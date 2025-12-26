@@ -2,6 +2,27 @@
 
 ## Erreurs courantes et solutions
 
+### Erreur: "couldn't locate the dockerfile at path Dockerfile"
+
+**Cause**: Railway ne trouve pas le Dockerfile. Cela peut être dû à une mauvaise configuration du `rootDirectory` ou `dockerfilePath`.
+
+**Solution**: 
+1. Vérifiez que `railway.toml` contient:
+```toml
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"  # Relatif au rootDirectory
+rootDirectory = "backend"  # ← Important !
+```
+
+2. **IMPORTANT**: Quand `rootDirectory = "backend"`, le `dockerfilePath` doit être relatif à ce répertoire, donc `Dockerfile` et non `backend/Dockerfile`.
+
+3. Configurez dans le dashboard Railway:
+   - Allez dans votre service → Settings → Build
+   - Définissez **Root Directory** à `backend`
+   - Définissez **Dockerfile Path** à `Dockerfile` (pas `backend/Dockerfile`)
+   - Sauvegardez et redéployez
+
 ### Erreur: "failed to compute cache key: nest-cli.json not found"
 
 **Cause**: Railway construit depuis la racine du projet, mais le Dockerfile est dans le dossier `backend/`.
@@ -11,14 +32,11 @@
 ```toml
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "backend/Dockerfile"
+dockerfilePath = "Dockerfile"
 rootDirectory = "backend"  # ← Important !
 ```
 
-2. Ou configurez dans le dashboard Railway:
-   - Allez dans votre service → Settings
-   - Définissez **Root Directory** à `backend`
-   - Définissez **Dockerfile Path** à `Dockerfile`
+2. Le Dockerfile crée maintenant automatiquement `nest-cli.json` si nécessaire
 
 ### Erreur: "Security vulnerabilities detected"
 

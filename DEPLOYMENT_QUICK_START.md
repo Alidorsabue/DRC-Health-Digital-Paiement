@@ -30,10 +30,13 @@ git push
    - Railway créera automatiquement une base de données
 
 3. **Configurer le service Backend**:
-   - Railway détectera automatiquement le Dockerfile
-   - Si nécessaire, configurez:
+   - Railway devrait détecter automatiquement le Dockerfile grâce à `railway.toml`
+   - **IMPORTANT**: Si Railway ne trouve pas le Dockerfile, configurez manuellement dans le dashboard:
+     - Allez dans votre service → Settings → Build
      - **Root Directory**: `backend`
-     - **Dockerfile Path**: `Dockerfile`
+     - **Dockerfile Path**: `Dockerfile` (relatif au root directory)
+     - **Build Command**: (laissez vide, utilise le Dockerfile)
+     - **Start Command**: `node dist/main.js`
 
 4. **Configurer les variables d'environnement**:
    Cliquez sur votre service backend → Variables → Ajoutez:
