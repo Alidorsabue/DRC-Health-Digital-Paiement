@@ -6,7 +6,7 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
+# Copier tous les fichiers de configuration nécessaires
 COPY package*.json ./
 COPY tsconfig.json ./
 COPY nest-cli.json ./
