@@ -6,15 +6,18 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Copier tous les fichiers de configuration nécessaires
+# Copier les fichiers de configuration nécessaires pour npm ci
 COPY package*.json ./
 COPY tsconfig.json ./
-COPY nest-cli.json ./
 
 # Installer les dépendances
 RUN npm ci
 
-# Copier le code source
+# Créer nest-cli.json si absent (nécessaire pour nest build)
+# Le fichier sera écrasé par COPY . . s'il existe dans le repo
+RUN echo '{"$schema":"https://json.schemastore.org/nest-cli","collection":"@nestjs/schematics","sourceRoot":"src","compilerOptions":{"deleteOutDir":true}}' > nest-cli.json
+
+# Copier le reste du code source (écrasera nest-cli.json si présent dans le repo)
 COPY . .
 
 # Builder l'application
