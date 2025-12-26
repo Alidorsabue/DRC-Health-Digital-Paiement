@@ -10,16 +10,14 @@ WORKDIR /app
 # Copier les fichiers de configuration du backend
 COPY backend/package*.json ./
 COPY backend/tsconfig.json ./
-
-# Créer nest-cli.json (nécessaire pour nest build)
-RUN echo '{"$schema":"https://json.schemastore.org/nest-cli","collection":"@nestjs/schematics","sourceRoot":"src","compilerOptions":{"deleteOutDir":true}}' > nest-cli.json
+COPY backend/nest-cli.json* ./
 
 # Installer les dépendances
-RUN npm ci
+# Utiliser npm install (plus flexible que npm ci qui nécessite package-lock.json)
+RUN npm install --production=false
 
-# Copier le reste du code source du backend (src et nest-cli.json si présent)
+# Copier le code source du backend
 COPY backend/src ./src
-COPY backend/nest-cli.json* ./
 
 # Builder l'application
 RUN npm run build
