@@ -4,7 +4,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-rootDirectory = "backend"
+# rootDirectory n'est plus nécessaire car le Dockerfile est à la racine
 
 [deploy]
 startCommand = "node dist/main.js"

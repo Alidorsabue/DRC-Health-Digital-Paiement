@@ -2,7 +2,27 @@
 
 ## Erreurs courantes et solutions
 
-### Erreur: "couldn't locate the dockerfile at path Dockerfile"
+### Erreur: "couldn't locate the dockerfile at path Dockerfile" ou "skipping 'Dockerfile' at 'backend/Dockerfile'"
+
+**Cause**: Railway ignore les Dockerfiles dans les sous-dossiers. Railway ne reconnaît pas toujours la configuration `rootDirectory` dans les fichiers de configuration.
+
+**Solution**: 
+1. **Solution recommandée**: Un `Dockerfile` a été créé à la racine du projet qui copie automatiquement les fichiers depuis `backend/`. Railway trouvera automatiquement ce Dockerfile.
+
+2. **Alternative**: Configurez manuellement dans le dashboard Railway:
+   - Allez dans votre service → Settings → Build
+   - Définissez **Root Directory** à `backend`
+   - Définissez **Dockerfile Path** à `Dockerfile` (relatif au root directory)
+   - Sauvegardez et redéployez
+
+3. Vérifiez que `railway.toml` contient:
+```toml
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+```
+
+### Erreur: "couldn't locate the dockerfile at path Dockerfile" (ancienne version)
 
 **Cause**: Railway ne trouve pas le Dockerfile. Cela peut être dû à une mauvaise configuration du `rootDirectory` ou `dockerfilePath`.
 
