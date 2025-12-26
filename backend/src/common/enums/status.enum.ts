@@ -1,0 +1,15 @@
+export enum PrestataireStatus {
+  ENREGISTRE = 'ENREGISTRE',
+  VALIDE_PAR_IT = 'VALIDE_PAR_IT',
+  APPROUVE_PAR_MCZ = 'APPROUVE_PAR_MCZ',
+  REJETE_PAR_MCZ = 'REJETE_PAR_MCZ',
+  EN_ATTENTE_PAR_MCZ = 'EN_ATTENTE_PAR_MCZ',
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+}
+

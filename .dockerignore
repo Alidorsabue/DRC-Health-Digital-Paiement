@@ -1,0 +1,14 @@
+node_modules
+.git
+.gitignore
+*.md
+.vscode
+.idea
+coverage
+.env
+.env.local
+mobile
+frontend/build
+backend/dist
+backend/coverage
+

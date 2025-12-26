@@ -1,0 +1,20 @@
+# Configuration Railway pour le projet DRC Digit Payment
+# Ce fichier configure le déploiement sur Railway
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+startCommand = "node dist/main.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Variables d'environnement recommandées
+# Configurez-les dans le dashboard Railway ou via Railway CLI
+# [variables]
+# NODE_ENV = "production"
+# JWT_SECRET = "changez-moi-en-production"
+# JWT_EXPIRES_IN = "7d"
+# FRONTEND_URL = "https://votre-frontend.up.railway.app"
+

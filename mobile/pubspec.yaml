@@ -1,0 +1,68 @@
+name: drc_digit_payment
+description: Application mobile pour la gestion des paiements des prestataires de santé publique en RDC
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  
+  # HTTP & API
+  http: ^1.1.0
+  dio: ^5.4.0
+  
+  # Database & Storage
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  shared_preferences: ^2.2.2
+  
+  # Forms & Validation
+  flutter_form_builder: ^9.1.1
+  form_builder_validators: ^10.0.0
+  
+  # Media & Files
+  image_picker: ^1.0.4
+  signature: ^5.4.0
+  # file_picker retiré temporairement pour éviter les warnings
+  # file_picker: ^6.1.1
+  path_provider: ^2.1.1
+  mobile_scanner: ^5.2.3
+  flutter_image_compress: ^2.1.0
+  
+  # Location & Permissions
+  geolocator: ^10.1.0
+  permission_handler: ^11.0.1
+  
+  # Connectivity
+  connectivity_plus: ^5.0.1
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # UI Components
+  # intl est fourni par flutter_localizations du SDK Flutter
+  flutter_slidable: ^3.0.1
+  pull_to_refresh: ^2.0.0
+  
+  # Utils
+  uuid: ^4.2.1
+  crypto: ^3.0.3
+  share_plus: ^7.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+dependency_overrides:
+  intl: ^0.20.2
+

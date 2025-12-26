@@ -1,0 +1,14 @@
+list_name,name,label,filter
+provinces,kinshasa,Kinshasa,
+provinces,kwilu,Kwilu,
+provinces,kongo_central,Kongo Central,
+antennes,antenne_kinshasa_1,Antenne Kinshasa 1,${provinceId}='kinshasa'
+antennes,antenne_kinshasa_2,Antenne Kinshasa 2,${provinceId}='kinshasa'
+zones,zone_kinshasa_1,Zone de Santé Kinshasa 1,${provinceId}='kinshasa'
+zones,zone_kinshasa_2,Zone de Santé Kinshasa 2,${provinceId}='kinshasa'
+aires,aire_zone1_1,Aire de Santé Zone 1 - Aire 1,${zoneId}='zone_kinshasa_1'
+aires,aire_zone1_2,Aire de Santé Zone 1 - Aire 2,${zoneId}='zone_kinshasa_1'
+categories,medecin,Médecin,
+categories,infirmier,Infirmier,
+categories,autre,Autre,
+
