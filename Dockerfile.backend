@@ -20,6 +20,8 @@ RUN npm install --production=false
 COPY backend/src ./src
 # Copier les migrations (nécessaires pour migration:run)
 COPY backend/migrations ./migrations
+# Copier les scripts (nécessaires pour run-sql-migrations.js)
+COPY backend/scripts ./scripts
 
 # Builder l'application
 RUN npm run build
@@ -37,6 +39,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/scripts ./scripts
 
 # Exposer le port (Railway utilisera la variable PORT)
 EXPOSE 3001
@@ -44,8 +47,8 @@ EXPOSE 3001
 # Créer un script de démarrage qui exécute les migrations puis démarre l'application
 RUN echo '#!/bin/sh' > start.sh && \
     echo 'echo "========================================="' >> start.sh && \
-    echo 'echo "Exécution des migrations..."' >> start.sh && \
-    echo 'npm run migration:run || echo "Note: Migrations déjà exécutées ou erreur (non bloquant)"' >> start.sh && \
+    echo 'echo "Exécution des migrations SQL..."' >> start.sh && \
+    echo 'node scripts/run-sql-migrations.js || echo "Note: Erreur lors de l'\''exécution des migrations (vérifiez les logs)"' >> start.sh && \
     echo 'echo "Démarrage de l'\''application..."' >> start.sh && \
     echo 'echo "========================================="' >> start.sh && \
     echo 'node dist/main.js' >> start.sh && \

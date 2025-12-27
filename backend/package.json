@@ -21,6 +21,7 @@
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/data-source.ts",
+    "migration:run-sql": "node scripts/run-sql-migrations.js",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/data-source.ts",
     "migration:prestataire-id": "node scripts/run-migration-simple.js",
     "migration:linked-form": "node scripts/run-migration-linked-form.js",
