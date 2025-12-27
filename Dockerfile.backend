@@ -46,9 +46,14 @@ EXPOSE 3001
 
 # Créer un script de démarrage qui exécute les migrations puis démarre l'application
 RUN echo '#!/bin/sh' > start.sh && \
+    echo 'set -e' >> start.sh && \
     echo 'echo "========================================="' >> start.sh && \
     echo 'echo "Exécution des migrations SQL..."' >> start.sh && \
-    echo 'node scripts/run-sql-migrations.js || echo "Note: Erreur lors de l'\''exécution des migrations (vérifiez les logs)"' >> start.sh && \
+    echo 'node scripts/run-sql-migrations.js' >> start.sh && \
+    echo 'if [ $? -ne 0 ]; then' >> start.sh && \
+    echo '  echo "❌ ERREUR: Les migrations ont échoué!"' >> start.sh && \
+    echo '  exit 1' >> start.sh && \
+    echo 'fi' >> start.sh && \
     echo 'echo "Démarrage de l'\''application..."' >> start.sh && \
     echo 'echo "========================================="' >> start.sh && \
     echo 'node dist/main.js' >> start.sh && \

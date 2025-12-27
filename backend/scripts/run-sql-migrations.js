@@ -26,6 +26,15 @@ const migrationFiles = [
 
 async function createTablesFromEntities() {
   console.log('📦 Création des tables à partir des entités TypeORM...');
+  console.log('🔍 Variables d\'environnement:');
+  console.log(`   DB_HOST: ${process.env.DB_HOST || 'non défini'}`);
+  console.log(`   DB_PORT: ${process.env.DB_PORT || 'non défini'}`);
+  console.log(`   DB_USERNAME: ${process.env.DB_USERNAME || 'non défini'}`);
+  console.log(`   DB_NAME: ${process.env.DB_NAME || 'non défini'}`);
+  
+  // Vérifier que les entités compilées existent
+  const entitiesPath = path.join(__dirname, '../dist/**/*.entity.js');
+  console.log(`🔍 Chemin des entités: ${entitiesPath}`);
   
   // Importer et initialiser le DataSource
   const dataSource = new DataSource({
@@ -37,26 +46,29 @@ async function createTablesFromEntities() {
     database: process.env.DB_NAME || 'drc_digit_payment',
     entities: [__dirname + '/../dist/**/*.entity.js'],
     synchronize: true, // Activer temporairement pour créer les tables
-    logging: false,
+    logging: true, // Activer les logs pour debug
   });
   
   try {
+    console.log('🔌 Initialisation de la connexion TypeORM...');
     await dataSource.initialize();
+    console.log('✅ Connexion TypeORM établie');
+    console.log('📊 Synchronisation du schéma (création des tables)...');
+    // La synchronisation se fait automatiquement lors de l'initialisation avec synchronize: true
     console.log('✅ Tables créées à partir des entités');
     await dataSource.destroy();
+    console.log('✅ Connexion TypeORM fermée');
   } catch (error) {
-    // Si les tables existent déjà, c'est OK
-    if (error.message && error.message.includes('already exists')) {
-      console.log('ℹ️  Les tables existent déjà, continuation...');
-    } else {
-      console.error('⚠️  Erreur lors de la création des tables:', error.message);
-      // Ne pas bloquer, continuer quand même
-    }
+    console.error('❌ Erreur lors de la création des tables:');
+    console.error('   Message:', error.message);
+    console.error('   Stack:', error.stack);
+    // Ne pas continuer si la création des tables échoue
     try {
       await dataSource.destroy();
     } catch (e) {
       // Ignorer les erreurs de destruction
     }
+    throw error; // Propager l'erreur pour arrêter le processus
   }
 }
 
