@@ -62,23 +62,46 @@ git push
 
 Après le premier déploiement, exécutez les migrations:
 
-**Option A: Via Railway Dashboard**
-1. Allez dans votre service backend
-2. Cliquez sur "Deployments" → "View Logs"
-3. Cliquez sur "Shell"
-4. Exécutez:
+**Option A: Via Railway CLI (RECOMMANDÉE)**
+
+1. **Installer Railway CLI**:
+```bash
+npm i -g @railway/cli
+```
+
+2. **Se connecter et lier le projet**:
+```bash
+railway login
+railway link
+```
+
+3. **Exécuter les migrations**:
+```bash
+cd backend
+railway run npm run migration:run
+```
+
+**Option B: Via Railway Dashboard (Terminal)**
+
+1. Allez dans votre service backend sur Railway
+2. Cliquez sur l'onglet **"Deployments"**
+3. Cliquez sur le dernier déploiement (celui qui est "Active")
+4. Cherchez l'icône **Terminal** ou **Shell** (souvent en haut à droite ou dans les onglets)
+5. Si vous ne trouvez pas, utilisez l'option **"Connect"** ou **"Open Terminal"**
+6. Dans le terminal, exécutez:
 ```bash
 npm run migration:run
 ```
 
-**Option B: Via Railway CLI**
-```bash
-npm i -g @railway/cli
-railway login
-railway link
-cd backend
-railway run npm run migration:run
-```
+**Option C: Ajouter les migrations au démarrage (Temporaire)**
+
+Si vous ne trouvez pas le terminal, vous pouvez temporairement exécuter les migrations au démarrage:
+
+1. Modifiez `backend/src/main.ts` pour ajouter les migrations au démarrage
+2. Déployez à nouveau
+3. Les migrations s'exécuteront automatiquement au démarrage
+
+**Note**: Railway a parfois changé l'emplacement du terminal. Si vous ne le trouvez pas, utilisez Railway CLI (Option A) qui est plus fiable.
 
 ### Étape 5: Déployer le Frontend (optionnel)
 

@@ -3,8 +3,8 @@
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
-# rootDirectory n'est plus nécessaire car le Dockerfile est à la racine
+dockerfilePath = "Dockerfile.backend"
+# Le Dockerfile backend est maintenant Dockerfile.backend pour éviter les conflits avec le frontend
 
 [deploy]
 startCommand = "node dist/main.js"
