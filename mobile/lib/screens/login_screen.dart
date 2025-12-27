@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../utils/network_utils.dart';
@@ -32,7 +33,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final prefs = await SharedPreferences.getInstance();
     final apiService = ApiService(); // Utiliser le singleton
     
-    // Utiliser l'URL sauvegardée ou détecter automatiquement
+    // En production, utiliser directement l'URL de production
+    if (AppConfig.isProduction) {
+      _apiUrlController.text = AppConfig.productionApiUrl;
+      apiService.setBaseUrl(AppConfig.productionApiUrl);
+      await prefs.setString('api_url', AppConfig.productionApiUrl);
+      if (mounted) setState(() {});
+      return;
+    }
+    
+    // Mode développement : détection IP
     final savedUrl = prefs.getString('api_url');
     
     if (!forceDetection && savedUrl != null && savedUrl.isNotEmpty) {
@@ -253,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
-                  if (_showApiUrl) ...[
+                  if (_showApiUrl && !AppConfig.isProduction) ...[
                     TextFormField(
                       controller: _apiUrlController,
                       decoration: InputDecoration(
@@ -518,16 +528,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _showApiUrl = !_showApiUrl;
-                      });
-                    },
-                    icon: Icon(_showApiUrl ? Icons.arrow_upward : Icons.settings),
-                    label: Text(_showApiUrl ? 'Masquer la configuration' : 'Configurer l\'URL du serveur'),
-                  ),
-                  const SizedBox(height: 16),
+                  if (!AppConfig.isProduction)
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showApiUrl = !_showApiUrl;
+                        });
+                      },
+                      icon: Icon(_showApiUrl ? Icons.arrow_upward : Icons.settings),
+                      label: Text(_showApiUrl ? 'Masquer la configuration' : 'Configurer l\'URL du serveur'),
+                    ),
+                  if (!AppConfig.isProduction) const SizedBox(height: 16),
+                  if (AppConfig.isProduction) const SizedBox(height: 16),
                   TextFormField(
                     controller: _usernameController,
                     decoration: const InputDecoration(

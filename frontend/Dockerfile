@@ -14,6 +14,10 @@ RUN npm install
 COPY . .
 
 # Builder l'application Next.js
+# Les variables NEXT_PUBLIC_* sont injectées au moment du build
+# Elles doivent être disponibles lors de cette étape
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 # Image de production

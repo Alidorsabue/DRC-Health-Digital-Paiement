@@ -26,7 +26,7 @@ api.interceptors.request.use((config) => {
     window.location.hostname.includes('railway.app');
   
   if (isRailwayProduction && currentApiUrl.includes('localhost')) {
-    const errorMsg = '❌ ERREUR CRITIQUE: Le frontend ne peut pas utiliser localhost en production sur Railway!';
+    const errorMsg = ' ERREUR CRITIQUE: Le frontend ne peut pas utiliser localhost en production sur Railway!';
     console.error(errorMsg);
     console.error('Hostname:', window.location.hostname);
     console.error('API URL détectée:', currentApiUrl);
@@ -83,7 +83,21 @@ api.interceptors.response.use(
     });
     
     // Gérer les erreurs 401 (Unauthorized) - Token expiré ou invalide
+    // MAIS ignorer les erreurs 401 sur les routes d'authentification (login, register, etc.)
     if (error.response?.status === 401) {
+      const requestUrl = error.config?.url || '';
+      const isAuthRoute = requestUrl.includes('/auth/login') || 
+                         requestUrl.includes('/auth/register') ||
+                         requestUrl.includes('/auth/');
+      
+      // Si c'est une route d'authentification, laisser l'erreur passer normalement
+      // (c'est probablement une erreur de connexion normale, pas un token expiré)
+      if (isAuthRoute) {
+        console.log('DEBUG API: Erreur 401 sur route d\'authentification, laisser passer normalement');
+        return Promise.reject(error);
+      }
+      
+      // Sinon, c'est probablement un token expiré ou invalide
       console.warn('DEBUG API: Token expiré ou invalide (401), déconnexion de l\'utilisateur...');
       
       // Nettoyer le localStorage

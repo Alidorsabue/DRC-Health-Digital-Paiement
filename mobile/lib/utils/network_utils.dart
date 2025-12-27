@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import '../config/app_config.dart';
 
 /// Utilitaires pour la détection réseau et la configuration de l'URL API
 class NetworkUtils {
@@ -195,10 +196,16 @@ class NetworkUtils {
   /// 
   /// Pour un émulateur : utilise 10.0.2.2 (adresse spéciale pour localhost du PC hôte)
   /// Pour un appareil physique : utilise l'IP locale détectée ou une IP par défaut
+  /// En production : utilise l'URL de production
   static String getApiUrl({String? customUrl}) {
     // Si une URL personnalisée est fournie, l'utiliser
     if (customUrl != null && customUrl.isNotEmpty) {
       return customUrl;
+    }
+
+    // En production, utiliser directement l'URL de production
+    if (AppConfig.isProduction) {
+      return AppConfig.productionApiUrl;
     }
 
     // Détecter si c'est un émulateur

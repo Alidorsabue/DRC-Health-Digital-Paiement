@@ -1,6 +1,12 @@
 class AppConfig {
-  // URL de l'API par défaut
-  static const String defaultApiUrl = 'https://drc-health-digital-paiement-production.up.railway.app';
+  // Mode production : désactive la détection d'IP et utilise uniquement l'URL de production
+  static const bool isProduction = true;
+  
+  // URL de l'API de production (sans /api car les endpoints sont ajoutés par le service)
+  static const String productionApiUrl = 'https://drc-health-digital-paiement-production.up.railway.app';
+  
+  // URL de l'API par défaut (pour compatibilité)
+  static const String defaultApiUrl = productionApiUrl;
   
   // Timeouts
   static const Duration connectTimeout = Duration(seconds: 30);

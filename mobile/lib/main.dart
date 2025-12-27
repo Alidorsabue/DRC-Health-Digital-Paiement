@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'config/app_config.dart';
 import 'services/api_service.dart';
 import 'services/database_service.dart';
 import 'services/sync_service.dart';
@@ -22,21 +23,54 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final apiService = ApiService(); // Singleton
   
-  // Vérifier l'URL sauvegardée et détecter automatiquement si nécessaire
+  // En production, utiliser directement l'URL de production
+  // En développement, détecter automatiquement l'IP
   String apiUrl;
-  final savedUrl = prefs.getString('api_url');
   
-  if (savedUrl != null && savedUrl.isNotEmpty) {
-    // Vérifier que l'URL sauvegardée fonctionne encore
-    try {
-      final isWorking = await NetworkUtils.testConnection(savedUrl).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => false,
-      );
-      if (isWorking) {
-        apiUrl = savedUrl;
-      } else {
-        // L'URL sauvegardée ne fonctionne plus, détecter automatiquement (mode rapide)
+  if (AppConfig.isProduction) {
+    // Mode production : utiliser uniquement l'URL de production
+    apiUrl = AppConfig.productionApiUrl;
+    // Nettoyer l'URL sauvegardée si elle contient /api (ancienne configuration)
+    final savedUrl = prefs.getString('api_url');
+    if (savedUrl != null && savedUrl.contains('/api')) {
+      // Supprimer /api de l'URL si présent
+      final cleanedUrl = savedUrl.replaceAll('/api', '').replaceAll(RegExp(r'/+$'), '');
+      if (cleanedUrl != savedUrl) {
+        await prefs.setString('api_url', cleanedUrl);
+      }
+    }
+    await prefs.setString('api_url', apiUrl);
+  } else {
+    // Mode développement : détecter automatiquement l'IP
+    final savedUrl = prefs.getString('api_url');
+    
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      // Vérifier que l'URL sauvegardée fonctionne encore
+      try {
+        final isWorking = await NetworkUtils.testConnection(savedUrl).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => false,
+        );
+        if (isWorking) {
+          apiUrl = savedUrl;
+        } else {
+          // L'URL sauvegardée ne fonctionne plus, détecter automatiquement (mode rapide)
+          final detectedUrl = await NetworkUtils.detectWorkingIP(quickMode: true).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => null,
+          );
+          apiUrl = detectedUrl ?? NetworkUtils.getApiUrl();
+          if (detectedUrl != null) {
+            await prefs.setString('api_url', detectedUrl);
+          }
+        }
+      } catch (e) {
+        // En cas d'erreur, utiliser l'URL par défaut
+        apiUrl = NetworkUtils.getApiUrl();
+      }
+    } else {
+      // Détecter automatiquement l'IP qui fonctionne (mode rapide pour éviter blocage)
+      try {
         final detectedUrl = await NetworkUtils.detectWorkingIP(quickMode: true).timeout(
           const Duration(seconds: 15),
           onTimeout: () => null,
@@ -45,25 +79,10 @@ void main() async {
         if (detectedUrl != null) {
           await prefs.setString('api_url', detectedUrl);
         }
+      } catch (e) {
+        // En cas d'erreur, utiliser l'URL par défaut
+        apiUrl = NetworkUtils.getApiUrl();
       }
-    } catch (e) {
-      // En cas d'erreur, utiliser l'URL par défaut
-      apiUrl = NetworkUtils.getApiUrl();
-    }
-  } else {
-    // Détecter automatiquement l'IP qui fonctionne (mode rapide pour éviter blocage)
-    try {
-      final detectedUrl = await NetworkUtils.detectWorkingIP(quickMode: true).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => null,
-      );
-      apiUrl = detectedUrl ?? NetworkUtils.getApiUrl();
-      if (detectedUrl != null) {
-        await prefs.setString('api_url', detectedUrl);
-      }
-    } catch (e) {
-      // En cas d'erreur, utiliser l'URL par défaut
-      apiUrl = NetworkUtils.getApiUrl();
     }
   }
   

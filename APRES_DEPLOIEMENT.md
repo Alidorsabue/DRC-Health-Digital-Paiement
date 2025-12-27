@@ -87,9 +87,11 @@ Vérifiez que toutes les variables sont correctement configurées :
 - `FRONTEND_URL=https://votre-frontend.up.railway.app`
 
 **Frontend** :
-- `NEXT_PUBLIC_API_URL=https://votre-backend.up.railway.app`
+- `NEXT_PUBLIC_API_URL=https://drc-health-digital-paiement-production.up.railway.app` (remplacez par votre URL backend)
 - `NODE_ENV=production`
 - `PORT=${{PORT}}`
+
+**⚠️ IMPORTANT**: La variable `NEXT_PUBLIC_API_URL` doit être configurée dans Railway → Service Frontend → Settings → Variables. Sinon, le frontend utilisera `http://localhost:3001` par défaut.
 
 ### 4. Vérifier la Connexion Frontend ↔ Backend
 

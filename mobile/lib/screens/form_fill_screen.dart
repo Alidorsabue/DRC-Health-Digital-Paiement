@@ -5,6 +5,7 @@ import '../models/form.dart' as model;
 import '../models/form_submission.dart';
 import '../providers/submissions_provider.dart';
 import '../providers/sync_provider.dart';
+import '../services/sync_service.dart';
 import '../widgets/form_fields/form_field_group.dart';
 import '../services/database_service.dart';
 import '../services/api_service.dart';
@@ -858,19 +859,52 @@ class _FormFillScreenState extends State<FormFillScreen> {
       // Tenter de synchroniser immédiatement les soumissions en attente
       try {
         await syncProvider.syncPendingSubmissions();
+        final syncResult = syncProvider.lastSyncResult;
+        
+        if (mounted) {
+          // Vérifier le résultat de la synchronisation avant d'afficher le message de succès
+          if (syncResult != null && syncResult.success && syncResult.failedSubmissions == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Formulaire envoyé avec succès${syncResult.syncedSubmissions > 0 ? ' et synchronisé' : ''}'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            Navigator.pop(context);
+          } else if (syncResult != null && syncResult.failedSubmissions > 0) {
+            // Afficher un message d'erreur si la synchronisation a échoué
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Formulaire enregistré localement mais erreur lors de l\'envoi: ${syncResult.message}'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+            // Ne pas fermer l'écran pour que l'utilisateur puisse réessayer
+          } else {
+            // Sauvegardé localement, sera synchronisé plus tard
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Formulaire enregistré localement. La synchronisation sera effectuée automatiquement.'),
+                backgroundColor: Colors.blue,
+              ),
+            );
+            Navigator.pop(context);
+          }
+        }
       } catch (syncError) {
         // La synchronisation échoue silencieusement si pas de connexion
         // Les données seront synchronisées plus tard automatiquement
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Formulaire envoyé avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Formulaire enregistré localement. Erreur de synchronisation: $syncError'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       if (mounted) {

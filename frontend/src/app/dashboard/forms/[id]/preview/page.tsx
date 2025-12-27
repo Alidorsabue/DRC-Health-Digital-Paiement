@@ -268,6 +268,12 @@ export default function FormPreviewPage() {
       const latestVersion = sortedVersions[0];
       
       if (latestVersion?.schema && latestVersion.schema.properties) {
+        // Debug: vérifier les propriétés du schéma
+        console.log('[FormPreview] Schéma chargé:', {
+          totalFields: Object.keys(latestVersion.schema.properties).length,
+          sampleField: Object.entries(latestVersion.schema.properties)[0],
+        });
+        
         parseSchemaToFields(latestVersion.schema);
         extractGroupsFromSchema(latestVersion.schema);
       } else {
@@ -281,9 +287,11 @@ export default function FormPreviewPage() {
         Object.entries(latestVersion.schema.properties).forEach(([name, prop]: [string, any]) => {
           if (prop.default !== undefined && prop.default !== null && prop.default !== '') {
             defaultValues[name] = prop.default;
+            console.log(`[FormPreview] Valeur par défaut pour ${name}:`, prop.default);
           }
         });
         if (Object.keys(defaultValues).length > 0) {
+          console.log('[FormPreview] Initialisation des valeurs par défaut:', defaultValues);
           setFormData(defaultValues);
         }
       }
@@ -353,7 +361,7 @@ export default function FormPreviewPage() {
         options = prop.items.enum.map((val: string) => ({ label: val, value: val }));
       }
 
-      parsedFields.push({
+      const field: FormField = {
         name,
         label: prop.title || name,
         type: fieldType,
@@ -380,7 +388,21 @@ export default function FormPreviewPage() {
         order: prop['x-order'] !== undefined ? prop['x-order'] : parsedFields.length, // Préserver l'ordre
         filterField: prop['x-filterField'],
         choiceFilter: prop['x-choiceFilter'],
-      });
+      };
+      
+      // Debug: afficher les propriétés importantes pour vérifier qu'elles sont bien chargées
+      if (field.relevant || field.constraint || field.appearance || field.defaultValue) {
+        console.log(`[FormPreview] Champ ${field.name}:`, {
+          relevant: field.relevant,
+          constraint: field.constraint,
+          appearance: field.appearance,
+          defaultValue: field.defaultValue,
+          dependsOn: field.dependsOn,
+          dependsValue: field.dependsValue,
+        });
+      }
+      
+      parsedFields.push(field);
     });
     
     setFields(parsedFields);
@@ -708,7 +730,21 @@ export default function FormPreviewPage() {
     alert('Données du formulaire:\n' + JSON.stringify(formData, null, 2));
   };
 
-  const visibleFields = fields.filter(shouldShowField);
+  // Filtrer les champs visibles selon leurs conditions relevant
+  const visibleFields = fields.filter((field) => {
+    const isVisible = shouldShowField(field);
+    if (!isVisible && field.relevant) {
+      console.log(`[FormPreview] Champ ${field.name} masqué par relevant:`, {
+        relevant: field.relevant,
+        formData: formData,
+        dependsOn: field.dependsOn,
+        dependsValue: field.dependsValue,
+      });
+    }
+    return isVisible;
+  });
+  
+  console.log('[FormPreview] Champs visibles:', visibleFields.length, 'sur', fields.length);
 
   if (loading) {
     return (

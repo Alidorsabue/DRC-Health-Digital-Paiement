@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 import '../models/form.dart' as form_models;
 import '../models/user.dart';
 import '../models/campaign.dart';
@@ -19,14 +20,14 @@ class ApiService {
   }
 
   ApiService._internal() {
-    _baseUrl = 'http://localhost:3001'; // Par défaut, peut être configuré
+    _baseUrl = AppConfig.productionApiUrl; // URL de production par défaut
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl!,
       headers: {
         'Content-Type': 'application/json',
       },
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
+      connectTimeout: AppConfig.connectTimeout,
+      receiveTimeout: AppConfig.receiveTimeout,
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -71,8 +72,9 @@ class ApiService {
 
       return response.data;
     } catch (e) {
-      // En cas d'erreur de connexion, essayer de détecter automatiquement l'IP
-      if (e is DioException && 
+      // En cas d'erreur de connexion, essayer de détecter automatiquement l'IP (uniquement en développement)
+      if (!AppConfig.isProduction && 
+          e is DioException && 
           (e.type == DioExceptionType.connectionTimeout ||
            e.type == DioExceptionType.receiveTimeout ||
            e.type == DioExceptionType.connectionError)) {
