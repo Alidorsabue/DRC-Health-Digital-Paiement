@@ -1,6 +1,9 @@
 import api from '../api';
 import { Campaign, CreateCampaignDto } from '../../types';
 
+// Exporter Campaign pour qu'il puisse être utilisé ailleurs
+export type { Campaign, CreateCampaignDto };
+
 export const campaignsApi = {
   getAll: async (): Promise<Campaign[]> => {
     const response = await api.get<Campaign[]>('/campaigns');
