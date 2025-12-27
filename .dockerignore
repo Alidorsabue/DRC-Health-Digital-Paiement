@@ -8,8 +8,12 @@ coverage
 .env
 .env.local
 mobile
-backend
+# Ne pas exclure backend car Dockerfile.backend en a besoin
+# backend
 frontend/build
 frontend/.next
 frontend/node_modules
+backend/dist
+backend/coverage
+backend/node_modules
 
