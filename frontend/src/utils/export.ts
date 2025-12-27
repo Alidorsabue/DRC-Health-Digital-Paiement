@@ -164,7 +164,7 @@ export async function exportTableToImage(
       logging: false,
     });
     
-    canvas.toBlob((blob) => {
+    canvas.toBlob((blob: Blob | null) => {
       if (blob) {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
