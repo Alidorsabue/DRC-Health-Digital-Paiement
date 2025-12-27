@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { formsApi } from '../../../lib/api/forms';
 import { Form, CreateFormDto } from '../../../types';
@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AlertModal from '../../../components/Modal/AlertModal';
 import ConfirmModal from '../../../components/Modal/ConfirmModal';
 
-export default function FormsPage() {
+function FormsPageContent() {
   const { user } = useAuthStore();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -771,6 +771,18 @@ export default function FormsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function FormsPage() {
+  return (
+    <Suspense fallback={
+      <div className="text-center py-12">
+        <p className="text-gray-500">Chargement...</p>
+      </div>
+    }>
+      <FormsPageContent />
+    </Suspense>
   );
 }
 
