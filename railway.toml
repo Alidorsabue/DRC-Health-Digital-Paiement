@@ -7,7 +7,7 @@ dockerfilePath = "Dockerfile.backend"
 # Le Dockerfile backend est maintenant Dockerfile.backend pour éviter les conflits avec le frontend
 
 [deploy]
-startCommand = "node dist/main.js"
+startCommand = "sh start.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
