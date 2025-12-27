@@ -1,5 +1,6 @@
 import api from '../api';
 import { Form, FormVersion, CreateFormDto, CreateFormVersionDto } from '../../types';
+import { getApiUrl } from '../../utils/api-url';
 
 export const formsApi = {
   getAll: async (): Promise<Form[]> => {
@@ -86,7 +87,8 @@ export const formsApi = {
 
   // API publiques (sans authentification)
   getPublic: async (id: string): Promise<any> => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/forms/public/${id}`);
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/forms/public/${id}`);
     if (!response.ok) {
       throw new Error('Formulaire non trouvé');
     }
@@ -94,7 +96,8 @@ export const formsApi = {
   },
 
   submitPublic: async (id: string, data: { campaignId?: string; data: Record<string, any> }): Promise<any> => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/forms/public/${id}/submit`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/forms/public/${id}/submit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

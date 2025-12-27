@@ -1,7 +1,17 @@
 import axios from 'axios';
+import { getApiUrl } from '../utils/api-url';
+
+// Récupérer et nettoyer l'URL de l'API (supprime automatiquement les guillemets ajoutés par Railway)
+const apiUrl = getApiUrl();
+
+// Log pour debug (uniquement en développement)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('API URL configurée:', apiUrl);
+  console.log('API URL brute:', process.env.NEXT_PUBLIC_API_URL);
+}
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
