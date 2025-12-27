@@ -47,15 +47,31 @@ EXPOSE 3001
 # Créer un script de démarrage qui exécute les migrations puis démarre l'application
 RUN echo '#!/bin/sh' > start.sh && \
     echo 'set -e' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
     echo 'echo "========================================="' >> start.sh && \
-    echo 'echo "Exécution des migrations SQL..."' >> start.sh && \
+    echo 'echo "🚀 DÉMARRAGE DU CONTENEUR"' >> start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
+    echo 'echo "📂 Vérification des fichiers..."' >> start.sh && \
+    echo 'ls -la /app/scripts/ || echo "⚠️  Dossier scripts non trouvé"' >> start.sh && \
+    echo 'ls -la /app/dist/ || echo "⚠️  Dossier dist non trouvé"' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'echo "🔄 EXÉCUTION DES MIGRATIONS"' >> start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
     echo 'node scripts/run-sql-migrations.js' >> start.sh && \
-    echo 'if [ $? -ne 0 ]; then' >> start.sh && \
-    echo '  echo "❌ ERREUR: Les migrations ont échoué!"' >> start.sh && \
+    echo 'MIGRATION_EXIT_CODE=$?' >> start.sh && \
+    echo 'if [ $MIGRATION_EXIT_CODE -ne 0 ]; then' >> start.sh && \
+    echo '  echo ""' >> start.sh && \
+    echo '  echo "❌ ERREUR: Les migrations ont échoué avec le code $MIGRATION_EXIT_CODE!"' >> start.sh && \
     echo '  exit 1' >> start.sh && \
     echo 'fi' >> start.sh && \
-    echo 'echo "Démarrage de l'\''application..."' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
     echo 'echo "========================================="' >> start.sh && \
+    echo 'echo "🚀 DÉMARRAGE DE L'\''APPLICATION"' >> start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'echo ""' >> start.sh && \
     echo 'node dist/main.js' >> start.sh && \
     chmod +x start.sh
 
