@@ -32,9 +32,36 @@ async function createTablesFromEntities() {
   console.log(`   DB_USERNAME: ${process.env.DB_USERNAME || 'non défini'}`);
   console.log(`   DB_NAME: ${process.env.DB_NAME || 'non défini'}`);
   
-  // Vérifier que les entités compilées existent
-  const entitiesPath = path.join(__dirname, '../dist/**/*.entity.js');
-  console.log(`🔍 Chemin des entités: ${entitiesPath}`);
+  // Trouver tous les fichiers d'entités compilés
+  const distPath = path.join(__dirname, '../dist');
+  const entities = [];
+  
+  function findEntities(dir) {
+    const files = fs.readdirSync(dir, { withFileTypes: true });
+    for (const file of files) {
+      const fullPath = path.join(dir, file.name);
+      if (file.isDirectory()) {
+        findEntities(fullPath);
+      } else if (file.name.endsWith('.entity.js')) {
+        entities.push(fullPath);
+        console.log(`   ✅ Trouvé: ${file.name}`);
+      }
+    }
+  }
+  
+  if (fs.existsSync(distPath)) {
+    console.log('🔍 Recherche des entités dans dist/...');
+    findEntities(distPath);
+    console.log(`📊 Total: ${entities.length} entités trouvées`);
+  } else {
+    console.error('❌ Le dossier dist/ n\'existe pas!');
+    throw new Error('Le dossier dist/ n\'existe pas. Assurez-vous que le build a réussi.');
+  }
+  
+  if (entities.length === 0) {
+    console.error('❌ Aucune entité trouvée!');
+    throw new Error('Aucune entité trouvée dans dist/. Vérifiez que le build a réussi.');
+  }
   
   // Importer et initialiser le DataSource
   const dataSource = new DataSource({
@@ -44,7 +71,7 @@ async function createTablesFromEntities() {
     username: process.env.DB_USERNAME || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_NAME || 'drc_digit_payment',
-    entities: [__dirname + '/../dist/**/*.entity.js'],
+    entities: entities, // Utiliser le tableau d'entités trouvées
     synchronize: true, // Activer temporairement pour créer les tables
     logging: true, // Activer les logs pour debug
   });
@@ -55,6 +82,24 @@ async function createTablesFromEntities() {
     console.log('✅ Connexion TypeORM établie');
     console.log('📊 Synchronisation du schéma (création des tables)...');
     // La synchronisation se fait automatiquement lors de l'initialisation avec synchronize: true
+    // Attendre un peu pour que la synchronisation se termine
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Vérifier que les tables ont été créées
+    const queryRunner = dataSource.createQueryRunner();
+    const tables = await queryRunner.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+      ORDER BY table_name
+    `);
+    console.log(`✅ ${tables.length} tables trouvées dans la base de données:`);
+    tables.forEach(table => {
+      console.log(`   - ${table.table_name}`);
+    });
+    await queryRunner.release();
+    
     console.log('✅ Tables créées à partir des entités');
     await dataSource.destroy();
     console.log('✅ Connexion TypeORM fermée');
@@ -139,11 +184,34 @@ async function runMigrations() {
 }
 
 async function main() {
-  // D'abord créer les tables à partir des entités
-  await createTablesFromEntities();
+  console.log('');
+  console.log('========================================');
+  console.log('🚀 DÉMARRAGE DES MIGRATIONS');
+  console.log('========================================');
+  console.log('');
   
-  // Ensuite exécuter les migrations SQL
-  await runMigrations();
+  try {
+    // D'abord créer les tables à partir des entités
+    await createTablesFromEntities();
+    
+    // Ensuite exécuter les migrations SQL
+    await runMigrations();
+    
+    console.log('');
+    console.log('========================================');
+    console.log('✅ MIGRATIONS TERMINÉES AVEC SUCCÈS');
+    console.log('========================================');
+    console.log('');
+  } catch (error) {
+    console.log('');
+    console.log('========================================');
+    console.error('❌ ERREUR FATALE DANS LES MIGRATIONS');
+    console.log('========================================');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.log('');
+    throw error;
+  }
 }
 
 main().catch((error) => {
