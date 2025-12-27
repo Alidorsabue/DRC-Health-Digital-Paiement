@@ -220,12 +220,21 @@ interface FormField {
   options?: { label: string; value: string; filter?: string }[];
   dependsOn?: string;
   dependsValue?: string;
+  dependsOperator?: string; // Opérateur pour dependsOn (=, !=, >, <, etc.)
+  relevant?: string; // Expression relevant complète
   noteText?: string;
   validation?: {
     min?: number;
     max?: number;
     pattern?: string;
+    minLength?: number;
+    maxLength?: number;
   };
+  constraint?: string; // Expression de contrainte complète
+  constraintMessage?: string; // Message d'erreur pour la contrainte
+  appearance?: string; // Apparence du champ (field-list, signature, number, minimal, etc.)
+  defaultValue?: any; // Valeur par défaut
+  parameters?: string; // Paramètres (pour audit, etc.)
   order?: number; // Ordre d'apparition pour préserver l'ordre
   filterField?: string; // Champ de référence pour le filtrage
   choiceFilter?: string; // Expression choice_filter complète
@@ -240,6 +249,7 @@ export default function FormPreviewPage() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<string[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (user?.role === 'SUPERADMIN' && params.id) {
@@ -263,6 +273,19 @@ export default function FormPreviewPage() {
       } else {
         setFields([]);
         setGroups([]);
+      }
+      
+      // Initialiser les valeurs par défaut
+      if (latestVersion?.schema && latestVersion.schema.properties) {
+        const defaultValues: Record<string, any> = {};
+        Object.entries(latestVersion.schema.properties).forEach(([name, prop]: [string, any]) => {
+          if (prop.default !== undefined && prop.default !== null && prop.default !== '') {
+            defaultValues[name] = prop.default;
+          }
+        });
+        if (Object.keys(defaultValues).length > 0) {
+          setFormData(defaultValues);
+        }
       }
     } catch (error) {
       console.error('Erreur lors du chargement:', error);
@@ -338,12 +361,22 @@ export default function FormPreviewPage() {
         group: prop['x-group'],
         dependsOn: prop['x-dependsOn'],
         dependsValue: prop['x-dependsValue'],
+        dependsOperator: prop['x-dependsOperator'],
+        relevant: prop['x-relevant'], // Expression relevant complète depuis le parser
         options: options,
         noteText: prop['x-noteText'],
-        validation: prop.minimum !== undefined || prop.maximum !== undefined ? {
+        validation: {
           min: prop.minimum,
           max: prop.maximum,
-        } : undefined,
+          minLength: prop.minLength ?? prop['x-minLength'],
+          maxLength: prop.maxLength ?? prop['x-maxLength'],
+          pattern: prop.pattern,
+        },
+        constraint: prop['x-constraint'],
+        constraintMessage: prop['x-constraintMessage'],
+        appearance: prop['x-appearance'],
+        defaultValue: prop.default,
+        parameters: prop['x-auditParams'] || prop['x-parameters'],
         order: prop['x-order'] !== undefined ? prop['x-order'] : parsedFields.length, // Préserver l'ordre
         filterField: prop['x-filterField'],
         choiceFilter: prop['x-choiceFilter'],
@@ -353,11 +386,127 @@ export default function FormPreviewPage() {
     setFields(parsedFields);
   };
 
+  // Évaluer une expression relevant complexe
+  const evaluateRelevant = (expression: string): boolean => {
+    if (!expression || expression.trim() === '') return true;
+    
+    const expr = expression.trim();
+    
+    // Gérer not()
+    if (expr.startsWith('not(') && expr.endsWith(')')) {
+      const innerExpr = expr.slice(4, -1).trim();
+      return !evaluateRelevant(innerExpr);
+    }
+    
+    // Gérer selected() - vérifier si une valeur est sélectionnée dans un select_multiple
+    const selectedMatch = expr.match(/selected\(([^,]+),\s*['"]([^'"]+)['"]\)/);
+    if (selectedMatch) {
+      const fieldName = selectedMatch[1].trim().replace(/\$\{|\}/g, '');
+      const expectedValue = selectedMatch[2].trim();
+      const fieldValue = formData[fieldName];
+      
+      if (Array.isArray(fieldValue)) {
+        return fieldValue.includes(expectedValue);
+      }
+      return fieldValue === expectedValue;
+    }
+    
+    // Gérer count-selected() - compter les valeurs sélectionnées
+    const countSelectedMatch = expr.match(/count-selected\(([^)]+)\)\s*(>=|<=|>|<|=)\s*(\d+)/);
+    if (countSelectedMatch) {
+      const fieldName = countSelectedMatch[1].trim().replace(/\$\{|\}/g, '');
+      const operator = countSelectedMatch[2].trim();
+      const expectedCount = parseInt(countSelectedMatch[3].trim(), 10);
+      const fieldValue = formData[fieldName];
+      
+      const actualCount = Array.isArray(fieldValue) ? fieldValue.length : (fieldValue ? 1 : 0);
+      
+      switch (operator) {
+        case '>=': return actualCount >= expectedCount;
+        case '<=': return actualCount <= expectedCount;
+        case '>': return actualCount > expectedCount;
+        case '<': return actualCount < expectedCount;
+        case '=': return actualCount === expectedCount;
+        default: return false;
+      }
+    }
+    
+    // Gérer les opérateurs simples (=, !=, >, <, >=, <=)
+    if (expr.includes('!=')) {
+      const parts = expr.split('!=').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parts[1].replace(/['"]/g, '').trim();
+      return formData[left] !== right;
+    }
+    
+    if (expr.includes('>=')) {
+      const parts = expr.split('>=').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parseFloat(parts[1].replace(/['"]/g, '').trim());
+      return parseFloat(formData[left]) >= right;
+    }
+    
+    if (expr.includes('<=')) {
+      const parts = expr.split('<=').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parseFloat(parts[1].replace(/['"]/g, '').trim());
+      return parseFloat(formData[left]) <= right;
+    }
+    
+    if (expr.includes('>')) {
+      const parts = expr.split('>').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parseFloat(parts[1].replace(/['"]/g, '').trim());
+      return parseFloat(formData[left]) > right;
+    }
+    
+    if (expr.includes('<')) {
+      const parts = expr.split('<').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parseFloat(parts[1].replace(/['"]/g, '').trim());
+      return parseFloat(formData[left]) < right;
+    }
+    
+    if (expr.includes('=')) {
+      const parts = expr.split('=').map(p => p.trim());
+      const left = parts[0].replace(/\$\{|\}/g, '');
+      const right = parts[1].replace(/['"]/g, '').trim();
+      
+      // Gérer != '' (valeur non vide)
+      if (right === '') {
+        const value = formData[left];
+        return value !== undefined && value !== null && value !== '';
+      }
+      
+      return formData[left] === right;
+    }
+    
+    // Si c'est juste un nom de champ, vérifier s'il a une valeur
+    const fieldName = expr.replace(/\$\{|\}/g, '');
+    if (fieldName && !expr.includes('(') && !expr.includes('=')) {
+      const value = formData[fieldName];
+      return value !== undefined && value !== null && value !== '';
+    }
+    
+    return true;
+  };
+
   // Vérifier si un champ doit être affiché selon ses dépendances
   const shouldShowField = (field: FormField): boolean => {
+    // Si le champ a une expression relevant, l'évaluer
+    if (field.relevant) {
+      return evaluateRelevant(field.relevant);
+    }
+    
+    // Sinon, utiliser la logique simple avec dependsOn
     if (!field.dependsOn) return true;
     
     const dependsOnValue = formData[field.dependsOn];
+    
+    if (field.dependsOperator === '!=') {
+      return dependsOnValue !== field.dependsValue;
+    }
+    
     return dependsOnValue === field.dependsValue;
   };
 
@@ -467,7 +616,75 @@ export default function FormPreviewPage() {
     return field.options;
   };
 
+  // Valider une contrainte
+  const validateConstraint = (field: FormField, value: any): string | null => {
+    if (!field.constraint || !value) return null;
+    
+    const constraint = field.constraint.trim();
+    const valueStr = String(value).trim();
+    
+    // Gérer les regex
+    const regexMatch = constraint.match(/regex\s*\([^,]+,\s*['"]([^'"]+)['"]\)/);
+    if (regexMatch) {
+      const pattern = regexMatch[1];
+      try {
+        const regex = new RegExp(pattern);
+        if (!regex.test(valueStr)) {
+          return field.constraintMessage || `La valeur ne correspond pas au format attendu`;
+        }
+      } catch (e) {
+        console.error('Erreur dans la regex:', e);
+      }
+    }
+    
+    // Gérer les contraintes de longueur
+    if (constraint.includes('string-length')) {
+      const lengthMatch = constraint.match(/string-length\([^)]+\)\s*(>=|<=|=)\s*(\d+)/);
+      if (lengthMatch) {
+        const operator = lengthMatch[1];
+        const expectedLength = parseInt(lengthMatch[2], 10);
+        const actualLength = valueStr.length;
+        
+        switch (operator) {
+          case '>=':
+            if (actualLength < expectedLength) {
+              return field.constraintMessage || `La longueur doit être d'au moins ${expectedLength} caractères`;
+            }
+            break;
+          case '<=':
+            if (actualLength > expectedLength) {
+              return field.constraintMessage || `La longueur doit être d'au plus ${expectedLength} caractères`;
+            }
+            break;
+          case '=':
+            if (actualLength !== expectedLength) {
+              return field.constraintMessage || `La longueur doit être exactement ${expectedLength} caractères`;
+            }
+            break;
+        }
+      }
+    }
+    
+    return null;
+  };
+
   const handleFieldChange = (name: string, value: any) => {
+    // Trouver le champ pour valider
+    const field = fields.find(f => f.name === name);
+    if (field) {
+      const error = validateConstraint(field, value);
+      if (error) {
+        setErrors((prev) => ({ ...prev, [name]: error }));
+        return; // Ne pas mettre à jour si erreur
+      } else {
+        setErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[name];
+          return newErrors;
+        });
+      }
+    }
+    
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -475,7 +692,7 @@ export default function FormPreviewPage() {
     
     // Réinitialiser les champs dépendants si le champ parent change
     fields.forEach((field) => {
-      if (field.dependsOn === name) {
+      if (field.dependsOn === name || (field.relevant && field.relevant.includes(name))) {
         setFormData((prev) => {
           const newData = { ...prev };
           delete newData[field.name];
@@ -576,24 +793,32 @@ export default function FormPreviewPage() {
         )}
 
         {/* Champs groupés */}
-        {Object.entries(groupedFields).map(([groupName, groupFields]) => (
-          <div key={groupName} className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-blue-300">
-              {groupName}
-            </h3>
-            <div className="space-y-4">
-              {groupFields.map((field) => (
-                <div key={field.name} className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-                  {renderField(field)}
-                </div>
-              ))}
+        {Object.entries(groupedFields).map(([groupName, groupFields]) => {
+          // Vérifier si le groupe a une appearance field-list
+          const firstField = groupFields[0];
+          const groupSchema = form?.versions?.[0]?.schema?.properties?.[firstField?.name];
+          const groupAppearance = groupSchema?.['x-groupAppearance'] || 'default';
+          const isFieldList = groupAppearance === 'field-list' || groupAppearance?.toLowerCase().includes('field-list');
+          
+          return (
+            <div key={groupName} className={`border-2 ${isFieldList ? 'border-gray-200' : 'border-blue-200'} rounded-lg p-4 ${isFieldList ? 'bg-white' : 'bg-blue-50'}`}>
+              <h3 className={`text-lg font-semibold text-gray-900 mb-4 pb-2 border-b ${isFieldList ? 'border-gray-300' : 'border-blue-300'}`}>
+                {groupName}
+              </h3>
+              <div className={isFieldList ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"}>
+                {groupFields.map((field) => (
+                  <div key={field.name} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {field.label}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    {renderField(field)}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {fields.length === 0 && (
           <div className="text-center py-12 text-gray-500">
@@ -628,20 +853,56 @@ export default function FormPreviewPage() {
 
     switch (field.type) {
       case 'select_one':
+        const appearance = field.appearance?.toLowerCase() || '';
+        const isMinimal = appearance.includes('minimal') || appearance.includes('compact');
+        const isHorizontal = appearance.includes('horizontal');
+        
+        if (isHorizontal || isMinimal) {
+          // Rendu horizontal ou minimal avec checkboxes/radio
+          return (
+            <div>
+              <div className={`flex ${isHorizontal ? 'flex-wrap gap-2' : 'flex-col gap-2'}`}>
+                {filteredOptions.map((opt) => (
+                  <label key={opt.value} className={`flex items-center ${isHorizontal ? 'mr-4' : ''}`}>
+                    <input
+                      type="radio"
+                      name={field.name}
+                      value={opt.value}
+                      checked={value === opt.value}
+                      onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                      required={field.required}
+                      className="mr-2"
+                    />
+                    <span className="text-gray-900">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              {errors[field.name] && (
+                <p className="mt-1 text-sm text-red-600">{errors[field.name]}</p>
+              )}
+            </div>
+          );
+        }
+        
         return (
-          <select
-            value={value}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            required={field.required}
-            className="w-full border rounded-md px-3 py-2 text-gray-900 bg-white"
-          >
-            <option value="">Sélectionner...</option>
-            {filteredOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <div>
+            <select
+              value={value}
+              onChange={(e) => handleFieldChange(field.name, e.target.value)}
+              required={field.required}
+              className={`w-full border rounded-md px-3 py-2 text-gray-900 bg-white ${errors[field.name] ? 'border-red-500' : ''}`}
+            >
+              <option value="">Sélectionner...</option>
+              {filteredOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {errors[field.name] && (
+              <p className="mt-1 text-sm text-red-600">{errors[field.name]}</p>
+            )}
+          </div>
         );
 
       case 'select_multiple':
@@ -668,15 +929,46 @@ export default function FormPreviewPage() {
         );
 
       case 'text':
+        const isMultiline = field.appearance?.toLowerCase().includes('multiline');
+        const isNumber = field.appearance?.toLowerCase().includes('number') || field.appearance?.toLowerCase().includes('numbers');
+        
+        if (isMultiline) {
+          return (
+            <div>
+              <textarea
+                value={value}
+                onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                required={field.required}
+                rows={4}
+                className={`w-full border rounded-md px-3 py-2 text-gray-900 bg-white ${errors[field.name] ? 'border-red-500' : ''}`}
+                placeholder={field.label}
+                minLength={field.validation?.minLength}
+                maxLength={field.validation?.maxLength}
+              />
+              {errors[field.name] && (
+                <p className="mt-1 text-sm text-red-600">{errors[field.name]}</p>
+              )}
+            </div>
+          );
+        }
+        
         return (
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            required={field.required}
-            className="w-full border rounded-md px-3 py-2 text-gray-900 bg-white"
-            placeholder={field.label}
-          />
+          <div>
+            <input
+              type={isNumber ? "number" : "text"}
+              value={value}
+              onChange={(e) => handleFieldChange(field.name, isNumber ? parseFloat(e.target.value) || '' : e.target.value)}
+              required={field.required}
+              className={`w-full border rounded-md px-3 py-2 text-gray-900 bg-white ${errors[field.name] ? 'border-red-500' : ''}`}
+              placeholder={field.label}
+              minLength={field.validation?.minLength}
+              maxLength={field.validation?.maxLength}
+              pattern={field.validation?.pattern}
+            />
+            {errors[field.name] && (
+              <p className="mt-1 text-sm text-red-600">{errors[field.name]}</p>
+            )}
+          </div>
         );
 
       case 'integer':
@@ -778,6 +1070,69 @@ export default function FormPreviewPage() {
         );
 
       case 'image':
+        const isSignature = field.appearance?.toLowerCase().includes('signature');
+        const maxPixelsMatch = field.appearance?.match(/max-pixels=(\d+)/i);
+        const maxPixels = maxPixelsMatch ? parseInt(maxPixelsMatch[1], 10) : undefined;
+        
+        if (isSignature) {
+          // Utiliser le composant draw pour la signature
+          return (
+            <div className="border rounded-md p-4 bg-gray-50">
+              <p className="text-sm text-gray-600 mb-2">Zone de signature</p>
+              <canvas
+                data-field={field.name}
+                className="border border-gray-300 bg-white cursor-crosshair"
+                width="400"
+                height="200"
+                onMouseDown={(e) => {
+                  const canvas = e.currentTarget;
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    const rect = canvas.getBoundingClientRect();
+                    ctx.beginPath();
+                    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                    
+                    const onMouseMove = (moveEvent: MouseEvent) => {
+                      ctx.lineTo(moveEvent.clientX - rect.left, moveEvent.clientY - rect.top);
+                      ctx.stroke();
+                    };
+                    
+                    const onMouseUp = () => {
+                      canvas.removeEventListener('mousemove', onMouseMove);
+                      canvas.removeEventListener('mouseup', onMouseUp);
+                      handleFieldChange(field.name, canvas.toDataURL());
+                    };
+                    
+                    canvas.addEventListener('mousemove', onMouseMove);
+                    canvas.addEventListener('mouseup', onMouseUp);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const canvas = document.querySelector(`canvas[data-field="${field.name}"]`) as HTMLCanvasElement;
+                  if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                      ctx.clearRect(0, 0, canvas.width, canvas.height);
+                      handleFieldChange(field.name, '');
+                    }
+                  }
+                }}
+                className="mt-2 text-sm text-red-600 hover:text-red-800"
+              >
+                Effacer
+              </button>
+              {value && (
+                <img src={value} alt="Signature" className="mt-2 max-w-xs rounded" />
+              )}
+            </div>
+          );
+        }
+        
         return (
           <div>
             <input
@@ -787,11 +1142,28 @@ export default function FormPreviewPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    handleFieldChange(field.name, reader.result);
-                  };
-                  reader.readAsDataURL(file);
+                  if (maxPixels) {
+                    // Redimensionner l'image si nécessaire
+                    const img = new Image();
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        const ratio = Math.min(maxPixels / img.width, maxPixels / img.height);
+                        canvas.width = img.width * ratio;
+                        canvas.height = img.height * ratio;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        handleFieldChange(field.name, canvas.toDataURL());
+                      }
+                    };
+                    img.src = URL.createObjectURL(file);
+                  } else {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      handleFieldChange(field.name, reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                  }
                 }
               }}
               className="w-full border rounded-md px-3 py-2 text-gray-900 bg-white"

@@ -288,7 +288,7 @@ export class XlsFormParserService {
     // Gérer les groupes et répétitions
     let currentGroup: string | null = null;
     let currentRepeat: string | null = null;
-    const groupStack: Array<{ name: string; label: string; order: number }> = [];
+    const groupStack: Array<{ name: string; label: string; order: number; appearance?: string }> = [];
     const repeatStack: Array<{ name: string; label: string; order: number }> = [];
 
     for (const row of rows) {
@@ -304,10 +304,15 @@ export class XlsFormParserService {
         const labelInfo = this.extractMultilingualLabel(row, labelColumns);
         const groupName = fieldName;
         currentGroup = groupName;
+        
+        // Stocker l'appearance du groupe si présente
+        const groupAppearance = row.appearance || '';
+        
         groupStack.push({
           name: groupName,
           label: labelInfo.label || groupName,
           order: order++,
+          appearance: groupAppearance,
         });
         continue;
       }
@@ -405,6 +410,11 @@ export class XlsFormParserService {
       // Gérer les groupes
       if (currentGroup) {
         fieldSchema['x-group'] = currentGroup;
+        // Stocker l'appearance du groupe si présente
+        const currentGroupInfo = groupStack.find(g => g.name === currentGroup);
+        if (currentGroupInfo?.appearance) {
+          fieldSchema['x-groupAppearance'] = currentGroupInfo.appearance;
+        }
       }
 
       // Gérer les répétitions
@@ -508,6 +518,10 @@ export class XlsFormParserService {
 
       // Gérer les dépendances (relevant)
       if (row.relevant) {
+        // Stocker l'expression relevant complète
+        fieldSchema['x-relevant'] = row.relevant;
+        
+        // Parser aussi pour extraire les informations simples (pour compatibilité)
         const dependencyInfo = this.parseRelevantExpression(row.relevant);
         if (dependencyInfo.field) {
           fieldSchema['x-dependsOn'] = dependencyInfo.field;
