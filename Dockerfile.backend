@@ -18,6 +18,8 @@ RUN npm install --production=false
 
 # Copier le code source du backend
 COPY backend/src ./src
+# Copier les migrations (nécessaires pour migration:run)
+COPY backend/migrations ./migrations
 
 # Builder l'application
 RUN npm run build
@@ -31,10 +33,24 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+# Copier les fichiers de migration et de configuration nécessaires
+COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/migrations ./migrations
 
 # Exposer le port (Railway utilisera la variable PORT)
 EXPOSE 3001
 
-# Commande de démarrage
-CMD ["node", "dist/main.js"]
+# Créer un script de démarrage qui exécute les migrations puis démarre l'application
+RUN echo '#!/bin/sh' > start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'echo "Exécution des migrations..."' >> start.sh && \
+    echo 'npm run migration:run || echo "Note: Migrations déjà exécutées ou erreur (non bloquant)"' >> start.sh && \
+    echo 'echo "Démarrage de l'\''application..."' >> start.sh && \
+    echo 'echo "========================================="' >> start.sh && \
+    echo 'node dist/main.js' >> start.sh && \
+    chmod +x start.sh
+
+# Utiliser le script au démarrage
+CMD ["sh", "start.sh"]
 
