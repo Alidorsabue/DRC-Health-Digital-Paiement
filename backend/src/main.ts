@@ -29,8 +29,10 @@ async function bootstrap() {
   );
 
   // Autoriser toutes les origines en développement pour permettre l'accès mobile
+  // Nettoyer FRONTEND_URL (supprimer le slash final s'il existe)
+  const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || 'http://localhost:3000';
   const corsOrigins = process.env.NODE_ENV === 'production' 
-    ? (process.env.FRONTEND_URL || 'http://localhost:3000')
+    ? frontendUrl
     : '*';
     
   app.enableCors({
@@ -98,5 +100,8 @@ async function bootstrap() {
   console.log(`========================================\n`);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('❌ Erreur lors du démarrage de l\'application:', error);
+  process.exit(1);
+});
 

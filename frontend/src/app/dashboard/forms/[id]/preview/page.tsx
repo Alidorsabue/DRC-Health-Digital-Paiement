@@ -217,7 +217,7 @@ interface FormField {
   type: string;
   required: boolean;
   group?: string;
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; filter?: string }[];
   dependsOn?: string;
   dependsValue?: string;
   noteText?: string;
@@ -227,6 +227,8 @@ interface FormField {
     pattern?: string;
   };
   order?: number; // Ordre d'apparition pour préserver l'ordre
+  filterField?: string; // Champ de référence pour le filtrage
+  choiceFilter?: string; // Expression choice_filter complète
 }
 
 export default function FormPreviewPage() {
@@ -318,8 +320,9 @@ export default function FormPreviewPage() {
         fieldType = 'select_one';
       }
 
-      let options: { label: string; value: string }[] | undefined;
+      let options: { label: string; value: string; filter?: string }[] | undefined;
       if (prop['x-options'] && Array.isArray(prop['x-options']) && prop['x-options'].length > 0) {
+        // Les options peuvent avoir une propriété filter
         options = prop['x-options'];
       } else if (prop.enum && Array.isArray(prop.enum) && prop.enum.length > 0) {
         options = prop.enum.map((val: string) => ({ label: val, value: val }));
@@ -342,6 +345,8 @@ export default function FormPreviewPage() {
           max: prop.maximum,
         } : undefined,
         order: prop['x-order'] !== undefined ? prop['x-order'] : parsedFields.length, // Préserver l'ordre
+        filterField: prop['x-filterField'],
+        choiceFilter: prop['x-choiceFilter'],
       });
     });
     
@@ -357,16 +362,108 @@ export default function FormPreviewPage() {
   };
 
   // Filtrer les options selon la dépendance hiérarchique
-  const getFilteredOptions = (field: FormField): { label: string; value: string }[] => {
+  const getFilteredOptions = (field: FormField): { label: string; value: string; filter?: string }[] => {
     if (!field.options) return [];
     
-    // Si le champ dépend d'un autre champ, filtrer les options
-    if (field.dependsOn && formData[field.dependsOn]) {
-      // Pour l'instant, retourner toutes les options
-      // Vous pouvez implémenter une logique de filtrage plus sophistiquée ici
-      return field.options;
+    // Déterminer le champ parent pour le filtrage
+    let parentFieldName: string | null = null;
+    let parentValue: any = null;
+    
+    // Cas 1: Le champ a un filterField explicite
+    if (field.filterField) {
+      parentFieldName = field.filterField;
+      parentValue = formData[field.filterField];
+    }
+    // Cas 2: Extraire le champ parent depuis choiceFilter
+    else if (field.choiceFilter) {
+      const fieldRefMatch = field.choiceFilter.match(/\$\{([^}]+)\}/);
+      if (fieldRefMatch) {
+        parentFieldName = fieldRefMatch[1].trim();
+        parentValue = formData[parentFieldName];
+      }
+    }
+    // Cas 3: Déterminer automatiquement selon la hiérarchie géographique
+    else {
+      const fieldNameLower = field.name.toLowerCase();
+      // Hiérarchie: province -> antenne -> zone -> aire
+      if (fieldNameLower.includes('antenne') || fieldNameLower.includes('antenneid')) {
+        // Les antennes sont filtrées par province
+        parentFieldName = fields.find(f => 
+          f.name.toLowerCase().includes('province') || f.name.toLowerCase().includes('provinceid')
+        )?.name || null;
+        if (parentFieldName) {
+          parentValue = formData[parentFieldName];
+        }
+      } else if (fieldNameLower.includes('zone') || fieldNameLower.includes('zoneid')) {
+        // Les zones sont filtrées par antenne ou province
+        parentFieldName = fields.find(f => 
+          (f.name.toLowerCase().includes('antenne') || f.name.toLowerCase().includes('antenneid')) ||
+          (f.name.toLowerCase().includes('province') || f.name.toLowerCase().includes('provinceid'))
+        )?.name || null;
+        if (parentFieldName) {
+          parentValue = formData[parentFieldName];
+        }
+      } else if (fieldNameLower.includes('aire') || fieldNameLower.includes('aireid')) {
+        // Les aires sont filtrées par zone
+        parentFieldName = fields.find(f => 
+          f.name.toLowerCase().includes('zone') || f.name.toLowerCase().includes('zoneid')
+        )?.name || null;
+        if (parentFieldName) {
+          parentValue = formData[parentFieldName];
+        }
+      }
     }
     
+    // Si on a un champ parent et une valeur, filtrer les options
+    if (parentFieldName && parentValue !== undefined && parentValue !== null && parentValue !== '') {
+      const parentValueStr = String(parentValue).trim();
+      
+      // Filtrer les options selon leur propriété filter
+      return field.options.filter((option) => {
+        // Si l'option n'a pas de filtre, elle est toujours visible
+        if (!option.filter || option.filter.trim() === '') {
+          return true;
+        }
+        
+        // Le filtre peut être:
+        // 1. Une valeur simple (ex: "kinshasa", "haut_katanga", "likasi")
+        // 2. Une expression XLSForm (ex: "${provinceId}='kinshasa'")
+        
+        const filterValue = option.filter.trim();
+        
+        // Cas 1: Filtre simple - comparaison directe avec la valeur du parent
+        if (filterValue === parentValueStr) {
+          return true;
+        }
+        
+        // Cas 2: Expression XLSForm - parser l'expression
+        // Format: ${fieldName}='value' ou ${fieldName}="value"
+        const expressionMatch = filterValue.match(/\$\{([^}]+)\}\s*=\s*['"]([^'"]+)['"]/);
+        if (expressionMatch) {
+          const filterFieldName = expressionMatch[1].trim();
+          const filterExpectedValue = expressionMatch[2].trim();
+          
+          // Vérifier si le champ parent correspond
+          if (filterFieldName === parentFieldName && filterExpectedValue === parentValueStr) {
+            return true;
+          }
+        }
+        
+        // Cas 3: Expression avec référence à un autre champ (ex: ${provinceId})
+        // Si le filtre contient juste ${fieldName}, comparer avec la valeur du champ référencé
+        const fieldRefMatch = filterValue.match(/\$\{([^}]+)\}/);
+        if (fieldRefMatch) {
+          const referencedFieldName = fieldRefMatch[1].trim();
+          if (referencedFieldName === parentFieldName && formData[referencedFieldName] === parentValue) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    // Si pas de champ parent ou pas de valeur, retourner toutes les options
     return field.options;
   };
 

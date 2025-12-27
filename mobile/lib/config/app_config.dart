@@ -1,6 +1,6 @@
 class AppConfig {
   // URL de l'API par défaut
-  static const String defaultApiUrl = 'http://localhost:3001';
+  static const String defaultApiUrl = 'https://drc-health-digital-paiement-production.up.railway.app';
   
   // Timeouts
   static const Duration connectTimeout = Duration(seconds: 30);

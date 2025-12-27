@@ -95,3 +95,11 @@ L'APK sera généré dans: `mobile/build/app/outputs/flutter-apk/app-release.apk
 
 Pour plus de détails, consultez `mobile/BUILD_APK.md`
 
+## ✅ Après le Déploiement
+
+Si vous avez déployé sur Railway, consultez `APRES_DEPLOIEMENT.md` pour :
+- Exécuter les migrations
+- Créer le premier utilisateur
+- Configurer l'application mobile
+- Tester l'application
+
