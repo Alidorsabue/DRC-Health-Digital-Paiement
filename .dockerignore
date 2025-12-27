@@ -8,8 +8,8 @@ coverage
 .env
 .env.local
 mobile
-frontend
-backend/dist
-backend/coverage
-backend/node_modules
+backend
+frontend/build
+frontend/.next
+frontend/node_modules
 
