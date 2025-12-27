@@ -1,24 +1,39 @@
 import axios from 'axios';
 import { getApiUrl } from '../utils/api-url';
 
-// Récupérer et nettoyer l'URL de l'API (supprime automatiquement les guillemets ajoutés par Railway)
-const apiUrl = getApiUrl();
-
-// Log pour debug (uniquement en développement)
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('API URL configurée:', apiUrl);
-  console.log('API URL brute:', process.env.NEXT_PUBLIC_API_URL);
+// Fonction pour obtenir l'URL de l'API de manière dynamique
+function getApiBaseUrl(): string {
+  return getApiUrl();
 }
 
+// Créer l'instance axios avec une URL dynamique
 const api = axios.create({
-  baseURL: apiUrl,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Intercepteur pour mettre à jour l'URL de base dynamiquement si nécessaire
 api.interceptors.request.use((config) => {
+  // Mettre à jour l'URL de base à chaque requête (au cas où elle changerait)
+  const currentApiUrl = getApiBaseUrl();
+  if (config.baseURL !== currentApiUrl) {
+    config.baseURL = currentApiUrl;
+  }
+  
+  // Log pour debug (toujours actif pour diagnostiquer)
+  if (typeof window !== 'undefined') {
+    console.log('🔍 DEBUG API CONFIG:', {
+      'API URL configurée': currentApiUrl,
+      'NEXT_PUBLIC_API_URL brute': process.env.NEXT_PUBLIC_API_URL,
+      'NODE_ENV': process.env.NODE_ENV,
+      'window.location.hostname': window.location.hostname,
+    });
+  }
+  
   const token = localStorage.getItem('access_token');
+
   console.log('DEBUG API REQUEST:', {
     url: config.url,
     baseURL: config.baseURL,
