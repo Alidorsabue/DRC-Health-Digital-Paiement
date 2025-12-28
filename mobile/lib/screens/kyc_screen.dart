@@ -70,12 +70,14 @@ class _KYCScreenState extends State<KYCScreen> {
       }
 
       // Récupérer les prestataires depuis la table du formulaire
+      // Ne récupérer que les prestataires uniques enregistrés (pas les doublons de validation)
       List<Map<String, dynamic>> data;
       if (formId != null) {
         // Utiliser le nouvel endpoint avec formId pour récupérer tous les prestataires
         // Le backend filtre automatiquement par zoneId pour les utilisateurs MCZ
-        print('DEBUG KYC: Appel getPrestatairesByForm avec formId=$formId, limit=1000');
-        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000);
+        // includeValidations=false par défaut pour ne récupérer que les prestataires uniques (validationSequence=null)
+        print('DEBUG KYC: Appel getPrestatairesByForm avec formId=$formId, limit=1000, includeValidations=false');
+        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000, includeValidations: false);
         data = List<Map<String, dynamic>>.from(result['data'] ?? []);
         print('DEBUG KYC: formId=$formId, result keys=${result.keys.toList()}, data count=${data.length}');
         if (data.isEmpty && userZoneId != null) {

@@ -237,11 +237,18 @@ export class FormsController {
     @Param('id') id: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('includeValidations') includeValidations?: string,
+    @Query('status') status?: string,
     @CurrentUser() user?: any,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 30;
-    return this.formsService.getPrestatairesDataByForm(id, pageNum, limitNum, undefined, user);
+    const includeValidationsBool = includeValidations === 'true' || includeValidations === '1';
+    const filters: Record<string, any> = { includeValidations: includeValidationsBool };
+    if (status) {
+      filters.status = status;
+    }
+    return this.formsService.getPrestatairesDataByForm(id, pageNum, limitNum, filters, user);
   }
 
   @Get(':id/statistics')

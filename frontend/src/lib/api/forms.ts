@@ -116,14 +116,14 @@ export const formsApi = {
     return response.data;
   },
 
-  getPrestatairesData: async (id: string, page: number = 1, limit: number = 30): Promise<{
+  getPrestatairesData: async (id: string, page: number = 1, limit: number = 30, includeValidations: boolean = false): Promise<{
     data: any[];
     total: number;
     page: number;
     limit: number;
   }> => {
     const response = await api.get(`/forms/${id}/prestataires/data`, {
-      params: { page, limit },
+      params: { page, limit, includeValidations },
     });
     return response.data;
   },

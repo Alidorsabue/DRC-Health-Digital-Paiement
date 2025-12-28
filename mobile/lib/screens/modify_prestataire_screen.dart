@@ -65,9 +65,12 @@ class _ModifyPrestataireScreenState extends State<ModifyPrestataireScreen> {
       }
 
       // Récupérer les prestataires depuis la table du formulaire
+      // Ne récupérer que les prestataires uniques enregistrés (pas les doublons de validation)
       List<Map<String, dynamic>> data;
       if (formId != null) {
-        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000);
+        // includeValidations=false par défaut pour ne récupérer que les prestataires uniques (validationSequence=null)
+        print('DEBUG MODIFY: Appel getPrestatairesByForm avec formId=$formId, limit=1000, includeValidations=false');
+        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000, includeValidations: false);
         data = List<Map<String, dynamic>>.from(result['data'] ?? []);
         print('DEBUG MODIFY: formId=$formId, result keys=${result.keys.toList()}, data count=${data.length}');
       } else {

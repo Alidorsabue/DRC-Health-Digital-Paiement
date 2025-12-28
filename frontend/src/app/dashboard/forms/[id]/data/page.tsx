@@ -5,9 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
 import { campaignsApi } from '../../../../../lib/api/campaigns';
+import { prestatairesApi } from '../../../../../lib/api/prestataires';
 import { Form, Campaign } from '../../../../../types';
 import Link from 'next/link';
 import AlertModal from '../../../../../components/Modal/AlertModal';
+import { exportData, ExportColumn, ExportRow } from '../../../../../utils/export';
 
 export default function FormDataPage() {
   const params = useParams();
@@ -32,6 +34,10 @@ export default function FormDataPage() {
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [selectedPrestataires, setSelectedPrestataires] = useState<Set<string>>(new Set());
+  const [editingPrestataire, setEditingPrestataire] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Record<string, any>>({});
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
@@ -327,12 +333,12 @@ export default function FormDataPage() {
   const loadData = async () => {
     try {
       setLoadingData(true);
-      // Charger toutes les données pour permettre le filtrage côté client
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000);
+      // Charger seulement les prestataires uniques (sans les doublons de validation)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, false);
       setAllData(result.data);
       // Debug: afficher la structure des données
       if (process.env.NODE_ENV === 'development' && result.data.length > 0) {
-        console.log('Données chargées:', result.data.length, 'lignes');
+        console.log('Données chargées (prestataires uniques):', result.data.length, 'lignes');
         console.log('Exemple de ligne:', result.data[0]);
         console.log('Clés disponibles:', Object.keys(result.data[0] || {}));
       }
@@ -347,7 +353,8 @@ export default function FormDataPage() {
   const loadValidationData = async () => {
     try {
       setLoadingData(true);
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000);
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
       // Filtrer les prestataires validés (validation_status non null/vide)
       let validated = result.data.filter((row: any) => {
         const validationStatus = row.validation_status || row.kyc_status || row.status;
@@ -383,11 +390,18 @@ export default function FormDataPage() {
   const loadApprobationData = async () => {
     try {
       setLoadingData(true);
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000);
-      // Filtrer les prestataires approuvés (approval_status non null/vide)
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
+      // Filtrer les prestataires approuvés (approval_status = 'APPROVED' ou 'APPROUVE_PAR_MCZ')
       let approved = result.data.filter((row: any) => {
-        const approvalStatus = row.approval_status;
-        return approvalStatus && approvalStatus !== '' && approvalStatus !== null;
+        const approvalStatus = row.approval_status || row.approvalStatus;
+        return approvalStatus && 
+               approvalStatus !== '' && 
+               approvalStatus !== null &&
+               (approvalStatus === 'APPROVED' || 
+                approvalStatus === 'APPROUVE_PAR_MCZ' ||
+                approvalStatus === 'approuve_par_mcz' ||
+                approvalStatus === 'approuve');
       });
       // Filtrer par campagne si sélectionnée
       if (selectedCampaignId) {
@@ -419,12 +433,19 @@ export default function FormDataPage() {
   const loadPaiementData = async () => {
     try {
       setLoadingData(true);
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000);
-      // Filtrer les prestataires payés (payment_status non null/vide ou paid_at non null)
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
+      // Filtrer les prestataires payés (payment_status = 'PAID' ou 'PAYE' ou paid_at non null)
       let paid = result.data.filter((row: any) => {
-        const paymentStatus = row.payment_status;
-        const paidAt = row.paid_at || row.payment_date;
-        return (paymentStatus && paymentStatus !== '' && paymentStatus !== null) || paidAt;
+        const paymentStatus = row.payment_status || row.paymentStatus;
+        const paidAt = row.paid_at || row.payment_date || row.paidAt;
+        return (paymentStatus && 
+                paymentStatus !== '' && 
+                paymentStatus !== null &&
+                (paymentStatus === 'PAID' || 
+                 paymentStatus === 'PAYE' ||
+                 paymentStatus === 'paye' ||
+                 paymentStatus === 'paye_par_partenaire')) || paidAt;
       });
       // Filtrer par campagne si sélectionnée
       if (selectedCampaignId) {
@@ -479,6 +500,95 @@ export default function FormDataPage() {
       return newFilters;
     });
     setPage(1); // Reset to first page when filtering
+  };
+
+  // Fonctions pour la gestion des prestataires (superadmin uniquement)
+  const toggleSelectPrestataire = (id: string) => {
+    const newSet = new Set(selectedPrestataires);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedPrestataires(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPrestataires.size === data.length) {
+      setSelectedPrestataires(new Set());
+    } else {
+      setSelectedPrestataires(new Set(data.map((row) => row.id || row.submissionId).filter(Boolean)));
+    }
+  };
+
+  const handleEditPrestataire = (row: any) => {
+    setEditingPrestataire(row.id || row.submissionId);
+    setEditFormData({
+      nom: row.family_name_i_c || row.nom || '',
+      prenom: row.given_name_i_c || row.prenom || '',
+      postnom: row.middle_name_i_c || row.postnom || '',
+      telephone: row.num_phone || row.confirm_phone || row.telephone || '',
+      categorie: row.categorie || row.campaign_role_i_f || row.campaign_role || row.role || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPrestataire) return;
+    
+    try {
+      await prestatairesApi.update(editingPrestataire, editFormData, params.id as string);
+      showAlert('Succès', 'Prestataire modifié avec succès', 'success');
+      setEditingPrestataire(null);
+      setEditFormData({});
+      loadData(); // Recharger les données
+    } catch (error: any) {
+      console.error('Erreur lors de la modification:', error);
+      showAlert('Erreur', error.response?.data?.message || 'Impossible de modifier le prestataire', 'error');
+    }
+  };
+
+  const handleDeletePrestataire = async (id: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce prestataire ? Cette action est irréversible.')) {
+      return;
+    }
+
+    try {
+      await prestatairesApi.delete(id, params.id as string);
+      showAlert('Succès', 'Prestataire supprimé avec succès', 'success');
+      loadData(); // Recharger les données
+      setSelectedPrestataires((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    } catch (error: any) {
+      console.error('Erreur lors de la suppression:', error);
+      showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer le prestataire', 'error');
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedPrestataires.size === 0) {
+      showAlert('Attention', 'Veuillez sélectionner au moins un prestataire', 'warning');
+      return;
+    }
+
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer ${selectedPrestataires.size} prestataire(s) ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    try {
+      const deletePromises = Array.from(selectedPrestataires).map(id => 
+        prestatairesApi.delete(id, params.id as string)
+      );
+      await Promise.all(deletePromises);
+      showAlert('Succès', `${selectedPrestataires.size} prestataire(s) supprimé(s) avec succès`, 'success');
+      setSelectedPrestataires(new Set());
+      loadData(); // Recharger les données
+    } catch (error: any) {
+      console.error('Erreur lors de la suppression batch:', error);
+      showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer les prestataires', 'error');
+    }
   };
 
   // Fonction pour détecter si un champ est de type select/enum
@@ -682,9 +792,63 @@ export default function FormDataPage() {
     };
   };
 
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    showAlert('Info', 'Fonctionnalité d\'export à venir', 'info');
+  const handleExport = async (format: 'csv' | 'excel' | 'json') => {
+    try {
+      // Préparer les colonnes pour l'export
+      const exportColumns: ExportColumn[] = [];
+      
+      // Ajouter la colonne ID
+      exportColumns.push({ key: 'id', label: 'ID' });
+      
+      // Ajouter les colonnes visibles
+      orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
+        const fieldSchema = schema?.properties?.[fieldName];
+        const label = fieldSchema?.title || fieldName;
+        exportColumns.push({ key: fieldName, label });
+      });
+
+      // Préparer les données pour l'export
+      const exportDataRows: ExportRow[] = data.map((row) => {
+        const exportRow: ExportRow = { id: row.id || row.submissionId || '-' };
+        
+        orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
+          const fieldSchema = schema?.properties?.[fieldName];
+          const realColumnName = findColumnName(fieldName, row) || fieldName;
+          let value = row[realColumnName];
+          
+          // Formater les valeurs spéciales
+          if (fieldName === 'nom' || fieldName === 'nom_complet') {
+            const nomComplet = formatSpecialCell(fieldName, row, fieldSchema);
+            value = nomComplet;
+          } else if (fieldSchema) {
+            // Pour les champs select, utiliser le label si disponible
+            const label = getLabelFromValue(value, fieldSchema);
+            if (label) {
+              value = label;
+            }
+          }
+          
+          exportRow[fieldName] = value || '';
+        });
+        
+        return exportRow;
+      });
+
+      // Générer le nom de fichier
+      const tabName = activeTab === 'data' ? 'data' : 
+                     activeTab === 'validation' ? 'validation' :
+                     activeTab === 'approbation' ? 'approbation' :
+                     activeTab === 'paiement' ? 'paiement' : 'export';
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${form?.name || 'export'}_${tabName}_${timestamp}`;
+
+      // Exporter selon le format
+      await exportData(format, exportDataRows, exportColumns, filename);
+      setShowExportMenu(false);
+    } catch (error: any) {
+      console.error('Erreur lors de l\'export:', error);
+      showAlert('Erreur', error.message || 'Impossible d\'exporter les données', 'error');
+    }
   };
 
   const handleToggleColumn = (fieldName: string) => {
@@ -1396,13 +1560,48 @@ export default function FormDataPage() {
                   </option>
                 ))}
               </select>
-              <button
-                onClick={handleExport}
-                className="px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-xs sm:text-sm font-medium flex-1 sm:flex-initial"
-              >
-                <span className="hidden sm:inline">Exporter</span>
-                <span className="sm:hidden">Exp</span>
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-xs sm:text-sm font-medium flex-1 sm:flex-initial flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Exporter</span>
+                  <span className="sm:hidden">Exp</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showExportMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowExportMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                      <div className="py-1">
+                        <button
+                          onClick={() => handleExport('excel')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          📊 Excel (XLSX)
+                        </button>
+                        <button
+                          onClick={() => handleExport('csv')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          📄 CSV
+                        </button>
+                        <button
+                          onClick={() => handleExport('json')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          🔗 JSON (API/Power BI/Python)
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1592,6 +1791,16 @@ export default function FormDataPage() {
               )}
             </div>
             <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto">
+              {user?.role === 'SUPERADMIN' && activeTab === 'data' && selectedPrestataires.size > 0 && (
+                <button
+                  onClick={handleBatchDelete}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2"
+                >
+                  <span>🗑️</span>
+                  <span className="hidden sm:inline">Supprimer ({selectedPrestataires.size})</span>
+                  <span className="sm:hidden">{selectedPrestataires.size}</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowColumnModal(true)}
                 className="px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 flex-1 sm:flex-initial"
@@ -1602,13 +1811,48 @@ export default function FormDataPage() {
                 </svg>
                 <span className="hidden sm:inline">Filtre</span>
               </button>
-              <button
-                onClick={handleExport}
-                className="px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-xs sm:text-sm font-medium flex-1 sm:flex-initial"
-              >
-                <span className="hidden sm:inline">Exporter</span>
-                <span className="sm:hidden">Exp</span>
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-xs sm:text-sm font-medium flex-1 sm:flex-initial flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Exporter</span>
+                  <span className="sm:hidden">Exp</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showExportMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowExportMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                      <div className="py-1">
+                        <button
+                          onClick={() => handleExport('excel')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          📊 Excel (XLSX)
+                        </button>
+                        <button
+                          onClick={() => handleExport('csv')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          📄 CSV
+                        </button>
+                        <button
+                          onClick={() => handleExport('json')}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          🔗 JSON (API/Power BI/Python)
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 className="px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-xs sm:text-sm font-medium"
                 title="Plein écran"
@@ -1630,6 +1874,16 @@ export default function FormDataPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
+                        {user?.role === 'SUPERADMIN' && activeTab === 'data' && (
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedPrestataires.size === data.length && data.length > 0}
+                              onChange={toggleSelectAll}
+                              className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                          </th>
+                        )}
                         <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
                           <div className="flex flex-col gap-1 sm:gap-2">
                             <span className="whitespace-nowrap">ID</span>
@@ -1739,13 +1993,31 @@ export default function FormDataPage() {
                           </th>
                         );
                       })}
+                      {user?.role === 'SUPERADMIN' && activeTab === 'data' && (
+                        <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {data.map((row, idx) => (
-                      <tr key={`${row.id || row.submissionId || 'row'}-${idx}`} className="hover:bg-gray-50">
+                    {data.map((row, idx) => {
+                      const rowId = row.id || row.submissionId;
+                      const isEditing = editingPrestataire === rowId;
+                      return (
+                      <tr key={`${rowId || 'row'}-${idx}`} className="hover:bg-gray-50">
+                        {user?.role === 'SUPERADMIN' && activeTab === 'data' && (
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap sticky left-0 bg-white z-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedPrestataires.has(rowId)}
+                              onChange={() => toggleSelectPrestataire(rowId)}
+                              className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                          </td>
+                        )}
                         <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900 font-mono sticky left-0 bg-white z-10">
-                          {row.id || row.submissionId || '-'}
+                          {rowId || '-'}
                         </td>
                         {orderedFields.filter(fieldName => visibleColumns.has(fieldName)).map((fieldName) => {
                           const fieldSchema = schema?.properties?.[fieldName];
@@ -1771,8 +2043,72 @@ export default function FormDataPage() {
                             </td>
                           );
                         })}
+                        {user?.role === 'SUPERADMIN' && activeTab === 'data' && (
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm">
+                            {isEditing ? (
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="Nom"
+                                  value={editFormData.nom || ''}
+                                  onChange={(e) => setEditFormData({ ...editFormData, nom: e.target.value })}
+                                  className="text-xs border rounded px-1 py-0.5 w-20"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Prénom"
+                                  value={editFormData.prenom || ''}
+                                  onChange={(e) => setEditFormData({ ...editFormData, prenom: e.target.value })}
+                                  className="text-xs border rounded px-1 py-0.5 w-20"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Téléphone"
+                                  value={editFormData.telephone || ''}
+                                  onChange={(e) => setEditFormData({ ...editFormData, telephone: e.target.value })}
+                                  className="text-xs border rounded px-1 py-0.5 w-20"
+                                />
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={handleSaveEdit}
+                                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingPrestataire(null);
+                                      setEditFormData({});
+                                    }}
+                                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleEditPrestataire(row)}
+                                  className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                  title="Éditer"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePrestataire(rowId)}
+                                  className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                                  title="Supprimer"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        )}
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                   </table>
                 </div>

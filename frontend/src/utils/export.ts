@@ -181,10 +181,37 @@ export async function exportTableToImage(
 }
 
 /**
+ * Exporte les données en JSON (pour API, Power BI, Python, etc.)
+ */
+export function exportToJSON(
+  data: ExportRow[],
+  columns: ExportColumn[],
+  filename: string = 'export.json'
+): void {
+  // Préparer les données avec les labels des colonnes
+  const jsonData = data.map((row) => {
+    const jsonRow: Record<string, any> = {};
+    columns.forEach((col) => {
+      jsonRow[col.label] = row[col.key];
+      // Ajouter aussi la clé technique pour faciliter le traitement
+      jsonRow[col.key] = row[col.key];
+    });
+    return jsonRow;
+  });
+
+  const jsonContent = JSON.stringify(jsonData, null, 2);
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+}
+
+/**
  * Exporte les données dans différents formats
  */
 export async function exportData(
-  format: 'csv' | 'excel' | 'pdf' | 'image',
+  format: 'csv' | 'excel' | 'pdf' | 'image' | 'json',
   data: ExportRow[],
   columns: ExportColumn[],
   filename: string,
@@ -202,6 +229,9 @@ export async function exportData(
       case 'excel':
         // Utiliser XLSX (format Excel moderne et recommandé)
         await exportToExcel(data, columns, `${baseFilename}.xlsx`);
+        break;
+      case 'json':
+        exportToJSON(data, columns, `${baseFilename}.json`);
         break;
       case 'pdf':
         await exportToPDF(data, columns, `${baseFilename}.pdf`, title);

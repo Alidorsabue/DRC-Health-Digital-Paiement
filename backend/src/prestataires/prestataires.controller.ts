@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   Patch,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PrestatairesService } from './prestataires.service';
@@ -180,7 +181,7 @@ export class PrestatairesController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(Role.IT)
+  @Roles(Role.IT, Role.SUPERADMIN)
   @ApiOperation({ summary: 'Mettre à jour les informations d\'un prestataire' })
   @ApiQuery({ name: 'formId', required: true, description: 'ID du formulaire' })
   updatePrestataire(
@@ -189,6 +190,18 @@ export class PrestatairesController {
     @Query('formId') formId: string,
   ) {
     return this.prestatairesService.updatePrestataire(id, updateDto, formId);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPERADMIN)
+  @ApiOperation({ summary: 'Supprimer un prestataire (SuperAdmin uniquement)' })
+  @ApiQuery({ name: 'formId', required: true, description: 'ID du formulaire' })
+  deletePrestataire(
+    @Param('id') id: string,
+    @Query('formId') formId: string,
+  ) {
+    return this.prestatairesService.deletePrestataire(id, formId);
   }
 
   @Get(':id/validations')

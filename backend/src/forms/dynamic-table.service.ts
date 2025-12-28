@@ -2125,6 +2125,29 @@ export class DynamicTableService {
   }
 
   /**
+   * Supprime un enregistrement (prestataire) de la table du formulaire
+   */
+  async deleteSubmission(formId: string, prestataireId: string): Promise<void> {
+    const tableName = this.getTableName(formId);
+
+    if (!(await this.tableExists(tableName))) {
+      throw new Error(`La table ${tableName} n'existe pas. Le formulaire doit être publié d'abord.`);
+    }
+
+    // Supprimer l'enregistrement par son ID
+    const result = await this.dataSource.query(
+      `DELETE FROM "${tableName}" WHERE id = $1`,
+      [prestataireId],
+    );
+
+    if (result.rowCount === 0) {
+      throw new Error(`Prestataire avec l'ID ${prestataireId} non trouvé dans la table ${tableName}`);
+    }
+
+    console.log(`🗑️ Prestataire supprimé: ${prestataireId} de la table ${tableName}`);
+  }
+
+  /**
    * Supprime la table d'un formulaire (lors de la suppression du formulaire)
    */
   async dropFormTable(formId: string): Promise<void> {

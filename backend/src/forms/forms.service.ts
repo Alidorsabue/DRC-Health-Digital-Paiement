@@ -391,13 +391,16 @@ export class FormsService {
         console.log(`[getPrestatairesDataByForm] Aucun filtre géographique appliqué. User: role=${user?.role}, scope=${user?.scope}`);
       }
 
-      // Par défaut, retourner seulement les enregistrements originaux (validation_sequence IS NULL ou 0)
-      // Mais permettre de voir tous les enregistrements si explicitement demandé
+      // Par défaut, pour l'onglet DATA, retourner seulement les enregistrements originaux (validation_sequence IS NULL)
+      // Pour l'onglet VALIDATION, on ne filtre pas pour voir toutes les validations
       if (filters && filters.validationSequence !== undefined) {
         submissionFilters.validationSequence = filters.validationSequence;
+      } else if (filters && filters.includeValidations === true) {
+        // Si includeValidations est true, ne pas filtrer (pour l'onglet VALIDATION)
+        // Ne pas définir validationSequence
       } else {
-        // Ne pas filtrer par validationSequence par défaut pour voir toutes les données
-        // Les enregistrements originaux et les validations seront tous visibles
+        // Par défaut pour DATA, ne retourner que les prestataires uniques (sans validations multiples)
+        submissionFilters.validationSequence = null;
       }
 
       if (filters) {

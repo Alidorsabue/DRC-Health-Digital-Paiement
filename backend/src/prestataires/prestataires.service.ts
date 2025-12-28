@@ -808,6 +808,22 @@ export class PrestatairesService {
   }
 
   /**
+   * Supprimer un prestataire
+   * Supprime directement dans la table du formulaire
+   */
+  async deletePrestataire(
+    id: string,
+    formId?: string,
+  ): Promise<void> {
+    if (!formId) {
+      throw new NotFoundException('formId requis pour supprimer un prestataire.');
+    }
+
+    // Supprimer directement dans la table du formulaire
+    await this.dynamicTableService.deleteSubmission(formId, id);
+  }
+
+  /**
    * Met à jour le statut KYC d'un prestataire
    * Met à jour directement dans la table du formulaire
    */

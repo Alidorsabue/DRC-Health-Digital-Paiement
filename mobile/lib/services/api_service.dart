@@ -238,14 +238,23 @@ class ApiService {
     String formId, {
     int page = 1,
     int limit = 100,
+    bool includeValidations = false,
+    String? status,
   }) async {
     try {
+      final queryParams = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+      };
+      if (includeValidations) {
+        queryParams['includeValidations'] = 'true';
+      }
+      if (status != null && status.isNotEmpty) {
+        queryParams['status'] = status;
+      }
       final response = await _dio.get(
         '/forms/$formId/prestataires/data',
-        queryParameters: {
-          'page': page,
-          'limit': limit,
-        },
+        queryParameters: queryParams,
       );
       return response.data;
     } catch (e) {

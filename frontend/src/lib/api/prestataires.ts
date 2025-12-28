@@ -47,5 +47,24 @@ export const prestatairesApi = {
     const response = await api.get<Prestataire>(`/prestataires/${id}`);
     return response.data;
   },
+
+  /**
+   * Met à jour un prestataire
+   */
+  update: async (id: string, data: Partial<Prestataire>, formId: string): Promise<Prestataire> => {
+    const response = await api.patch<Prestataire>(`/prestataires/${id}`, data, {
+      params: { formId },
+    });
+    return response.data;
+  },
+
+  /**
+   * Supprime un prestataire
+   */
+  delete: async (id: string, formId: string): Promise<void> => {
+    await api.delete(`/prestataires/${id}`, {
+      params: { formId },
+    });
+  },
 };
 

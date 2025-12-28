@@ -367,6 +367,7 @@ export class ApprovalsService {
             validation_date: record.validation_date || null, // Date de validation par IT (snake_case)
             status: record.status,
             zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.admin2_h_c,
+            aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.admin4_h_c || record.admin4_h_c,
             // Inclure les champs du formulaire pour l'affichage
             nom: record.family_name_i_c || record.nom || formData.family_name_i_c || formData.nom,
             prenom: record.given_name_i_c || record.prenom || formData.given_name_i_c || formData.prenom,

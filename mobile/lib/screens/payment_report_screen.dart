@@ -59,14 +59,36 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
       }
 
       // Récupérer les prestataires depuis la table du formulaire
+      // Ne récupérer que les prestataires approuvés avec leur statut de paiement
+      // Utiliser status='APPROUVE_PAR_MCZ' pour filtrer les prestataires approuvés
+      // includeValidations=false pour ne récupérer que les prestataires uniques (pas les doublons de validation)
       List<Map<String, dynamic>> data;
       if (formId != null) {
-        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000);
+        print('DEBUG PAYMENT: Appel getPrestatairesByForm avec formId=$formId, limit=1000, status=APPROUVE_PAR_MCZ, includeValidations=false');
+        final result = await _apiService.getPrestatairesByForm(
+          formId, 
+          limit: 1000, 
+          includeValidations: false,
+          status: 'APPROUVE_PAR_MCZ',
+        );
         data = List<Map<String, dynamic>>.from(result['data'] ?? []);
         print('DEBUG PAYMENT: formId=$formId, result keys=${result.keys.toList()}, data count=${data.length}');
       } else {
         data = await _apiService.getPrestataires();
         print('DEBUG PAYMENT: Pas de formId, data count=${data.length}');
+        // Filtrer côté client pour ne garder que les prestataires approuvés si pas de formId
+        data = data.where((p) {
+          final status = p['status']?.toString().toUpperCase() ?? '';
+          final approvalStatus = p['approval_status']?.toString().toUpperCase() ?? 
+                                p['approvalStatus']?.toString().toUpperCase() ?? '';
+          return status == 'APPROUVE_PAR_MCZ' || 
+                 status == 'APPROUVE' || 
+                 status == 'APPROVED' ||
+                 approvalStatus == 'APPROUVE_PAR_MCZ' || 
+                 approvalStatus == 'APPROUVE' || 
+                 approvalStatus == 'APPROVED';
+        }).toList();
+        print('DEBUG PAYMENT: Après filtrage par statut approuvé, data count=${data.length}');
       }
 
       print('DEBUG PAYMENT: data count=${data.length}');
