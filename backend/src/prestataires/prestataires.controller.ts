@@ -77,19 +77,51 @@ export class PrestatairesController {
     });
     
     if (campaignId) filters.campaignId = campaignId;
-    if (user.scope === GeographicScope.AIRE) {
-      filters.aireId = user.aireId;
-    } else if (user.scope === GeographicScope.ZONE) {
+    
+    // Pour MCZ: filtrer par zoneId de l'utilisateur
+    if (user.role === 'MCZ' && user.zoneId) {
       filters.zoneId = user.zoneId;
-    } else if (user.scope === GeographicScope.PROVINCE) {
-      filters.provinceId = user.provinceId;
     }
-    // Pour DPS, utiliser le provinceId de la query si fourni, sinon celui de l'utilisateur
-    if (provinceId && user.scope !== GeographicScope.AIRE) {
-      filters.provinceId = provinceId;
+    // Pour IT: appliquer les filtres géographiques selon le scope, mais permettre de voir tous les prestataires qu'ils ont enregistrés
+    else if (user.role === 'IT') {
+      // IT avec scope AIRE: filtrer par aireId
+      if (user.scope === GeographicScope.AIRE && user.aireId) {
+        filters.aireId = user.aireId;
+      }
+      // IT avec scope ZONE: filtrer par zoneId
+      else if (user.scope === GeographicScope.ZONE && user.zoneId) {
+        filters.zoneId = user.zoneId;
+      }
+      // IT avec scope PROVINCE: filtrer par provinceId
+      else if (user.scope === GeographicScope.PROVINCE && user.provinceId) {
+        filters.provinceId = user.provinceId;
+      }
+      // IT sans scope spécifique ou SUPERADMIN: pas de filtre géographique (voir tous)
     }
-    if (zoneId && user.scope !== GeographicScope.AIRE) filters.zoneId = zoneId;
-    if (aireId && user.scope !== GeographicScope.AIRE) filters.aireId = aireId;
+    // Pour les autres rôles, appliquer les filtres selon le scope
+    else {
+      if (user.scope === GeographicScope.AIRE && user.aireId) {
+        filters.aireId = user.aireId;
+      } else if (user.scope === GeographicScope.ZONE && user.zoneId) {
+        filters.zoneId = user.zoneId;
+      } else if (user.scope === GeographicScope.PROVINCE && user.provinceId) {
+        filters.provinceId = user.provinceId;
+      }
+    }
+    
+    // Permettre de surcharger les filtres géographiques via query params (sauf pour MCZ qui est toujours limité à sa zone)
+    if (user.role !== 'MCZ') {
+      if (provinceId && user.scope !== GeographicScope.AIRE) {
+        filters.provinceId = provinceId;
+      }
+      if (zoneId && user.scope !== GeographicScope.AIRE) {
+        filters.zoneId = zoneId;
+      }
+      if (aireId && user.scope !== GeographicScope.AIRE) {
+        filters.aireId = aireId;
+      }
+    }
+    
     if (status) filters.status = status;
 
     console.log('[PrestatairesController.findAll] Filters appliqués:', filters);

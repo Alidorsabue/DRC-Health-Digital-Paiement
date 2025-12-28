@@ -160,6 +160,11 @@ export class ApprovalsService {
         // validationSequence: null, // ❌ Ce filtre excluait les prestataires validés par IT
       };
       
+      // Filtrer par zoneId si fourni (pour MCZ)
+      if (zoneId) {
+        filters.zoneId = zoneId;
+      }
+      
       // Filtrer par aireId si fourni (pour IT)
       if (aireId) {
         filters.aireId = aireId;

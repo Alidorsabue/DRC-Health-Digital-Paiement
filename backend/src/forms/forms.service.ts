@@ -366,19 +366,31 @@ export class FormsService {
         aireId?: string;
       } = {};
 
+      // Filtrer par zoneId pour les utilisateurs MCZ
+      if (user && user.role === 'MCZ' && user.zoneId) {
+        submissionFilters.zoneId = user.zoneId;
+      }
       // Filtrer par aire de santé pour les utilisateurs IT avec scope AIRE
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+      else if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
         submissionFilters.aireId = user.aireId;
       }
+      // Filtrer par zoneId pour les utilisateurs IT avec scope ZONE
+      else if (user && user.role === 'IT' && user.scope === 'ZONE' && user.zoneId) {
+        submissionFilters.zoneId = user.zoneId;
+      }
+      // Filtrer par provinceId pour les utilisateurs IT avec scope PROVINCE
+      else if (user && user.role === 'IT' && user.scope === 'PROVINCE' && user.provinceId) {
+        submissionFilters.provinceId = user.provinceId;
+      }
+      // IT sans scope ou SUPERADMIN: pas de filtre géographique (voir tous)
 
       // Par défaut, retourner seulement les enregistrements originaux (validation_sequence IS NULL ou 0)
       // Mais permettre de voir tous les enregistrements si explicitement demandé
       if (filters && filters.validationSequence !== undefined) {
         submissionFilters.validationSequence = filters.validationSequence;
       } else {
-        // TEMPORAIREMENT: Ne pas filtrer par validationSequence pour voir toutes les données
-        // Cela permettra de déboguer pourquoi aucune donnée n'est retournée
-        // submissionFilters.validationSequence = null;
+        // Ne pas filtrer par validationSequence par défaut pour voir toutes les données
+        // Les enregistrements originaux et les validations seront tous visibles
       }
 
       if (filters) {

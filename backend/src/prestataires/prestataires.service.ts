@@ -429,10 +429,28 @@ export class PrestatairesService {
           { status: PrestataireStatus.VALIDE_PAR_IT },
         ];
         
+        // Filtrer par zoneId pour les utilisateurs MCZ
+        if (user && user.role === 'MCZ' && user.zoneId) {
+          whereConditions.forEach(condition => {
+            condition.zoneId = user.zoneId;
+          });
+        }
         // Filtrer par aire de santé pour les utilisateurs IT avec scope AIRE
-        if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+        else if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
           whereConditions.forEach(condition => {
             condition.aireId = user.aireId;
+          });
+        }
+        // Filtrer par zoneId pour les utilisateurs IT avec scope ZONE
+        else if (user && user.role === 'IT' && user.scope === 'ZONE' && user.zoneId) {
+          whereConditions.forEach(condition => {
+            condition.zoneId = user.zoneId;
+          });
+        }
+        // Filtrer par provinceId pour les utilisateurs IT avec scope PROVINCE
+        else if (user && user.role === 'IT' && user.scope === 'PROVINCE' && user.provinceId) {
+          whereConditions.forEach(condition => {
+            condition.provinceId = user.provinceId;
           });
         }
         
@@ -451,20 +469,31 @@ export class PrestatairesService {
 
       // Récupérer depuis la table du formulaire
       // Les prestataires en attente sont ceux avec status ENREGISTRE ou VALIDE_PAR_IT
-      // et validation_sequence IS NULL (enregistrement original, pas une validation)
-      const filters: any = {
-        validationSequence: null, // Seulement les enregistrements originaux
-      };
+      // Ne pas filtrer par validationSequence pour voir tous les enregistrements (originaux et validations)
+      const filters: any = {};
       
       // Filtrer par campagne si fournie
       if (campaignId) {
         filters.campaignId = campaignId;
       }
       
+      // Filtrer par zoneId pour les utilisateurs MCZ
+      if (user && user.role === 'MCZ' && user.zoneId) {
+        filters.zoneId = user.zoneId;
+      }
       // Filtrer par aire de santé pour les utilisateurs IT avec scope AIRE
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+      else if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
         filters.aireId = user.aireId;
       }
+      // Filtrer par zoneId pour les utilisateurs IT avec scope ZONE
+      else if (user && user.role === 'IT' && user.scope === 'ZONE' && user.zoneId) {
+        filters.zoneId = user.zoneId;
+      }
+      // Filtrer par provinceId pour les utilisateurs IT avec scope PROVINCE
+      else if (user && user.role === 'IT' && user.scope === 'PROVINCE' && user.provinceId) {
+        filters.provinceId = user.provinceId;
+      }
+      // IT sans scope ou SUPERADMIN: pas de filtre géographique (voir tous)
       
       const { data } = await this.dynamicTableService.getSubmissions(
         targetFormId,
@@ -527,10 +556,28 @@ export class PrestatairesService {
         { status: PrestataireStatus.VALIDE_PAR_IT },
       ];
       
+      // Filtrer par zoneId pour les utilisateurs MCZ
+      if (user && user.role === 'MCZ' && user.zoneId) {
+        whereConditions.forEach(condition => {
+          condition.zoneId = user.zoneId;
+        });
+      }
       // Filtrer par aire de santé pour les utilisateurs IT avec scope AIRE
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+      else if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
         whereConditions.forEach(condition => {
           condition.aireId = user.aireId;
+        });
+      }
+      // Filtrer par zoneId pour les utilisateurs IT avec scope ZONE
+      else if (user && user.role === 'IT' && user.scope === 'ZONE' && user.zoneId) {
+        whereConditions.forEach(condition => {
+          condition.zoneId = user.zoneId;
+        });
+      }
+      // Filtrer par provinceId pour les utilisateurs IT avec scope PROVINCE
+      else if (user && user.role === 'IT' && user.scope === 'PROVINCE' && user.provinceId) {
+        whereConditions.forEach(condition => {
+          condition.provinceId = user.provinceId;
         });
       }
       
