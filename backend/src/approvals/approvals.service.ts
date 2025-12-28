@@ -252,20 +252,62 @@ export class ApprovalsService {
         // Normaliser le zoneId pour la comparaison (insensible à la casse, trim)
         const normalizedZoneId = zoneId.toString().trim().toLowerCase();
         console.log(`[ApprovalsService.findByZoneOrAire] Recherche zoneId normalisé: "${normalizedZoneId}"`);
+        console.log(`[ApprovalsService.findByZoneOrAire] Total enregistrements avant filtrage: ${data.length}`);
+        
+        // Afficher les zoneIds uniques trouvés AVANT filtrage pour diagnostic
+        const uniqueZoneIdsBeforeFilter = new Set<string>();
+        data.forEach((record: any) => {
+          const formData = typeof record.raw_data === 'string' ? JSON.parse(record.raw_data || '{}') : (record.raw_data || {});
+          const recordZoneId = record.zone_id || 
+                              record.zoneId || 
+                              record.zone_de_sante_id ||
+                              record.zoneDeSanteId ||
+                              formData.zone_id || 
+                              formData.zoneId || 
+                              formData.zone_de_sante_id ||
+                              formData.zoneDeSanteId ||
+                              formData.admin2_h_c ||
+                              formData.admin3_h_c ||
+                              record.admin2_h_c ||
+                              record.admin3_h_c;
+          if (recordZoneId) {
+            uniqueZoneIdsBeforeFilter.add(recordZoneId.toString().trim().toLowerCase());
+          }
+        });
+        console.log(`[ApprovalsService.findByZoneOrAire] ZoneIds uniques trouvés AVANT filtrage:`, Array.from(uniqueZoneIdsBeforeFilter));
         
         // Chercher zoneId dans les données du formulaire (peut être dans raw_data ou colonne directe)
         let matchCount = 0;
+        let noZoneIdCount = 0;
         filteredData = filteredData.filter((record: any) => {
-          const formData = record.raw_data || {};
-          // Chercher dans plusieurs emplacements possibles
+          // Parser raw_data si c'est une string
+          const formData = typeof record.raw_data === 'string' 
+            ? (() => {
+                try {
+                  return JSON.parse(record.raw_data || '{}');
+                } catch (e) {
+                  console.warn(`[ApprovalsService.findByZoneOrAire] Erreur parsing raw_data:`, e);
+                  return {};
+                }
+              })()
+            : (record.raw_data || {});
+          
+          // Chercher dans plusieurs emplacements possibles (ordre de priorité)
           const recordZoneId = record.zone_id || 
                               record.zoneId || 
+                              record.zone_de_sante_id ||
+                              record.zoneDeSanteId ||
                               formData.zone_id || 
                               formData.zoneId || 
+                              formData.zone_de_sante_id ||
+                              formData.zoneDeSanteId ||
                               formData.admin2_h_c ||
-                              record.admin2_h_c;
+                              formData.admin3_h_c ||
+                              record.admin2_h_c ||
+                              record.admin3_h_c;
           
           if (!recordZoneId) {
+            noZoneIdCount++;
             return false;
           }
           
@@ -283,10 +325,11 @@ export class ApprovalsService {
           return matches;
         });
         
-        console.log(`[ApprovalsService.findByZoneOrAire] Après filtrage par zone: ${filteredData.length} enregistrements`);
+        console.log(`[ApprovalsService.findByZoneOrAire] Après filtrage par zone: ${filteredData.length} enregistrements (${matchCount} matches, ${noZoneIdCount} sans zoneId)`);
         
         if (filteredData.length === 0 && data.length > 0) {
           console.warn(`[ApprovalsService.findByZoneOrAire] ⚠️ ATTENTION: Aucun match trouvé pour zoneId="${zoneId}" (normalisé: "${normalizedZoneId}")`);
+          console.warn(`[ApprovalsService.findByZoneOrAire] ZoneIds disponibles dans les données:`, Array.from(uniqueZoneIdsBeforeFilter));
           console.warn(`[ApprovalsService.findByZoneOrAire] Vérifiez que le zoneId de l'utilisateur correspond bien aux zoneIds dans les données`);
         }
       } else if (!aireId) {

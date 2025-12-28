@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../models/prestataire.dart';
 import '../models/campaign.dart';
+import '../models/user.dart';
 
 class KYCScreen extends StatefulWidget {
   const KYCScreen({super.key});
@@ -14,12 +16,14 @@ class _KYCScreenState extends State<KYCScreen> {
   List<Prestataire> _prestataires = [];
   bool _isLoading = true;
   final ApiService _apiService = ApiService();
+  late final AuthService _authService;
   String _searchQuery = '';
   String? _formId;
 
   @override
   void initState() {
     super.initState();
+    _authService = AuthService(_apiService);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -54,15 +58,32 @@ class _KYCScreenState extends State<KYCScreen> {
         }
       }
 
+      // Récupérer le zoneId de l'utilisateur connecté
+      User? currentUser;
+      String? userZoneId;
+      try {
+        currentUser = await _authService.getCurrentUser();
+        userZoneId = currentUser?.zoneId;
+        print('DEBUG KYC: Utilisateur connecté - role=${currentUser?.role}, zoneId=$userZoneId, provinceId=${currentUser?.provinceId}');
+      } catch (e) {
+        print('DEBUG KYC: Erreur lors de la récupération de l\'utilisateur: $e');
+      }
+
       // Récupérer les prestataires depuis la table du formulaire
       List<Map<String, dynamic>> data;
       if (formId != null) {
         // Utiliser le nouvel endpoint avec formId pour récupérer tous les prestataires
+        // Le backend filtre automatiquement par zoneId pour les utilisateurs MCZ
+        print('DEBUG KYC: Appel getPrestatairesByForm avec formId=$formId, limit=1000');
         final result = await _apiService.getPrestatairesByForm(formId, limit: 1000);
         data = List<Map<String, dynamic>>.from(result['data'] ?? []);
         print('DEBUG KYC: formId=$formId, result keys=${result.keys.toList()}, data count=${data.length}');
+        if (data.isEmpty && userZoneId != null) {
+          print('DEBUG KYC: ⚠️ ATTENTION - Aucune donnée retournée pour zoneId=$userZoneId');
+        }
       } else {
         // Fallback: utiliser l'ancien endpoint sans formId (le backend trouvera automatiquement)
+        print('DEBUG KYC: Pas de formId, utilisation de getPrestatairesPendingValidation');
         data = await _apiService.getPrestatairesPendingValidation();
         print('DEBUG KYC: Pas de formId, data count=${data.length}');
       }

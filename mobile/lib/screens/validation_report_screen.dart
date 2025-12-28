@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../models/prestataire.dart';
 import '../models/campaign.dart';
+import '../models/user.dart';
 
 class ApprovalReportScreen extends StatefulWidget {
   const ApprovalReportScreen({super.key});
@@ -14,8 +16,15 @@ class _ApprovalReportScreenState extends State<ApprovalReportScreen> {
   List<Prestataire> _prestataires = [];
   bool _isLoading = true;
   final ApiService _apiService = ApiService();
+  late final AuthService _authService;
   String _selectedStatus = 'Tous';
   String? _formId;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = AuthService(_apiService);
+  }
 
   @override
   void initState() {
@@ -53,12 +62,27 @@ class _ApprovalReportScreenState extends State<ApprovalReportScreen> {
         }
       }
 
+      // Récupérer le zoneId de l'utilisateur connecté
+      User? currentUser;
+      String? userZoneId;
+      try {
+        currentUser = await _authService.getCurrentUser();
+        userZoneId = currentUser?.zoneId;
+        print('DEBUG validation_report: Utilisateur connecté - role=${currentUser?.role}, zoneId=$userZoneId, provinceId=${currentUser?.provinceId}');
+      } catch (e) {
+        print('DEBUG validation_report: Erreur lors de la récupération de l\'utilisateur: $e');
+      }
+
       // Récupérer les approbations depuis la table du formulaire
       List<Map<String, dynamic>> data;
       if (formId != null) {
-        data = await _apiService.getApprovalsByForm(formId);
+        // Passer le zoneId explicitement pour les utilisateurs MCZ (même si le backend devrait le faire automatiquement)
+        print('DEBUG validation_report: Appel getApprovalsByForm avec formId=$formId, zoneId=$userZoneId');
+        data = await _apiService.getApprovalsByForm(formId, zoneId: userZoneId);
+        print('DEBUG validation_report: ${data.length} prestataires reçus du backend');
       } else {
         // Fallback: utiliser getPrestataires
+        print('DEBUG validation_report: Pas de formId, utilisation de getPrestataires');
         data = await _apiService.getPrestataires();
       }
 

@@ -728,7 +728,8 @@ export class DynamicTableService {
       if (filters.zoneId) {
         const zoneColumns: string[] = [];
         // Chercher les variantes possibles de noms de colonnes pour zone
-        const possibleZoneNames = ['zoneid', 'admin3_h_c', 'zone_id', 'admin3', 'zoneId', 'ZoneId', 'ZONEID'];
+        // Ajouter aussi admin2_h_c qui est souvent utilisé dans les formulaires ODK
+        const possibleZoneNames = ['zoneid', 'admin3_h_c', 'admin2_h_c', 'zone_id', 'admin3', 'admin2', 'zoneId', 'ZoneId', 'ZONEID'];
         for (const colName of possibleZoneNames) {
           if (columnNames.has(colName.toLowerCase())) {
             // Trouver le nom exact avec la casse correcte
@@ -744,8 +745,10 @@ export class DynamicTableService {
           paramIndex++;
           console.log(`[getSubmissions] Filtre zoneId appliqué: ${filters.zoneId} sur colonnes: ${zoneColumns.join(', ')}`);
         } else {
-          // Si aucune colonne de zone n'est trouvée, ne pas filtrer (pour éviter de perdre des données)
-          console.warn(`[getSubmissions] ATTENTION: Aucune colonne de zone trouvée dans ${tableName} pour filtrer par zoneId=${filters.zoneId}. Le filtre est ignoré pour retourner tous les prestataires.`);
+          // Si aucune colonne de zone n'est trouvée, ne pas filtrer au niveau SQL
+          // Le filtrage se fera côté application dans raw_data
+          console.warn(`[getSubmissions] ATTENTION: Aucune colonne de zone trouvée dans ${tableName} pour filtrer par zoneId=${filters.zoneId}. Le filtre SQL est ignoré, le filtrage se fera côté application dans raw_data.`);
+          console.log(`[getSubmissions] Colonnes disponibles dans ${tableName}:`, Array.from(columnNames).sort());
         }
       }
       if (filters.aireId) {
