@@ -2862,7 +2862,7 @@ export default function FormBuilderPage() {
         onConfirm={() => {
           confirmModal.onConfirm();
         }}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
         title={confirmModal.title}
         message={confirmModal.message}
         type={confirmModal.type}
