@@ -660,13 +660,39 @@ export class PrestatairesService {
     } else {
       // Créer une nouvelle ligne pour cette nouvelle campagne
       // insertValidationRecord vérifiera automatiquement si une validation existe déjà
-          await this.dynamicTableService.insertValidationRecord(
-        targetFormId,
+      try {
+        await this.dynamicTableService.insertValidationRecord(
+          targetFormId,
+          id,
+          campaignId,
+          validationDate,
+          presenceDays,
+        );
+      } catch (error: any) {
+        // Si une validation existe déjà (erreur de duplication), essayer de la mettre à jour
+        if (error.message && error.message.includes('existe déjà')) {
+          // Re-vérifier et mettre à jour la validation existante
+          const existingValidationRetry = await this.dynamicTableService.findValidationByCampaign(
+            targetFormId,
             id,
             campaignId,
-            validationDate,
-            presenceDays,
           );
+          
+          if (existingValidationRetry) {
+            await this.dynamicTableService.updateValidationInTable(
+              targetFormId,
+              id,
+              presenceDays,
+              validationDate,
+              campaignId,
+            );
+          } else {
+            throw error; // Relancer l'erreur si on ne peut pas la résoudre
+          }
+        } else {
+          throw error; // Relancer les autres erreurs
+        }
+      }
 
       // Récupérer le nouvel enregistrement créé pour le retourner
       const { data } = await this.dynamicTableService.getSubmissions(
@@ -678,7 +704,7 @@ export class PrestatairesService {
 
       if (!data || data.length === 0) {
         throw new NotFoundException(`Nouvelle validation non trouvée après création`);
-    }
+      }
     
       return data[0];
     }

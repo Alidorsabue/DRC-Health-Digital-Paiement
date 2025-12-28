@@ -302,9 +302,17 @@ class ApiService {
   }
 
   /// Invalider un prestataire (remettre le status à ENREGISTRE)
-  Future<Map<String, dynamic>> invalidatePrestataire(String id) async {
+  Future<Map<String, dynamic>> invalidatePrestataire(String id, {String? formId}) async {
     try {
-      final response = await _dio.patch('/prestataires/$id/invalidate');
+      final queryParams = <String, dynamic>{};
+      if (formId != null) {
+        queryParams['formId'] = formId;
+      }
+      
+      final response = await _dio.patch(
+        '/prestataires/$id/invalidate',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
       return response.data;
     } catch (e) {
       throw Exception(_handleError(e));

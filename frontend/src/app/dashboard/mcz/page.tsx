@@ -371,10 +371,15 @@ export default function MCZPage() {
       showAlert('Attention', 'Veuillez sélectionner au moins un prestataire', 'warning');
       return;
     }
+    if (!selectedFormId) {
+      showAlert('Erreur', 'Veuillez sélectionner un formulaire', 'warning');
+      return;
+    }
     try {
       await approvalsApi.approveBatch(
         Array.from(selectedPrestataires),
         batchComment || undefined,
+        selectedFormId,
       );
       showAlert('Succès', `${selectedPrestataires.size} prestataire(s) approuvé(s) avec succès`, 'success');
       loadPrestataires();
@@ -395,10 +400,15 @@ export default function MCZPage() {
       showAlert('Erreur', 'Un commentaire est obligatoire pour le rejet', 'warning');
       return;
     }
+    if (!selectedFormId) {
+      showAlert('Erreur', 'Veuillez sélectionner un formulaire', 'warning');
+      return;
+    }
     try {
       await approvalsApi.rejectBatch(
         Array.from(selectedPrestataires),
         batchComment,
+        selectedFormId,
       );
       showAlert('Succès', `${selectedPrestataires.size} prestataire(s) rejeté(s) avec succès`, 'success');
       loadPrestataires();

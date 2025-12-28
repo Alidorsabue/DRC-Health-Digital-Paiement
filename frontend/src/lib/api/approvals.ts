@@ -86,10 +86,11 @@ export const approvalsApi = {
   approveBatch: async (
     prestataireIds: string[],
     commentaire?: string,
+    formId?: string,
   ): Promise<Approval[]> => {
     const response = await api.post<Approval[]>(
       '/approbations/batch/approve',
-      { prestataireIds, commentaire },
+      { prestataireIds, commentaire, formId },
     );
     return response.data;
   },
@@ -100,10 +101,11 @@ export const approvalsApi = {
   rejectBatch: async (
     prestataireIds: string[],
     commentaire: string,
+    formId?: string,
   ): Promise<Approval[]> => {
     const response = await api.post<Approval[]>(
       '/approbations/batch/reject',
-      { prestataireIds, commentaire },
+      { prestataireIds, commentaire, formId },
     );
     return response.data;
   },

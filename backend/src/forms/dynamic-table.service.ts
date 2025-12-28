@@ -1695,12 +1695,19 @@ export class DynamicTableService {
 
     // Chercher une validation existante pour ce prestataire et cette campagne
     // Pour les validations, on utilise prestataire_id pour référencer le prestataire original
+    // Vérifier à la fois par id et prestataire_id, et chercher les validations par:
+    // - status = 'VALIDE_PAR_IT' OU
+    // - validation_sequence IS NOT NULL OU
+    // - presence_days IS NOT NULL (indique qu'une validation a été faite)
     const result = await this.dataSource.query(
       `SELECT * FROM "${tableName}" 
        WHERE (id = $1 OR prestataire_id = $1)
        AND campaign_id = $2
-       AND (validation_sequence IS NOT NULL OR status = 'VALIDE_PAR_IT')
-       AND status = 'VALIDE_PAR_IT'
+       AND (
+         status = 'VALIDE_PAR_IT' 
+         OR validation_sequence IS NOT NULL 
+         OR presence_days IS NOT NULL
+       )
        ORDER BY validation_sequence DESC NULLS LAST, created_at DESC
        LIMIT 1`,
       [prestataireId, campaignId],

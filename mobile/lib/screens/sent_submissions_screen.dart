@@ -274,7 +274,32 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
     try {
       // Utiliser prestataireId si disponible (ID réel du prestataire), sinon utiliser id
       final prestataireRealId = prestataire.prestataireId ?? prestataire.id;
-      await _apiService.invalidatePrestataire(prestataireRealId);
+      
+      // Récupérer le formId depuis la campagne si disponible
+      String? formId = _formId;
+      if (formId == null && prestataire.campaignId != null) {
+        try {
+          final campaign = _campaigns.firstWhere(
+            (c) => c.id == prestataire.campaignId,
+            orElse: () => _campaigns.firstWhere(
+              (c) => c.enregistrementFormId != null,
+              orElse: () => _campaigns.first,
+            ),
+          );
+          formId = campaign.enregistrementFormId;
+        } catch (e) {
+          // Si on ne trouve pas de campagne, essayer de récupérer depuis les campagnes chargées
+          if (_campaigns.isNotEmpty) {
+            final campaign = _campaigns.firstWhere(
+              (c) => c.enregistrementFormId != null,
+              orElse: () => _campaigns.first,
+            );
+            formId = campaign.enregistrementFormId;
+          }
+        }
+      }
+      
+      await _apiService.invalidatePrestataire(prestataireRealId, formId: formId);
       
       // Supprimer la date de validation et la campagne locale
       _validationDates.remove(prestataire.id);

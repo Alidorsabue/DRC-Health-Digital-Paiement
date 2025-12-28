@@ -112,6 +112,7 @@ export class ApprovalsService {
     prestataireIds: string[],
     userId: string,
     commentaire?: string,
+    formId?: string,
   ): Promise<ApprovalMCZ[]> {
     const approvals: ApprovalMCZ[] = [];
     for (const prestataireId of prestataireIds) {
@@ -119,6 +120,7 @@ export class ApprovalsService {
         prestataireId,
         { decision: ApprovalDecision.APPROVED, commentaire },
         userId,
+        formId,
       );
       approvals.push(approval);
     }
@@ -129,6 +131,7 @@ export class ApprovalsService {
     prestataireIds: string[],
     userId: string,
     commentaire?: string,
+    formId?: string,
   ): Promise<ApprovalMCZ[]> {
     const approvals: ApprovalMCZ[] = [];
     for (const prestataireId of prestataireIds) {
@@ -136,6 +139,7 @@ export class ApprovalsService {
         prestataireId,
         { decision: ApprovalDecision.REJECTED, commentaire },
         userId,
+        formId,
       );
       approvals.push(approval);
     }

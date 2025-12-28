@@ -80,6 +80,7 @@ export class ApprovalsController {
       batchApprovalDto.prestataireIds,
       user.userId,
       batchApprovalDto.commentaire,
+      batchApprovalDto.formId,
     );
   }
 
@@ -93,6 +94,7 @@ export class ApprovalsController {
       batchApprovalDto.prestataireIds,
       user.userId,
       batchApprovalDto.commentaire,
+      batchApprovalDto.formId,
     );
   }
 }
