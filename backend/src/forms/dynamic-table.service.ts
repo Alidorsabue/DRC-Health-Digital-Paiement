@@ -778,6 +778,56 @@ export class DynamicTableService {
 
     console.log(`[getSubmissions] tableName=${tableName}, whereClause=${whereClause}, params=`, queryParams);
 
+    // DIAGNOSTIC: Si on filtre par zoneId, vérifier d'abord combien d'enregistrements existent au total
+    if (filters?.zoneId) {
+      try {
+        const totalCountQuery = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM "${tableName}" WHERE 1=1`,
+        );
+        const totalCount = parseInt(totalCountQuery[0]?.count || '0', 10);
+        console.log(`[getSubmissions] DIAGNOSTIC: Total enregistrements dans ${tableName}: ${totalCount}`);
+        
+        // Échantillonner quelques enregistrements pour voir les zoneIds présents
+        if (totalCount > 0) {
+          const sampleQuery = await this.dataSource.query(
+            `SELECT * FROM "${tableName}" LIMIT 5`,
+          );
+          const sampleZoneIds = new Set<string>();
+          sampleQuery.forEach((record: any) => {
+            const rawData = typeof record.raw_data === 'string' 
+              ? (() => {
+                  try {
+                    return JSON.parse(record.raw_data || '{}');
+                  } catch (e) {
+                    return {};
+                  }
+                })()
+              : (record.raw_data || {});
+            
+            const sampleZoneId = record.zone_id || 
+                                record.zoneId || 
+                                record.zone_de_sante_id ||
+                                record.zoneDeSanteId ||
+                                rawData.zone_id || 
+                                rawData.zoneId || 
+                                rawData.zone_de_sante_id ||
+                                rawData.zoneDeSanteId ||
+                                rawData.admin2_h_c ||
+                                rawData.admin3_h_c ||
+                                record.admin2_h_c ||
+                                record.admin3_h_c;
+            
+            if (sampleZoneId) {
+              sampleZoneIds.add(sampleZoneId.toString().trim().toLowerCase());
+            }
+          });
+          console.log(`[getSubmissions] DIAGNOSTIC: ZoneIds trouvés dans l'échantillon (5 premiers):`, Array.from(sampleZoneIds));
+        }
+      } catch (e) {
+        console.warn(`[getSubmissions] Erreur lors du diagnostic:`, e);
+      }
+    }
+
     // Récupérer toutes les données d'abord (sans filtres géographiques si les colonnes n'existent pas)
     const [data, countResult] = await Promise.all([
       this.dataSource.query(
@@ -798,33 +848,91 @@ export class DynamicTableService {
     let filteredTotal = parseInt(countResult[0]?.count || '0', 10);
     
     if (filters) {
-      // Vérifier si on doit filtrer par zoneId dans raw_data
-      if (filters.zoneId) {
+      // Filtrer par zoneId dans raw_data si nécessaire
+      if (filters.zoneId && columnNames.has('raw_data')) {
         const zoneColumnsFound = existingColumns.some((col: any) => {
           const colName = col.column_name.toLowerCase();
-          return ['zoneid', 'admin3_h_c', 'zone_id', 'admin3'].includes(colName);
+          return ['zoneid', 'admin3_h_c', 'admin2_h_c', 'zone_id', 'admin3', 'admin2'].includes(colName);
         });
         
-        if (!zoneColumnsFound && columnNames.has('raw_data')) {
-          console.log(`[getSubmissions] Colonne zone non trouvée, filtrage dans raw_data pour zoneId=${filters.zoneId}`);
+        // Si le filtre SQL n'a rien retourné mais qu'une colonne existe, récupérer TOUS les enregistrements
+        // et filtrer dans raw_data (les données peuvent être dans raw_data mais pas dans la colonne)
+        if (zoneColumnsFound && data.length === 0) {
+          console.log(`[getSubmissions] Filtre SQL n'a rien retourné malgré colonne existante, récupération de tous les enregistrements pour filtrage dans raw_data`);
+          const allDataQuery = await this.dataSource.query(
+            `SELECT * FROM "${tableName}" WHERE 1=1 ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+            [limit, offset],
+          );
+          filteredData = allDataQuery;
+          console.log(`[getSubmissions] ${allDataQuery.length} enregistrements récupérés pour filtrage dans raw_data`);
+        }
+        
+        // Filtrer dans raw_data si aucune colonne n'a été trouvée OU si le filtre SQL n'a rien retourné
+        const shouldFilterInRawData = !zoneColumnsFound || (zoneColumnsFound && data.length === 0);
+        
+        if (shouldFilterInRawData) {
+          if (!zoneColumnsFound) {
+            console.log(`[getSubmissions] Colonne zone non trouvée, filtrage dans raw_data pour zoneId=${filters.zoneId}`);
+          } else {
+            console.log(`[getSubmissions] Filtre SQL n'a rien retourné, filtrage dans raw_data pour zoneId=${filters.zoneId}`);
+          }
           const normalizedZoneId = filters.zoneId.toString().trim().toLowerCase();
           
+          let matchCount = 0;
+          let noZoneIdCount = 0;
+          const uniqueZoneIdsFound = new Set<string>();
+          
           filteredData = filteredData.filter((record: any) => {
+            // Parser raw_data si c'est une string
             const rawData = typeof record.raw_data === 'string' 
-              ? JSON.parse(record.raw_data) 
+              ? (() => {
+                  try {
+                    return JSON.parse(record.raw_data || '{}');
+                  } catch (e) {
+                    console.warn(`[getSubmissions] Erreur parsing raw_data:`, e);
+                    return {};
+                  }
+                })()
               : (record.raw_data || {});
             
+            // Chercher dans plusieurs emplacements possibles (ordre de priorité)
             const recordZoneId = record.zone_id || 
                                 record.zoneId || 
+                                record.zone_de_sante_id ||
+                                record.zoneDeSanteId ||
                                 rawData.zone_id || 
                                 rawData.zoneId || 
+                                rawData.zone_de_sante_id ||
+                                rawData.zoneDeSanteId ||
+                                rawData.admin2_h_c ||
                                 rawData.admin3_h_c ||
+                                record.admin2_h_c ||
                                 record.admin3_h_c;
             
-            if (!recordZoneId) return true; // Inclure si pas de zoneId (pour ne pas perdre de données)
+            if (!recordZoneId) {
+              noZoneIdCount++;
+              return false; // ❌ CORRECTION: Exclure si pas de zoneId quand on filtre par zoneId
+            }
             
-            return recordZoneId.toString().trim().toLowerCase() === normalizedZoneId;
+            // Normaliser pour comparaison
+            const normalizedRecordZoneId = recordZoneId.toString().trim().toLowerCase();
+            uniqueZoneIdsFound.add(normalizedRecordZoneId);
+            
+            const matches = normalizedRecordZoneId === normalizedZoneId;
+            if (matches) {
+              matchCount++;
+            }
+            
+            return matches;
           });
+          
+          console.log(`[getSubmissions] Après filtrage dans raw_data: ${filteredData.length} enregistrements (${matchCount} matches, ${noZoneIdCount} sans zoneId)`);
+          console.log(`[getSubmissions] ZoneIds uniques trouvés dans raw_data:`, Array.from(uniqueZoneIdsFound));
+          
+          if (filteredData.length === 0 && data.length > 0) {
+            console.warn(`[getSubmissions] ⚠️ ATTENTION: Aucun match trouvé pour zoneId="${filters.zoneId}" (normalisé: "${normalizedZoneId}")`);
+            console.warn(`[getSubmissions] ZoneIds disponibles dans les données:`, Array.from(uniqueZoneIdsFound));
+          }
           
           // Recompter le total
           const allDataForCount = await this.dataSource.query(
