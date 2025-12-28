@@ -566,26 +566,66 @@ export class DynamicTableService {
     const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
     const columnNames = columns.join(', ');
 
-    // Utiliser ON CONFLICT sur (id, campaign_id) si la table a ces colonnes (clé primaire composite)
-    // Sinon utiliser submission_id comme fallback
-    let conflictClause: string;
-    if (existingColumnNames.has('id') && existingColumnNames.has('campaign_id')) {
-      conflictClause = '(id, campaign_id)';
-    } else if (existingColumnNames.has('id')) {
-      conflictClause = '(id)';
-    } else {
-      conflictClause = '(submission_id)';
-    }
-    
+    // Utiliser INSERT simple car l'ID est généré de manière unique
+    // Si un doublon existe (contrainte de clé primaire), cela générera une erreur qui sera gérée par l'appelant
     const insertSQL = `
       INSERT INTO "${tableName}" (${columnNames})
       VALUES (${placeholders})
-      ON CONFLICT ${conflictClause} DO UPDATE SET
-        raw_data = EXCLUDED.raw_data,
-        updated_at = CURRENT_TIMESTAMP
     `;
 
-    await this.dataSource.query(insertSQL, values);
+    try {
+      await this.dataSource.query(insertSQL, values);
+    } catch (error: any) {
+      // Si l'erreur est due à une violation de contrainte unique (doublon), mettre à jour l'enregistrement existant
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('UNIQUE constraint')) {
+        // Récupérer l'ID de la valeur insérée
+        const idIndex = columns.findIndex(col => col.toLowerCase() === 'id');
+        const idValue = idIndex >= 0 ? values[idIndex] : null;
+        
+        if (idValue && existingColumnNames.has('raw_data')) {
+          // Mettre à jour l'enregistrement existant
+          const rawDataIndex = columns.findIndex(col => col.toLowerCase() === 'raw_data');
+          const rawDataValue = rawDataIndex >= 0 ? values[rawDataIndex] : null;
+          
+          if (existingColumnNames.has('campaign_id')) {
+            const campaignIdIndex = columns.findIndex(col => col.toLowerCase() === 'campaign_id');
+            const campaignIdValue = campaignIdIndex >= 0 ? values[campaignIdIndex] : null;
+            
+            if (campaignIdValue) {
+              await this.dataSource.query(
+                `UPDATE "${tableName}" 
+                 SET raw_data = $1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $2 AND campaign_id = $3`,
+                [rawDataValue, idValue, campaignIdValue]
+              );
+              console.log(`[insertSubmission] Enregistrement mis à jour: id=${idValue}, campaign_id=${campaignIdValue}`);
+            } else {
+              await this.dataSource.query(
+                `UPDATE "${tableName}" 
+                 SET raw_data = $1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $2`,
+                [rawDataValue, idValue]
+              );
+              console.log(`[insertSubmission] Enregistrement mis à jour: id=${idValue}`);
+            }
+          } else {
+            await this.dataSource.query(
+              `UPDATE "${tableName}" 
+               SET raw_data = $1, updated_at = CURRENT_TIMESTAMP
+               WHERE id = $2`,
+              [rawDataValue, idValue]
+            );
+            console.log(`[insertSubmission] Enregistrement mis à jour: id=${idValue}`);
+          }
+        } else {
+          // Si pas de raw_data, juste ignorer le doublon
+          console.log(`[insertSubmission] Enregistrement déjà existant avec id=${idValue}, ignoré`);
+        }
+      } else {
+        // Autre type d'erreur, propager
+        throw error;
+      }
+    }
   }
 
   /**
@@ -1318,26 +1358,65 @@ export class DynamicTableService {
     const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
     const columnNames = columns.join(', ');
 
-    // Utiliser ON CONFLICT sur (id, campaign_id) pour gérer les doublons
+    // Utiliser INSERT simple, gérer les doublons avec try/catch
     const insertSQL = `
       INSERT INTO "${tableName}" (${columnNames})
       VALUES (${placeholders})
-      ON CONFLICT (id, campaign_id) DO UPDATE SET
-        status = EXCLUDED.status,
-        presence_days = EXCLUDED.presence_days,
-        validation_date = EXCLUDED.validation_date,
-        updated_at = CURRENT_TIMESTAMP
     `;
 
     try {
       await this.dataSource.query(insertSQL, values);
       console.log(`✅ Enregistrement de validation créé: ${newSubmissionId} pour prestataire ${prestataireId} et campagne ${campaignId}`);
     } catch (error: any) {
-      // Si l'erreur est due à une contrainte unique, c'est qu'une validation existe déjà
-      if (error.code === '23505' || error.message?.includes('duplicate key')) {
-        throw new Error(`Une validation existe déjà pour ce prestataire (ID: ${prestataireId}) et cette campagne (ID: ${campaignId}). Veuillez modifier la validation existante ou choisir une autre campagne.`);
+      // Si l'erreur est due à une contrainte unique (doublon), mettre à jour l'enregistrement existant
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('UNIQUE constraint')) {
+        // Récupérer les index des colonnes à mettre à jour
+        const statusIndex = columns.findIndex(col => col.toLowerCase() === 'status');
+        const presenceDaysIndex = columns.findIndex(col => col.toLowerCase() === 'presence_days');
+        const validationDateIndex = columns.findIndex(col => col.toLowerCase() === 'validation_date');
+        const idIndex = columns.findIndex(col => col.toLowerCase() === 'id');
+        const campaignIdIndex = columns.findIndex(col => col.toLowerCase() === 'campaign_id');
+        
+        const idValue = idIndex >= 0 ? values[idIndex] : newSubmissionId;
+        const campaignIdValue = campaignIdIndex >= 0 ? values[campaignIdIndex] : campaignId;
+        
+        // Construire la mise à jour
+        const updates: string[] = [];
+        const updateValues: any[] = [];
+        let paramIndex = 1;
+        
+        if (statusIndex >= 0) {
+          updates.push(`status = $${paramIndex}`);
+          updateValues.push(values[statusIndex]);
+          paramIndex++;
+        }
+        if (presenceDaysIndex >= 0) {
+          updates.push(`presence_days = $${paramIndex}`);
+          updateValues.push(values[presenceDaysIndex]);
+          paramIndex++;
+        }
+        if (validationDateIndex >= 0) {
+          updates.push(`validation_date = $${paramIndex}`);
+          updateValues.push(values[validationDateIndex]);
+          paramIndex++;
+        }
+        updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        
+        // Identifier l'enregistrement par id et campaign_id
+        updateValues.push(idValue);
+        updateValues.push(campaignIdValue);
+        
+        await this.dataSource.query(
+          `UPDATE "${tableName}" 
+           SET ${updates.join(', ')}
+           WHERE id = $${paramIndex} AND campaign_id = $${paramIndex + 1}`,
+          updateValues
+        );
+        console.log(`✅ Enregistrement de validation mis à jour: ${newSubmissionId} pour prestataire ${prestataireId} et campagne ${campaignId}`);
+      } else {
+        // Autre type d'erreur, propager
+        throw error;
       }
-      throw error;
     }
   }
 

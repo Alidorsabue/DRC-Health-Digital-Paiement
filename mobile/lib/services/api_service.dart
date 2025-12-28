@@ -354,15 +354,35 @@ class ApiService {
         return message;
       } else if (error.type == DioExceptionType.connectionTimeout ||
                  error.type == DioExceptionType.receiveTimeout) {
-        return 'Timeout de connexion.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}\n\nVérifications:\n1. Le serveur est démarré?\n2. L\'URL est correcte\n3. Le firewall autorise le port 3001?\n4. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        final baseMessage = 'Timeout de connexion.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
+        if (AppConfig.isProduction) {
+          return '$baseMessage\n\nVérifications:\n1. Le serveur est accessible sur Railway\n2. L\'URL est correcte\n3. Vérifiez votre connexion internet\n4. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
+        } else {
+          return '$baseMessage\n\nVérifications:\n1. Le serveur est démarré?\n2. L\'URL est correcte\n3. Le firewall autorise le port 3001?\n4. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        }
       } else if (error.type == DioExceptionType.connectionError) {
-        return 'Connexion refusée.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}\n\nVérifications:\n1. Le serveur backend est démarré\n2. Le serveur écoute sur 0.0.0.0:3001\n3. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        final baseMessage = 'Connexion refusée.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
+        if (AppConfig.isProduction) {
+          return '$baseMessage\n\nVérifications:\n1. Le serveur Railway est accessible\n2. Vérifiez votre connexion internet\n3. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
+        } else {
+          return '$baseMessage\n\nVérifications:\n1. Le serveur backend est démarré\n2. Le serveur écoute sur 0.0.0.0:3001\n3. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        }
       } else if (error.type == DioExceptionType.unknown) {
         final errorMessage = error.message ?? '';
         if (errorMessage.contains('Failed host lookup') || errorMessage.contains('Network is unreachable')) {
-          return 'Réseau inaccessible.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}\n\nVérifications:\n1. Le téléphone et l\'ordinateur sont sur le même réseau\n2. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+          final baseMessage = 'Réseau inaccessible.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
+          if (AppConfig.isProduction) {
+            return '$baseMessage\n\nVérifications:\n1. Vérifiez votre connexion internet\n2. Le serveur Railway est accessible\n3. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
+          } else {
+            return '$baseMessage\n\nVérifications:\n1. Le téléphone et l\'ordinateur sont sur le même réseau\n2. Testez dans le navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+          }
         }
-        return 'Impossible de se connecter.\n\nURL: ${_baseUrl ?? "non configuré"}\n\nVérifiez:\n1. Serveur démarré\n2. URL correcte\n3. Firewall autorisé\n4. Test navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        final baseMessage = 'Impossible de se connecter.\n\nURL: ${_baseUrl ?? "non configuré"}';
+        if (AppConfig.isProduction) {
+          return '$baseMessage\n\nVérifiez:\n1. Votre connexion internet\n2. Le serveur Railway est accessible\n3. Test navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
+        } else {
+          return '$baseMessage\n\nVérifiez:\n1. Serveur démarré\n2. URL correcte\n3. Firewall autorisé\n4. Test navigateur: ${_baseUrl ?? "http://localhost:3001"}/api\n\n💡 L\'application va essayer de détecter automatiquement une IP qui fonctionne.';
+        }
       }
       return error.message ?? 'Erreur inconnue';
     }
