@@ -95,3 +95,6 @@ DEBUG API REQUEST: {
 - C'est un comportement voulu : pas de fallback vers localhost en production
 - Si Railway est indisponible, corrigez le problème Railway au lieu d'utiliser localhost
 
+
+
+

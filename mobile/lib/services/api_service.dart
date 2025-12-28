@@ -98,11 +98,11 @@ class ApiService {
 
             return response.data;
           } catch (retryError) {
-            throw _handleError(retryError);
+            throw Exception(_handleError(retryError));
           }
         }
       }
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -119,7 +119,7 @@ class ApiService {
       final List<dynamic> data = response.data;
       return data.map((json) => form_models.FormModel.fromJson(json)).toList();
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -128,7 +128,7 @@ class ApiService {
       final response = await _dio.get('/forms/$id');
       return form_models.FormModel.fromJson(response.data);
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -137,7 +137,7 @@ class ApiService {
       final response = await _dio.get('/forms/public/$id');
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -156,7 +156,7 @@ class ApiService {
       );
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -167,7 +167,7 @@ class ApiService {
       final List<dynamic> data = response.data;
       return data.map((json) => Campaign.fromJson(json)).toList();
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -177,7 +177,7 @@ class ApiService {
       final response = await _dio.get('/prestataires/$id');
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -205,7 +205,7 @@ class ApiService {
       });
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -215,7 +215,7 @@ class ApiService {
       final response = await _dio.get('/prestataires');
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -229,7 +229,7 @@ class ApiService {
       final response = await _dio.get(url);
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -249,7 +249,7 @@ class ApiService {
       );
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -270,7 +270,7 @@ class ApiService {
       );
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -297,7 +297,7 @@ class ApiService {
       );
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -307,7 +307,7 @@ class ApiService {
       final response = await _dio.patch('/prestataires/$id/invalidate');
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -330,7 +330,7 @@ class ApiService {
       );
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
@@ -341,51 +341,128 @@ class ApiService {
       final List<dynamic> data = response.data;
       return data.map((json) => Map<String, dynamic>.from(json)).toList();
     } catch (e) {
-      throw _handleError(e);
+      throw Exception(_handleError(e));
     }
   }
 
   String _handleError(dynamic error) {
     if (error is DioException) {
+      // Erreur avec réponse HTTP (codes de statut)
       if (error.response != null) {
-        final message = error.response?.data['message'] ?? 
-                       error.response?.data['error'] ?? 
-                       'Erreur serveur';
-        return message;
-      } else if (error.type == DioExceptionType.connectionTimeout ||
-                 error.type == DioExceptionType.receiveTimeout) {
-        final baseMessage = 'Timeout de connexion.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
-        if (AppConfig.isProduction) {
-          return '$baseMessage\n\nVérifications:\n1. Le serveur est accessible sur Railway\n2. L\'URL est correcte\n3. Vérifiez votre connexion internet\n4. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
-        } else {
-          return '$baseMessage\n\nVérifications:\n1. Le serveur Railway est accessible\n2. L\'URL est correcte\n3. Vérifiez votre connexion internet\n4. Testez dans le navigateur: ${_baseUrl ?? AppConfig.productionApiUrl}/api';
-        }
-      } else if (error.type == DioExceptionType.connectionError) {
-        final baseMessage = 'Connexion refusée.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
-        if (AppConfig.isProduction) {
-          return '$baseMessage\n\nVérifications:\n1. Le serveur Railway est accessible\n2. Vérifiez votre connexion internet\n3. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
-        } else {
-          return '$baseMessage\n\nVérifications:\n1. Le serveur Railway est accessible\n2. Vérifiez votre connexion internet\n3. Testez dans le navigateur: ${_baseUrl ?? AppConfig.productionApiUrl}/api';
-        }
-      } else if (error.type == DioExceptionType.unknown) {
-        final errorMessage = error.message ?? '';
-        if (errorMessage.contains('Failed host lookup') || errorMessage.contains('Network is unreachable')) {
-          final baseMessage = 'Réseau inaccessible.\n\nURL utilisée: ${_baseUrl ?? "non configuré"}';
-          if (AppConfig.isProduction) {
-            return '$baseMessage\n\nVérifications:\n1. Vérifiez votre connexion internet\n2. Le serveur Railway est accessible\n3. Testez dans le navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
-          } else {
-            return '$baseMessage\n\nVérifications:\n1. Vérifiez votre connexion internet\n2. Le serveur Railway est accessible\n3. Testez dans le navigateur: ${_baseUrl ?? AppConfig.productionApiUrl}/api';
-          }
-        }
-        final baseMessage = 'Impossible de se connecter.\n\nURL: ${_baseUrl ?? "non configuré"}';
-        if (AppConfig.isProduction) {
-          return '$baseMessage\n\nVérifiez:\n1. Votre connexion internet\n2. Le serveur Railway est accessible\n3. Test navigateur: ${_baseUrl ?? "https://drc-health-digital-paiement-production.up.railway.app"}/api';
-        } else {
-          return '$baseMessage\n\nVérifiez:\n1. Vérifiez votre connexion internet\n2. Le serveur Railway est accessible\n3. URL correcte\n4. Test navigateur: ${_baseUrl ?? AppConfig.productionApiUrl}/api';
+        final status = error.response?.statusCode;
+        final responseData = error.response?.data;
+        final serverMessage = responseData is Map
+            ? (responseData['message'] ?? responseData['error'] ?? '')
+            : '';
+        final requestUrl = error.requestOptions.path;
+        
+        // Gérer les codes HTTP spécifiques avec messages détaillés et solutions
+        switch (status) {
+          case 400:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Requête invalide. Vérifiez les données envoyées.';
+          
+          case 401:
+            // Pour les routes d'authentification, utiliser le message du serveur
+            if (requestUrl.contains('/auth/login') || 
+                requestUrl.contains('/auth/register') ||
+                requestUrl.contains('/auth/')) {
+              return serverMessage.isNotEmpty
+                  ? serverMessage
+                  : 'Identifiants incorrects. Vérifiez votre nom d\'utilisateur et mot de passe.';
+            }
+            return 'Session expirée. Veuillez vous reconnecter.';
+          
+          case 403:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour cette action.';
+          
+          case 404:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Ressource non trouvée. L\'élément demandé n\'existe pas.';
+          
+          case 409:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Conflit. Cette ressource existe déjà ou a été modifiée.';
+          
+          case 422:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Données invalides. Veuillez vérifier les champs du formulaire.';
+          
+          case 429:
+            return 'Trop de requêtes. Veuillez patienter quelques instants avant de réessayer.';
+          
+          case 500:
+            final apiUrl = _baseUrl ?? (AppConfig.isProduction 
+                ? 'https://drc-health-digital-paiement-production.up.railway.app'
+                : AppConfig.productionApiUrl);
+            return serverMessage.isNotEmpty
+                ? '$serverMessage\n\nSolutions possibles:\n1. Réessayez dans quelques instants\n2. Vérifiez que le serveur est accessible: $apiUrl\n3. Contactez l\'administrateur si le problème persiste'
+                : 'Erreur serveur interne.\n\nSolutions possibles:\n1. Réessayez dans quelques instants\n2. Vérifiez que le serveur est accessible: $apiUrl\n3. Contactez l\'administrateur si le problème persiste';
+          
+          case 502:
+            final apiUrl502 = _baseUrl ?? (AppConfig.isProduction 
+                ? 'https://drc-health-digital-paiement-production.up.railway.app'
+                : AppConfig.productionApiUrl);
+            return 'Serveur indisponible (Bad Gateway).\n\nSolutions possibles:\n1. Le serveur backend est peut-être en cours de redémarrage\n2. Vérifiez que le serveur est accessible: $apiUrl502\n3. Réessayez dans quelques instants';
+          
+          case 503:
+            final apiUrl503 = _baseUrl ?? (AppConfig.isProduction 
+                ? 'https://drc-health-digital-paiement-production.up.railway.app'
+                : AppConfig.productionApiUrl);
+            return 'Service temporairement indisponible.\n\nSolutions possibles:\n1. Le serveur est en maintenance\n2. Réessayez dans quelques minutes\n3. Vérifiez l\'état du serveur: $apiUrl503';
+          
+          case 504:
+            return 'Timeout de la passerelle.\n\nSolutions possibles:\n1. Le serveur met trop de temps à répondre\n2. Vérifiez votre connexion internet\n3. Réessayez plus tard';
+          
+          default:
+            return serverMessage.isNotEmpty
+                ? serverMessage
+                : 'Erreur HTTP ${status ?? "inconnu"}. Veuillez réessayer ou contacter le support.';
         }
       }
-      return error.message ?? 'Erreur inconnue';
+      
+      // Erreurs réseau (pas de réponse du serveur)
+      final apiUrl = _baseUrl ?? (AppConfig.isProduction 
+          ? 'https://drc-health-digital-paiement-production.up.railway.app'
+          : AppConfig.productionApiUrl);
+      
+      // Timeout
+      if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout) {
+        return 'Timeout de connexion.\n\nURL utilisée: $apiUrl\n\nSolutions possibles:\n1. Vérifiez votre connexion internet\n2. Le serveur est peut-être surchargé\n3. Réessayez dans quelques instants\n4. Testez dans le navigateur: $apiUrl/api';
+      }
+      
+      // Erreur de connexion
+      if (error.type == DioExceptionType.connectionError) {
+        return 'Connexion refusée.\n\nURL utilisée: $apiUrl\n\nSolutions possibles:\n1. Le serveur backend n\'est peut-être pas démarré\n2. Vérifiez que le serveur est accessible: $apiUrl\n3. Testez dans le navigateur: $apiUrl/api\n4. Contactez l\'administrateur';
+      }
+      
+      // Erreur inconnue (peut inclure DNS, réseau inaccessible, etc.)
+      if (error.type == DioExceptionType.unknown) {
+        final errorMessage = error.message ?? '';
+        
+        // Erreur DNS/hostname
+        if (errorMessage.contains('Failed host lookup') || 
+            errorMessage.contains('Network is unreachable') ||
+            errorMessage.contains('getaddrinfo')) {
+          return 'Réseau inaccessible.\n\nURL utilisée: $apiUrl\n\nSolutions possibles:\n1. Vérifiez votre connexion internet\n2. Vérifiez que l\'URL du serveur est correcte\n3. Testez dans le navigateur: $apiUrl/api';
+        }
+        
+        // Erreur générique
+        return 'Impossible de contacter le serveur.\n\nURL utilisée: $apiUrl\n\nSolutions possibles:\n1. Vérifiez votre connexion internet\n2. Vérifiez que le serveur est accessible: $apiUrl\n3. Testez dans le navigateur: $apiUrl/api\n4. Réessayez dans quelques instants';
+      }
+      
+      // Autres types d'erreurs DioException
+      return error.message ?? 'Erreur de connexion. Veuillez réessayer.';
     }
+    
+    // Erreur non-DioException
     return error.toString();
   }
 }

@@ -120,3 +120,6 @@ C'est pourquoi vous devez **rebuild** l'application après avoir modifié ces va
 - [ ] Requêtes réseau pointent vers le backend Railway
 - [ ] Pas d'erreurs CORS dans la console
 
+
+
+

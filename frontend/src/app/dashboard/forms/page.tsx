@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AlertModal from '../../../components/Modal/AlertModal';
 import ConfirmModal from '../../../components/Modal/ConfirmModal';
+import { getErrorMessage } from '../../../utils/error-handler';
 
 function FormsPageContent() {
   const { user } = useAuthStore();
@@ -152,10 +153,11 @@ function FormsPageContent() {
         baseURL: error.config?.baseURL,
       });
       
-      // Afficher l'erreur à l'utilisateur
+      // Afficher l'erreur à l'utilisateur avec message formaté et solutions
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
       showAlert(
         'Erreur',
-        `Impossible de charger les formulaires: ${error.response?.data?.message || error.message || 'Erreur inconnue'}`,
+        `Impossible de charger les formulaires:\n\n${errorMsg}`,
         'error'
       );
       

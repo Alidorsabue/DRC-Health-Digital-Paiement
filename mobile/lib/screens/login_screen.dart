@@ -5,6 +5,7 @@ import '../config/app_config.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../utils/network_utils.dart';
+import '../utils/error_handler.dart';
 import 'forms_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -215,14 +216,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      String errorMsg = e.toString();
-      // Améliorer le message d'erreur
-      if (errorMsg.contains('connection') || errorMsg.contains('Failed host lookup')) {
-        errorMsg = 'Impossible de se connecter au serveur. Vérifiez:\n'
-            '1. Que le serveur est démarré\n'
-            '2. L\'URL du serveur est correcte (${_apiUrlController.text})\n'
-            '3. Que l\'appareil est sur le même réseau';
-      }
+      // Utiliser la fonction utilitaire pour obtenir le message d'erreur formaté avec solutions
+      final errorMsg = getErrorMessage(e, 'Erreur de connexion. Vérifiez vos identifiants.');
+      
       setState(() {
         _errorMessage = errorMsg;
         _isLoading = false;

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../lib/api/auth';
+import { getErrorMessage } from '../../utils/error-handler';
 
 function LoginForm() {
   const router = useRouter();
@@ -33,9 +34,8 @@ function LoginForm() {
       login(response);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(
-        err.response?.data?.message || 'Erreur de connexion. Vérifiez vos identifiants.'
-      );
+      // Utiliser la fonction utilitaire pour obtenir le message d'erreur formaté avec solutions
+      setError(getErrorMessage(err, 'Erreur de connexion. Vérifiez vos identifiants.'));
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ function LoginForm() {
           )}
           {error && !expiredMessage && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+              <div className="whitespace-pre-line">{error}</div>
             </div>
           )}
           <div className="rounded-md shadow-sm -space-y-px">

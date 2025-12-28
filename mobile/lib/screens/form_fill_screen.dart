@@ -9,6 +9,7 @@ import '../services/sync_service.dart';
 import '../widgets/form_fields/form_field_group.dart';
 import '../services/database_service.dart';
 import '../services/api_service.dart';
+import '../utils/error_handler.dart';
 import 'submissions_list_screen.dart';
 
 class FormFillScreen extends StatefulWidget {
@@ -908,10 +909,12 @@ class _FormFillScreenState extends State<FormFillScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errorMsg = getErrorMessage(e, 'Une erreur est survenue lors de la soumission');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: ${e.toString()}'),
+            content: Text(errorMsg),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

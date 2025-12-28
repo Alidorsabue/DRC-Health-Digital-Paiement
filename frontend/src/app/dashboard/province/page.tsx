@@ -9,6 +9,8 @@ import { campaignsApi } from '../../../lib/api/campaigns';
 import { formsApi } from '../../../lib/api/forms';
 import { Campaign, Form } from '../../../types';
 import DataTable, { Column } from '../../../components/DataTable';
+import { getErrorMessage } from '../../../utils/error-handler';
+import AlertModal from '../../../components/Modal/AlertModal';
 
 interface GeographicOption {
   id: string;
@@ -28,6 +30,11 @@ export default function ProvincePage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [alert, setAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setAlert({ title, message, type });
+  };
 
   const loadData = useCallback(async () => {
     if (!user?.provinceId) return;
@@ -38,6 +45,8 @@ export default function ProvincePage() {
       setStats(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques:', error);
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les statistiques:\n\n${errorMsg}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -214,12 +223,8 @@ export default function ProvincePage() {
       }
     } catch (error: any) {
       console.error('DEBUG PROVINCE: Erreur lors du chargement des prestataires:', error);
-      console.error('DEBUG PROVINCE: Détails de l\'erreur:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-      });
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les prestataires:\n\n${errorMsg}`, 'error');
       setPrestataires([]);
     } finally {
       setLoadingPrestataires(false);
@@ -380,6 +385,15 @@ export default function ProvincePage() {
 
   return (
     <div>
+      {alert && (
+        <AlertModal
+          isOpen={!!alert}
+          title={alert.title}
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert(null)}
+        />
+      )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Interface DPS - Vue Province

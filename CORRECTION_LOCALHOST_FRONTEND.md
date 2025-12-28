@@ -70,3 +70,6 @@ DEBUG API REQUEST: {
 - Le code détecte automatiquement l'environnement et utilise la bonne URL
 - Aucune configuration supplémentaire n'est nécessaire dans Railway
 
+
+
+

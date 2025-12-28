@@ -82,3 +82,6 @@ Après avoir créé le SuperAdmin, utilisez ces identifiants pour vous connecter
    - Railway → Service Backend → Variables
    - Vérifiez que `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` sont correctes
 
+
+
+

@@ -8,6 +8,8 @@ import { formsApi } from '../../lib/api/forms';
 import { geographicApi } from '../../lib/api/geographic';
 import { Campaign, Form } from '../../types';
 import Link from 'next/link';
+import { getErrorMessage } from '../../utils/error-handler';
+import AlertModal from '../../components/Modal/AlertModal';
 
 interface GeographicOption {
   id: string;
@@ -28,6 +30,11 @@ export default function DashboardPage() {
     formId: '',
   });
   const [provinces, setProvinces] = useState<GeographicOption[]>([]);
+  const [alert, setAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setAlert({ title, message, type });
+  };
   const [zones, setZones] = useState<GeographicOption[]>([]);
   const [aires, setAires] = useState<GeographicOption[]>([]);
   const [loadingGeographic, setLoadingGeographic] = useState(true);
@@ -582,14 +589,9 @@ export default function DashboardPage() {
         if (timeoutId) clearTimeout(timeoutId);
       } catch (error: any) {
         console.error('DEBUG DASHBOARD: Erreur lors du chargement des données:', error);
-        console.error('DEBUG DASHBOARD: Détails de l\'erreur:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          url: error.config?.url,
-        });
-        // En cas d'erreur, ne pas bloquer l'affichage
+        const errorMsg = getErrorMessage(error, 'Erreur inconnue');
         if (isMounted) {
+          showAlert('Erreur', `Impossible de charger les statistiques:\n\n${errorMsg}`, 'error');
           setStats(null);
           setLoading(false);
         }
@@ -651,6 +653,15 @@ export default function DashboardPage() {
 
   return (
     <div>
+      {alert && (
+        <AlertModal
+          isOpen={!!alert}
+          title={alert.title}
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert(null)}
+        />
+      )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Bienvenue, {user?.fullName}

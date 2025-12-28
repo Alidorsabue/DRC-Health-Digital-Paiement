@@ -10,6 +10,7 @@ import { geographicApi } from '../../../lib/api/geographic';
 import { Campaign, Form } from '../../../types';
 import AlertModal from '../../../components/Modal/AlertModal';
 import DataTable, { Column } from '../../../components/DataTable';
+import { getErrorMessage } from '../../../utils/error-handler';
 
 interface GeographicOption {
   id: string;
@@ -289,20 +290,9 @@ export default function MCZPage() {
       setPrestataires(filtered);
     } catch (error: any) {
       console.error('Erreur lors du chargement des prestataires:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Erreur inconnue';
-      
-      const detailedMessage = error.response?.status === 404
-        ? 'Formulaire ou zone non trouvée. Vérifiez que le formulaire existe et que votre zone est correctement configurée.'
-        : error.response?.status === 403
-        ? 'Accès refusé. Vérifiez vos permissions.'
-        : error.response?.status === 401
-        ? 'Session expirée. Veuillez vous reconnecter.'
-        : `Impossible de charger les prestataires: ${errorMessage}`;
-      
-      showAlert('Erreur', detailedMessage, 'error');
+      // Utiliser la fonction utilitaire pour obtenir le message d'erreur formaté avec solutions
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les prestataires:\n\n${errorMsg}`, 'error');
       setPrestataires([]);
     } finally {
       setLoading(false);

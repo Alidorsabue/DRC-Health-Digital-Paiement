@@ -85,3 +85,6 @@ Le code utilise maintenant :
 
 Cela garantit que l'URL sera correcte même si la variable n'est pas configurée correctement dans Railway.
 
+
+
+

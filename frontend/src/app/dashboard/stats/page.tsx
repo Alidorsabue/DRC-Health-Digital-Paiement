@@ -5,6 +5,8 @@ import { useAuthStore } from '../../../store/authStore';
 import { statsApi, NationalStats, ZoneStats, AireStats, ProvinceStats } from '../../../lib/api/stats';
 import { campaignsApi } from '../../../lib/api/campaigns';
 import { Campaign } from '../../../types';
+import { getErrorMessage } from '../../../utils/error-handler';
+import AlertModal from '../../../components/Modal/AlertModal';
 
 export default function StatsPage() {
   const { user } = useAuthStore();
@@ -12,6 +14,11 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [alert, setAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setAlert({ title, message, type });
+  };
 
   const loadStats = async () => {
     try {
@@ -23,11 +30,8 @@ export default function StatsPage() {
       setStats(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques:', error);
-      console.error('Détails de l\'erreur:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les statistiques:\n\n${errorMsg}`, 'error');
       setStats(null);
     } finally {
       setLoading(false);
@@ -50,11 +54,8 @@ export default function StatsPage() {
       setStats(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques MCZ:', error);
-      console.error('Détails de l\'erreur:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les statistiques MCZ:\n\n${errorMsg}`, 'error');
       setStats(null);
     } finally {
       setLoading(false);
@@ -77,11 +78,8 @@ export default function StatsPage() {
       setStats(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques DPS:', error);
-      console.error('Détails de l\'erreur:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
+      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
+      showAlert('Erreur', `Impossible de charger les statistiques DPS:\n\n${errorMsg}`, 'error');
       setStats(null);
     } finally {
       setLoading(false);
@@ -172,6 +170,15 @@ export default function StatsPage() {
 
   return (
     <div>
+      {alert && (
+        <AlertModal
+          isOpen={!!alert}
+          title={alert.title}
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert(null)}
+        />
+      )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
         <p className="mt-2 text-sm text-gray-600">
