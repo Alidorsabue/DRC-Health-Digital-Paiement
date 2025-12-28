@@ -202,6 +202,21 @@ export default function MCZPage() {
       
       console.log('Prestataires reçus du backend:', data.length, data);
       
+      // Afficher la répartition par zoneId pour le débogage
+      const zoneIdCount = data.reduce((acc: any, p: any) => {
+        const zoneId = p.zoneId || p.zone_id || 'null';
+        acc[zoneId] = (acc[zoneId] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('Répartition par zoneId:', zoneIdCount);
+      console.log('ZoneId de l\'utilisateur:', user.zoneId);
+      console.log('Exemples de zoneId dans les données:', data.slice(0, 5).map(p => ({
+        id: p.id,
+        zoneId: p.zoneId,
+        zone_id: p.zone_id,
+        allZoneFields: Object.keys(p).filter(k => k.toLowerCase().includes('zone')),
+      })));
+      
       // Afficher la répartition par statut pour le débogage
       const statusCount = data.reduce((acc: any, p: any) => {
         acc[p.status] = (acc[p.status] || 0) + 1;
@@ -218,12 +233,33 @@ export default function MCZPage() {
       // Les prestataires approuvés/rejetés doivent rester visibles avec leur nouveau statut
       let filtered = data;
       
+      // Fonction pour normaliser les zoneId (enlever espaces, convertir en minuscules, etc.)
+      const normalizeZoneId = (zoneId: string | null | undefined): string => {
+        if (!zoneId) return '';
+        return String(zoneId).trim().toLowerCase();
+      };
+      
+      const userZoneIdNormalized = normalizeZoneId(user.zoneId);
+      console.log('ZoneId utilisateur normalisé:', userZoneIdNormalized);
+      
       // Sécurité: Filtrer par zone de santé de l'utilisateur (ne devrait jamais être nécessaire si le backend filtre correctement)
       // Mais on le fait quand même pour garantir que seules les données de la zone sont affichées
+      // Comparaison normalisée pour gérer les différences de format
       filtered = filtered.filter(p => {
-        const pZoneId = p.zoneId || p.zone_id;
-        return pZoneId === user.zoneId;
+        const pZoneId = p.zoneId || p.zone_id || p.zone_de_sante_id || p.zoneDeSanteId;
+        const pZoneIdNormalized = normalizeZoneId(pZoneId);
+        
+        // Comparaison normalisée
+        const matches = pZoneIdNormalized === userZoneIdNormalized;
+        
+        if (!matches && pZoneId) {
+          console.warn(`ZoneId mismatch: prestataire zoneId="${pZoneId}" (normalisé: "${pZoneIdNormalized}") !== user zoneId="${user.zoneId}" (normalisé: "${userZoneIdNormalized}")`);
+        }
+        
+        return matches;
       });
+      
+      console.log(`Après filtrage par zoneId: ${filtered.length} prestataires (sur ${data.length} reçus)`);
       
       // Filtrer par aire de santé si sélectionnée
       if (selectedAireId) {
