@@ -9,7 +9,8 @@ import { prestatairesApi } from '../../../../../lib/api/prestataires';
 import { Form, Campaign } from '../../../../../types';
 import Link from 'next/link';
 import AlertModal from '../../../../../components/Modal/AlertModal';
-import { exportData, ExportColumn, ExportRow } from '../../../../../utils/export';
+import ConfirmModal from '../../../../../components/Modal/ConfirmModal';
+import { exportData, createPublicJSONLink, ExportColumn, ExportRow } from '../../../../../utils/export';
 
 export default function FormDataPage() {
   const params = useParams();
@@ -38,6 +39,26 @@ export default function FormDataPage() {
   const [editingPrestataire, setEditingPrestataire] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Record<string, any>>({});
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showPublicLinkModal, setShowPublicLinkModal] = useState(false);
+  const [publicLinkData, setPublicLinkData] = useState<{
+    url: string;
+    expiresAt: string;
+  } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    isLoading?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'warning',
+    isLoading: false,
+  });
 
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
@@ -540,7 +561,16 @@ export default function FormDataPage() {
       showAlert('Succès', 'Prestataire modifié avec succès', 'success');
       setEditingPrestataire(null);
       setEditFormData({});
-      loadData(); // Recharger les données
+      // Recharger les données selon l'onglet actif
+      if (activeTab === 'data') {
+        loadData();
+      } else if (activeTab === 'validation') {
+        loadValidationData();
+      } else if (activeTab === 'approbation') {
+        loadApprobationData();
+      } else if (activeTab === 'paiement') {
+        loadPaiementData();
+      }
     } catch (error: any) {
       console.error('Erreur lors de la modification:', error);
       showAlert('Erreur', error.response?.data?.message || 'Impossible de modifier le prestataire', 'error');
@@ -548,23 +578,40 @@ export default function FormDataPage() {
   };
 
   const handleDeletePrestataire = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce prestataire ? Cette action est irréversible.')) {
-      return;
-    }
-
-    try {
-      await prestatairesApi.delete(id, params.id as string);
-      showAlert('Succès', 'Prestataire supprimé avec succès', 'success');
-      loadData(); // Recharger les données
-      setSelectedPrestataires((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-    } catch (error: any) {
-      console.error('Erreur lors de la suppression:', error);
-      showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer le prestataire', 'error');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Confirmer la suppression',
+      message: 'Êtes-vous sûr de vouloir supprimer ce prestataire ? Cette action est irréversible.',
+      type: 'danger',
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true }));
+        try {
+          await prestatairesApi.delete(id, params.id as string);
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+          showAlert('Succès', 'Prestataire supprimé avec succès', 'success');
+          // Recharger les données selon l'onglet actif
+          if (activeTab === 'data') {
+            loadData();
+          } else if (activeTab === 'validation') {
+            loadValidationData();
+          } else if (activeTab === 'approbation') {
+            loadApprobationData();
+          } else if (activeTab === 'paiement') {
+            loadPaiementData();
+          }
+          setSelectedPrestataires((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+        } catch (error: any) {
+          console.error('Erreur lors de la suppression:', error);
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+          showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer le prestataire', 'error');
+        }
+      },
+    });
   };
 
   const handleBatchDelete = async () => {
@@ -573,22 +620,39 @@ export default function FormDataPage() {
       return;
     }
 
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer ${selectedPrestataires.size} prestataire(s) ? Cette action est irréversible.`)) {
-      return;
-    }
-
-    try {
-      const deletePromises = Array.from(selectedPrestataires).map(id => 
-        prestatairesApi.delete(id, params.id as string)
-      );
-      await Promise.all(deletePromises);
-      showAlert('Succès', `${selectedPrestataires.size} prestataire(s) supprimé(s) avec succès`, 'success');
-      setSelectedPrestataires(new Set());
-      loadData(); // Recharger les données
-    } catch (error: any) {
-      console.error('Erreur lors de la suppression batch:', error);
-      showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer les prestataires', 'error');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Confirmer la suppression multiple',
+      message: `Êtes-vous sûr de vouloir supprimer ${selectedPrestataires.size} prestataire(s) ? Cette action est irréversible.`,
+      type: 'danger',
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true }));
+        try {
+          const deletePromises = Array.from(selectedPrestataires).map(id => 
+            prestatairesApi.delete(id, params.id as string)
+          );
+          await Promise.all(deletePromises);
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+          showAlert('Succès', `${selectedPrestataires.size} prestataire(s) supprimé(s) avec succès`, 'success');
+          setSelectedPrestataires(new Set());
+          // Recharger les données selon l'onglet actif
+          if (activeTab === 'data') {
+            loadData();
+          } else if (activeTab === 'validation') {
+            loadValidationData();
+          } else if (activeTab === 'approbation') {
+            loadApprobationData();
+          } else if (activeTab === 'paiement') {
+            loadPaiementData();
+          }
+        } catch (error: any) {
+          console.error('Erreur lors de la suppression batch:', error);
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+          showAlert('Erreur', error.response?.data?.message || 'Impossible de supprimer les prestataires', 'error');
+        }
+      },
+    });
   };
 
   // Fonction pour détecter si un champ est de type select/enum
@@ -794,21 +858,36 @@ export default function FormDataPage() {
 
   const handleExport = async (format: 'csv' | 'excel' | 'json') => {
     try {
-      // Préparer les colonnes pour l'export
+      // Utiliser les bonnes données selon l'onglet actif
+      let dataToExport: any[] = [];
+      if (activeTab === 'data') {
+        // Pour DATA, utiliser allData (toutes les données non filtrées) pour exporter tout
+        dataToExport = allData;
+      } else if (activeTab === 'validation') {
+        dataToExport = validationData;
+      } else if (activeTab === 'approbation') {
+        dataToExport = approbationData;
+      } else if (activeTab === 'paiement') {
+        dataToExport = paiementData;
+      } else {
+        dataToExport = data;
+      }
+
+      // Préparer les colonnes pour l'export - uniquement les colonnes visibles
       const exportColumns: ExportColumn[] = [];
       
       // Ajouter la colonne ID
       exportColumns.push({ key: 'id', label: 'ID' });
       
-      // Ajouter les colonnes visibles
+      // Ajouter les colonnes visibles uniquement
       orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
         const fieldSchema = schema?.properties?.[fieldName];
         const label = fieldSchema?.title || fieldName;
         exportColumns.push({ key: fieldName, label });
       });
 
-      // Préparer les données pour l'export
-      const exportDataRows: ExportRow[] = data.map((row) => {
+      // Préparer les données pour l'export avec uniquement les colonnes visibles
+      const exportDataRows: ExportRow[] = dataToExport.map((row) => {
         const exportRow: ExportRow = { id: row.id || row.submissionId || '-' };
         
         orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
@@ -845,9 +924,82 @@ export default function FormDataPage() {
       // Exporter selon le format
       await exportData(format, exportDataRows, exportColumns, filename);
       setShowExportMenu(false);
+      showAlert('Succès', `Export ${format.toUpperCase()} réussi`, 'success');
     } catch (error: any) {
       console.error('Erreur lors de l\'export:', error);
       showAlert('Erreur', error.message || 'Impossible d\'exporter les données', 'error');
+    }
+  };
+
+  const handleCreatePublicLink = async () => {
+    try {
+      setShowExportMenu(false);
+      
+      // Utiliser les bonnes données selon l'onglet actif
+      let dataToExport: any[] = [];
+      if (activeTab === 'data') {
+        dataToExport = allData;
+      } else if (activeTab === 'validation') {
+        dataToExport = validationData;
+      } else if (activeTab === 'approbation') {
+        dataToExport = approbationData;
+      } else if (activeTab === 'paiement') {
+        dataToExport = paiementData;
+      } else {
+        dataToExport = data;
+      }
+
+      // Préparer les colonnes pour l'export - uniquement les colonnes visibles
+      const exportColumns: ExportColumn[] = [];
+      
+      // Ajouter la colonne ID
+      exportColumns.push({ key: 'id', label: 'ID' });
+      
+      // Ajouter les colonnes visibles uniquement
+      orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
+        const fieldSchema = schema?.properties?.[fieldName];
+        const label = fieldSchema?.title || fieldName;
+        exportColumns.push({ key: fieldName, label });
+      });
+
+      // Préparer les données pour l'export avec uniquement les colonnes visibles
+      const exportDataRows: ExportRow[] = dataToExport.map((row) => {
+        const exportRow: ExportRow = { id: row.id || row.submissionId || '-' };
+        
+        orderedFields.filter(fieldName => visibleColumns.has(fieldName)).forEach((fieldName) => {
+          const fieldSchema = schema?.properties?.[fieldName];
+          const realColumnName = findColumnName(fieldName, row) || fieldName;
+          let value = row[realColumnName];
+          
+          // Formater les valeurs spéciales
+          if (fieldName === 'nom' || fieldName === 'nom_complet') {
+            const nomComplet = formatSpecialCell(fieldName, row, fieldSchema);
+            value = nomComplet;
+          } else if (fieldSchema) {
+            // Pour les champs select, utiliser le label si disponible
+            const label = getLabelFromValue(value, fieldSchema);
+            if (label) {
+              value = label;
+            }
+          }
+          
+          exportRow[fieldName] = value || '';
+        });
+        
+        return exportRow;
+      });
+
+      // Créer le lien public (7 jours par défaut)
+      const result = await createPublicJSONLink(exportDataRows, exportColumns, 24 * 7);
+      
+      setPublicLinkData({
+        url: result.publicUrl,
+        expiresAt: result.expiresAt,
+      });
+      setShowPublicLinkModal(true);
+    } catch (error: any) {
+      console.error('Erreur lors de la création du lien public:', error);
+      showAlert('Erreur', error.message || 'Impossible de créer le lien public', 'error');
     }
   };
 
@@ -1545,6 +1697,26 @@ export default function FormDataPage() {
               )}
             </div>
             <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto">
+              {user?.role === 'SUPERADMIN' && selectedPrestataires.size > 0 && (
+                <button
+                  onClick={handleBatchDelete}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2"
+                >
+                  <span>🗑️</span>
+                  <span className="hidden sm:inline">Supprimer ({selectedPrestataires.size})</span>
+                  <span className="sm:hidden">{selectedPrestataires.size}</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowColumnModal(true)}
+                className="px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 flex-1 sm:flex-initial"
+                title="Filtrer les colonnes à afficher"
+              >
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                <span className="hidden sm:inline">Filtre</span>
+              </button>
               <select
                 value={selectedCampaignId}
                 onChange={(e) => {
@@ -1595,7 +1767,13 @@ export default function FormDataPage() {
                           onClick={() => handleExport('json')}
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         >
-                          🔗 JSON (API/Power BI/Python)
+                          📥 Télécharger JSON
+                        </button>
+                        <button
+                          onClick={() => handleCreatePublicLink()}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          🔗 Lien public JSON (API/Power BI/Python)
                         </button>
                       </div>
                     </div>
@@ -1617,7 +1795,22 @@ export default function FormDataPage() {
                   <table className="min-w-full divide-y divide-gray-200" style={{ tableLayout: 'auto' }}>
                     <thead className="bg-gray-50">
                       <tr>
-                        {orderedFields.map((fieldName, colIndex) => {
+                        {user?.role === 'SUPERADMIN' && (
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedPrestataires.size === data.length && data.length > 0}
+                              onChange={toggleSelectAll}
+                              className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                          </th>
+                        )}
+                        <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+                          <div className="flex flex-col gap-1 sm:gap-2">
+                            <span className="whitespace-nowrap">ID</span>
+                          </div>
+                        </th>
+                        {orderedFields.filter(fieldName => visibleColumns.has(fieldName)).map((fieldName, colIndex) => {
                           // Obtenir le label de la colonne
                           let columnLabel = fieldName;
                           if (fieldName === 'nom' || fieldName === 'nom_complet') {
@@ -1707,30 +1900,71 @@ export default function FormDataPage() {
                             </th>
                           );
                         })}
+                        {user?.role === 'SUPERADMIN' && (
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50 z-10">
+                            Actions
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {data.map((row, idx) => (
-                        <tr key={`${row.id || row.submissionId || 'row'}-${idx}`} className="hover:bg-gray-50">
-                          {orderedFields.map((fieldName) => {
-                            const fieldSchema = schema?.properties?.[fieldName];
-                            const cellValue = formatSpecialCell(fieldName, row, fieldSchema);
-                            
-                            return (
-                              <td 
-                                key={fieldName} 
-                                className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900"
-                                style={{ minWidth: '100px', wordBreak: 'break-word', overflowWrap: 'break-word' }}
-                                title={cellValue}
-                              >
-                                <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-                                  <span className="block min-w-0 break-words">{cellValue}</span>
+                      {data.map((row, idx) => {
+                        const rowId = row.id || row.submissionId || `row-${idx}`;
+                        return (
+                          <tr key={`${rowId}-${idx}`} className="hover:bg-gray-50">
+                            {user?.role === 'SUPERADMIN' && (
+                              <td className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm text-gray-900 sticky left-0 bg-white z-10">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPrestataires.has(rowId)}
+                                  onChange={() => toggleSelectPrestataire(rowId)}
+                                  className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                              </td>
+                            )}
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 sticky left-0 bg-white z-10 font-mono">
+                              {rowId}
+                            </td>
+                            {orderedFields.filter(fieldName => visibleColumns.has(fieldName)).map((fieldName) => {
+                              const fieldSchema = schema?.properties?.[fieldName];
+                              const cellValue = formatSpecialCell(fieldName, row, fieldSchema);
+                              
+                              return (
+                                <td 
+                                  key={fieldName} 
+                                  className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900"
+                                  style={{ minWidth: '100px', wordBreak: 'break-word', overflowWrap: 'break-word' }}
+                                  title={cellValue}
+                                >
+                                  <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                    <span className="block min-w-0 break-words">{cellValue}</span>
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            {user?.role === 'SUPERADMIN' && (
+                              <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 sticky right-0 bg-white z-10">
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <button
+                                    onClick={() => handleEditPrestataire(row)}
+                                    className="px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs sm:text-sm"
+                                    title="Modifier"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeletePrestataire(rowId)}
+                                    className="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm"
+                                    title="Supprimer"
+                                  >
+                                    🗑️
+                                  </button>
                                 </div>
                               </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1846,7 +2080,13 @@ export default function FormDataPage() {
                           onClick={() => handleExport('json')}
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         >
-                          🔗 JSON (API/Power BI/Python)
+                          📥 Télécharger JSON
+                        </button>
+                        <button
+                          onClick={() => handleCreatePublicLink()}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          🔗 Lien public JSON (API/Power BI/Python)
                         </button>
                       </div>
                     </div>
@@ -2162,6 +2402,96 @@ export default function FormDataPage() {
         message={alertModal.message}
         type={alertModal.type}
       />
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        isLoading={confirmModal.isLoading}
+      />
+
+      {/* Modal pour afficher le lien public JSON */}
+      {showPublicLinkModal && publicLinkData && (
+        <div className="fixed z-50 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowPublicLinkModal(false)}
+            ></div>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <span className="text-xl text-green-600">🔗</span>
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                      Lien public JSON créé avec succès
+                    </h3>
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-500 mb-4">
+                        Ce lien permet d'accéder aux données JSON depuis d'autres plateformes (Power BI, Python, etc.).
+                        Le lien expire le {new Date(publicLinkData.expiresAt).toLocaleDateString('fr-FR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}.
+                      </p>
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          URL publique :
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={publicLinkData.url}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm font-mono"
+                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(publicLinkData.url);
+                              showAlert('Succès', 'Lien copié dans le presse-papiers', 'success');
+                            }}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                          >
+                            📋 Copier
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                        <p className="text-xs text-blue-800">
+                          <strong>💡 Utilisation :</strong> Utilisez cette URL dans Power BI, Python (requests.get), 
+                          ou toute autre application qui peut consommer des APIs REST. Les données sont accessibles 
+                          sans authentification jusqu'à expiration du lien.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPublicLinkModal(false);
+                    setPublicLinkData(null);
+                  }}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de sélection des colonnes */}
       {showColumnModal && form && (

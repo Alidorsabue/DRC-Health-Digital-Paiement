@@ -64,16 +64,31 @@ async function exportToExcel(
       throw new Error('La bibliothèque xlsx n\'a pas pu être chargée correctement. Veuillez réinstaller les dépendances avec: npm install xlsx');
     }
     
+    // Fonction pour tronquer les valeurs longues (limite Excel: 32767 caractères)
+    const truncateValue = (value: any, maxLength: number = 32767): string => {
+      if (value === null || value === undefined) return '';
+      
+      let stringValue: string;
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        stringValue = JSON.stringify(value);
+      } else {
+        stringValue = String(value);
+      }
+      
+      // Tronquer si nécessaire
+      if (stringValue.length > maxLength) {
+        return stringValue.substring(0, maxLength - 3) + '...';
+      }
+      
+      return stringValue;
+    };
+    
     // Préparer les données
     const worksheetData = [
       columns.map((col) => col.label), // En-têtes
       ...data.map((row) => columns.map((col) => {
         const value = row[col.key];
-        // Convertir les objets complexes en string
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          return JSON.stringify(value);
-        }
-        return value || '';
+        return truncateValue(value);
       })),
     ];
     
@@ -205,6 +220,38 @@ export function exportToJSON(
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
+}
+
+/**
+ * Crée un lien public partageable pour des données JSON
+ * Retourne l'URL publique et les informations de partage
+ */
+export async function createPublicJSONLink(
+  data: ExportRow[],
+  columns: ExportColumn[],
+  expiresInHours: number = 24 * 7 // 7 jours par défaut
+): Promise<{
+  success: boolean;
+  token: string;
+  publicUrl: string;
+  expiresAt: string;
+  expiresInHours: number;
+}> {
+  // Préparer les données avec les labels des colonnes
+  const jsonData = data.map((row) => {
+    const jsonRow: Record<string, any> = {};
+    columns.forEach((col) => {
+      jsonRow[col.label] = row[col.key];
+      // Ajouter aussi la clé technique pour faciliter le traitement
+      jsonRow[col.key] = row[col.key];
+    });
+    return jsonRow;
+  });
+
+  // Importer dynamiquement l'API pour éviter les problèmes de dépendances circulaires
+  const { sharedApi } = await import('../lib/api/shared');
+  
+  return await sharedApi.createSharedData(jsonData, expiresInHours);
 }
 
 /**

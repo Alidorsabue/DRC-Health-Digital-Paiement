@@ -24,11 +24,6 @@ class _ApprovalReportScreenState extends State<ApprovalReportScreen> {
   void initState() {
     super.initState();
     _authService = AuthService(_apiService);
-  }
-
-  @override
-  void initState() {
-    super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });

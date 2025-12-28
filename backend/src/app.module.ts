@@ -13,6 +13,7 @@ import { PartnersModule } from './partners/partners.module';
 import { StatsModule } from './stats/stats.module';
 import { GeographicModule } from './geographic/geographic.module';
 import { MobileModule } from './mobile/mobile.module';
+import { SharedDataModule } from './shared/shared-data.module';
 import { DatabaseConfig } from './config/database.config';
 
 @Module({
@@ -36,6 +37,7 @@ import { DatabaseConfig } from './config/database.config';
     StatsModule,
     GeographicModule,
     MobileModule,
+    SharedDataModule,
   ],
 })
 export class AppModule {}
