@@ -30,7 +30,11 @@ async function bootstrap() {
 
   // Autoriser toutes les origines en développement pour permettre l'accès mobile
   // Nettoyer FRONTEND_URL (supprimer le slash final s'il existe)
-  const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+  // MODE PRODUCTION: Utiliser FRONTEND_URL ou l'URL Railway par défaut
+  const defaultFrontendUrl = process.env.NODE_ENV === 'production' 
+    ? 'https://drc-health-digital-paiement-production.up.railway.app'
+    : 'http://localhost:3000';
+  const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || defaultFrontendUrl;
   const corsOrigins = process.env.NODE_ENV === 'production' 
     ? frontendUrl
     : '*';

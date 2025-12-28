@@ -30,16 +30,25 @@ void main() async {
   if (AppConfig.isProduction) {
     // Mode production : utiliser uniquement l'URL de production
     apiUrl = AppConfig.productionApiUrl;
-    // Nettoyer l'URL sauvegardée si elle contient /api (ancienne configuration)
+    // Nettoyer l'URL sauvegardée si elle contient localhost ou /api (ancienne configuration)
     final savedUrl = prefs.getString('api_url');
-    if (savedUrl != null && savedUrl.contains('/api')) {
-      // Supprimer /api de l'URL si présent
-      final cleanedUrl = savedUrl.replaceAll('/api', '').replaceAll(RegExp(r'/+$'), '');
-      if (cleanedUrl != savedUrl) {
-        await prefs.setString('api_url', cleanedUrl);
+    if (savedUrl != null) {
+      // Si l'URL sauvegardée contient localhost, 127.0.0.1, ou /api, la remplacer par l'URL de production
+      if (savedUrl.contains('localhost') || 
+          savedUrl.contains('127.0.0.1') || 
+          savedUrl.contains('/api') ||
+          !savedUrl.contains('railway.app')) {
+        print('🧹 Nettoyage de l\'URL sauvegardée (localhost ou /api détecté): $savedUrl');
+        print('✅ Remplacement par l\'URL de production: $apiUrl');
+        await prefs.setString('api_url', apiUrl);
+      } else if (savedUrl != apiUrl) {
+        // Si l'URL sauvegardée est différente de l'URL de production, la mettre à jour
+        print('🔄 Mise à jour de l\'URL sauvegardée: $savedUrl -> $apiUrl');
+        await prefs.setString('api_url', apiUrl);
       }
+    } else {
+      await prefs.setString('api_url', apiUrl);
     }
-    await prefs.setString('api_url', apiUrl);
   } else {
     // Mode développement : détecter automatiquement l'IP
     final savedUrl = prefs.getString('api_url');

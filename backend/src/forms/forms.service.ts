@@ -369,20 +369,27 @@ export class FormsService {
       // Filtrer par zoneId pour les utilisateurs MCZ
       if (user && user.role === 'MCZ' && user.zoneId) {
         submissionFilters.zoneId = user.zoneId;
+        console.log(`[getPrestatairesDataByForm] Filtre MCZ zoneId appliqué: ${user.zoneId}`);
       }
       // Filtrer par aire de santé pour les utilisateurs IT avec scope AIRE
       else if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
         submissionFilters.aireId = user.aireId;
+        console.log(`[getPrestatairesDataByForm] Filtre IT AIRE appliqué: ${user.aireId}`);
       }
       // Filtrer par zoneId pour les utilisateurs IT avec scope ZONE
       else if (user && user.role === 'IT' && user.scope === 'ZONE' && user.zoneId) {
         submissionFilters.zoneId = user.zoneId;
+        console.log(`[getPrestatairesDataByForm] Filtre IT ZONE appliqué: ${user.zoneId}`);
       }
       // Filtrer par provinceId pour les utilisateurs IT avec scope PROVINCE
       else if (user && user.role === 'IT' && user.scope === 'PROVINCE' && user.provinceId) {
         submissionFilters.provinceId = user.provinceId;
+        console.log(`[getPrestatairesDataByForm] Filtre IT PROVINCE appliqué: ${user.provinceId}`);
       }
       // IT sans scope ou SUPERADMIN: pas de filtre géographique (voir tous)
+      else {
+        console.log(`[getPrestatairesDataByForm] Aucun filtre géographique appliqué. User: role=${user?.role}, scope=${user?.scope}`);
+      }
 
       // Par défaut, retourner seulement les enregistrements originaux (validation_sequence IS NULL ou 0)
       // Mais permettre de voir tous les enregistrements si explicitement demandé

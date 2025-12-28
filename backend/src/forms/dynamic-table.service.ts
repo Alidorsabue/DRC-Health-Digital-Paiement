@@ -705,11 +705,11 @@ export class DynamicTableService {
       if (filters.provinceId) {
         const provinceColumns: string[] = [];
         // Chercher les variantes possibles de noms de colonnes pour province
-        const possibleProvinceNames = ['provinceid', 'admin1_h_c', 'province_id', 'admin1'];
+        const possibleProvinceNames = ['provinceid', 'admin1_h_c', 'province_id', 'admin1', 'provinceId', 'ProvinceId', 'PROVINCEID'];
         for (const colName of possibleProvinceNames) {
-          if (columnNames.has(colName)) {
+          if (columnNames.has(colName.toLowerCase())) {
             // Trouver le nom exact avec la casse correcte
-            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName)?.column_name;
+            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName.toLowerCase())?.column_name;
             if (exactName) {
               provinceColumns.push(`"${exactName}"`);
             }
@@ -719,16 +719,20 @@ export class DynamicTableService {
           whereClause += ` AND (${provinceColumns.join(` = $${paramIndex} OR `)} = $${paramIndex})`;
           queryParams.push(filters.provinceId);
           paramIndex++;
+          console.log(`[getSubmissions] Filtre provinceId appliqué: ${filters.provinceId} sur colonnes: ${provinceColumns.join(', ')}`);
+        } else {
+          // Si aucune colonne de province n'est trouvée, ne pas filtrer (pour éviter de perdre des données)
+          console.warn(`[getSubmissions] ATTENTION: Aucune colonne de province trouvée dans ${tableName} pour filtrer par provinceId=${filters.provinceId}. Le filtre est ignoré pour retourner tous les prestataires.`);
         }
       }
       if (filters.zoneId) {
         const zoneColumns: string[] = [];
         // Chercher les variantes possibles de noms de colonnes pour zone
-        const possibleZoneNames = ['zoneid', 'admin3_h_c', 'zone_id', 'admin3'];
+        const possibleZoneNames = ['zoneid', 'admin3_h_c', 'zone_id', 'admin3', 'zoneId', 'ZoneId', 'ZONEID'];
         for (const colName of possibleZoneNames) {
-          if (columnNames.has(colName)) {
+          if (columnNames.has(colName.toLowerCase())) {
             // Trouver le nom exact avec la casse correcte
-            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName)?.column_name;
+            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName.toLowerCase())?.column_name;
             if (exactName) {
               zoneColumns.push(`"${exactName}"`);
             }
@@ -738,16 +742,20 @@ export class DynamicTableService {
           whereClause += ` AND (${zoneColumns.join(` = $${paramIndex} OR `)} = $${paramIndex})`;
           queryParams.push(filters.zoneId);
           paramIndex++;
+          console.log(`[getSubmissions] Filtre zoneId appliqué: ${filters.zoneId} sur colonnes: ${zoneColumns.join(', ')}`);
+        } else {
+          // Si aucune colonne de zone n'est trouvée, ne pas filtrer (pour éviter de perdre des données)
+          console.warn(`[getSubmissions] ATTENTION: Aucune colonne de zone trouvée dans ${tableName} pour filtrer par zoneId=${filters.zoneId}. Le filtre est ignoré pour retourner tous les prestataires.`);
         }
       }
       if (filters.aireId) {
         const aireColumns: string[] = [];
         // Chercher les variantes possibles de noms de colonnes pour aire
-        const possibleAireNames = ['aireid', 'admin4_h_c', 'aire_id', 'admin4'];
+        const possibleAireNames = ['aireid', 'admin4_h_c', 'aire_id', 'admin4', 'aireId', 'AireId', 'AIREID'];
         for (const colName of possibleAireNames) {
-          if (columnNames.has(colName)) {
+          if (columnNames.has(colName.toLowerCase())) {
             // Trouver le nom exact avec la casse correcte
-            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName)?.column_name;
+            const exactName = existingColumns.find((col: any) => col.column_name.toLowerCase() === colName.toLowerCase())?.column_name;
             if (exactName) {
               aireColumns.push(`"${exactName}"`);
             }
@@ -757,12 +765,17 @@ export class DynamicTableService {
           whereClause += ` AND (${aireColumns.join(` = $${paramIndex} OR `)} = $${paramIndex})`;
           queryParams.push(filters.aireId);
           paramIndex++;
+          console.log(`[getSubmissions] Filtre aireId appliqué: ${filters.aireId} sur colonnes: ${aireColumns.join(', ')}`);
+        } else {
+          // Si aucune colonne d'aire n'est trouvée, ne pas filtrer (pour éviter de perdre des données)
+          console.warn(`[getSubmissions] ATTENTION: Aucune colonne d'aire trouvée dans ${tableName} pour filtrer par aireId=${filters.aireId}. Le filtre est ignoré pour retourner tous les prestataires.`);
         }
       }
     }
 
     console.log(`[getSubmissions] tableName=${tableName}, whereClause=${whereClause}, params=`, queryParams);
 
+    // Récupérer toutes les données d'abord (sans filtres géographiques si les colonnes n'existent pas)
     const [data, countResult] = await Promise.all([
       this.dataSource.query(
         `SELECT * FROM "${tableName}" WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -774,11 +787,142 @@ export class DynamicTableService {
       ),
     ]);
 
-    console.log(`[getSubmissions] found ${data.length} records, total=${countResult[0]?.count || '0'}`);
+    console.log(`[getSubmissions] found ${data.length} records before geographic filtering, total=${countResult[0]?.count || '0'}`);
+
+    // Si des filtres géographiques ont été demandés mais aucune colonne n'a été trouvée,
+    // appliquer le filtre sur raw_data après récupération
+    let filteredData = data;
+    let filteredTotal = parseInt(countResult[0]?.count || '0', 10);
+    
+    if (filters) {
+      // Vérifier si on doit filtrer par zoneId dans raw_data
+      if (filters.zoneId) {
+        const zoneColumnsFound = existingColumns.some((col: any) => {
+          const colName = col.column_name.toLowerCase();
+          return ['zoneid', 'admin3_h_c', 'zone_id', 'admin3'].includes(colName);
+        });
+        
+        if (!zoneColumnsFound && columnNames.has('raw_data')) {
+          console.log(`[getSubmissions] Colonne zone non trouvée, filtrage dans raw_data pour zoneId=${filters.zoneId}`);
+          const normalizedZoneId = filters.zoneId.toString().trim().toLowerCase();
+          
+          filteredData = filteredData.filter((record: any) => {
+            const rawData = typeof record.raw_data === 'string' 
+              ? JSON.parse(record.raw_data) 
+              : (record.raw_data || {});
+            
+            const recordZoneId = record.zone_id || 
+                                record.zoneId || 
+                                rawData.zone_id || 
+                                rawData.zoneId || 
+                                rawData.admin3_h_c ||
+                                record.admin3_h_c;
+            
+            if (!recordZoneId) return true; // Inclure si pas de zoneId (pour ne pas perdre de données)
+            
+            return recordZoneId.toString().trim().toLowerCase() === normalizedZoneId;
+          });
+          
+          // Recompter le total
+          const allDataForCount = await this.dataSource.query(
+            `SELECT * FROM "${tableName}" WHERE ${whereClause.replace(/AND\s+\([^)]*zone[^)]*\)/gi, '')}`,
+            queryParams.filter((_, idx) => {
+              // Retirer les paramètres de zoneId
+              return true; // Simplifié pour l'instant
+            }),
+          );
+          
+          filteredTotal = allDataForCount.filter((record: any) => {
+            const rawData = typeof record.raw_data === 'string' 
+              ? JSON.parse(record.raw_data) 
+              : (record.raw_data || {});
+            
+            const recordZoneId = record.zone_id || 
+                                record.zoneId || 
+                                rawData.zone_id || 
+                                rawData.zoneId || 
+                                rawData.admin3_h_c ||
+                                record.admin3_h_c;
+            
+            if (!recordZoneId) return true;
+            
+            return recordZoneId.toString().trim().toLowerCase() === normalizedZoneId;
+          }).length;
+          
+          console.log(`[getSubmissions] Après filtrage raw_data zoneId: ${filteredData.length} enregistrements, total=${filteredTotal}`);
+        }
+      }
+      
+      // Vérifier si on doit filtrer par aireId dans raw_data
+      if (filters.aireId) {
+        const aireColumnsFound = existingColumns.some((col: any) => {
+          const colName = col.column_name.toLowerCase();
+          return ['aireid', 'admin4_h_c', 'aire_id', 'admin4'].includes(colName);
+        });
+        
+        if (!aireColumnsFound && columnNames.has('raw_data')) {
+          console.log(`[getSubmissions] Colonne aire non trouvée, filtrage dans raw_data pour aireId=${filters.aireId}`);
+          const normalizedAireId = filters.aireId.toString().trim().toLowerCase();
+          
+          filteredData = filteredData.filter((record: any) => {
+            const rawData = typeof record.raw_data === 'string' 
+              ? JSON.parse(record.raw_data) 
+              : (record.raw_data || {});
+            
+            const recordAireId = record.aire_id || 
+                                 record.aireId || 
+                                 rawData.aire_id || 
+                                 rawData.aireId || 
+                                 rawData.admin4_h_c ||
+                                 record.admin4_h_c;
+            
+            if (!recordAireId) return true; // Inclure si pas d'aireId
+            
+            return recordAireId.toString().trim().toLowerCase() === normalizedAireId;
+          });
+          
+          console.log(`[getSubmissions] Après filtrage raw_data aireId: ${filteredData.length} enregistrements`);
+        }
+      }
+      
+      // Vérifier si on doit filtrer par provinceId dans raw_data
+      if (filters.provinceId) {
+        const provinceColumnsFound = existingColumns.some((col: any) => {
+          const colName = col.column_name.toLowerCase();
+          return ['provinceid', 'admin1_h_c', 'province_id', 'admin1'].includes(colName);
+        });
+        
+        if (!provinceColumnsFound && columnNames.has('raw_data')) {
+          console.log(`[getSubmissions] Colonne province non trouvée, filtrage dans raw_data pour provinceId=${filters.provinceId}`);
+          const normalizedProvinceId = filters.provinceId.toString().trim().toLowerCase();
+          
+          filteredData = filteredData.filter((record: any) => {
+            const rawData = typeof record.raw_data === 'string' 
+              ? JSON.parse(record.raw_data) 
+              : (record.raw_data || {});
+            
+            const recordProvinceId = record.province_id || 
+                                     record.provinceId || 
+                                     rawData.province_id || 
+                                     rawData.provinceId || 
+                                     rawData.admin1_h_c ||
+                                     record.admin1_h_c;
+            
+            if (!recordProvinceId) return true; // Inclure si pas de provinceId
+            
+            return recordProvinceId.toString().trim().toLowerCase() === normalizedProvinceId;
+          });
+          
+          console.log(`[getSubmissions] Après filtrage raw_data provinceId: ${filteredData.length} enregistrements`);
+        }
+      }
+    }
+
+    console.log(`[getSubmissions] found ${filteredData.length} records after all filtering, total=${filteredTotal}`);
 
     return {
-      data,
-      total: parseInt(countResult[0]?.count || '0', 10),
+      data: filteredData,
+      total: filteredTotal,
     };
   }
 

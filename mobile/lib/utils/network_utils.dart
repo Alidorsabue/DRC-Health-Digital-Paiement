@@ -193,10 +193,7 @@ class NetworkUtils {
   }
 
   /// Obtient l'URL de l'API en fonction de l'environnement
-  /// 
-  /// Pour un émulateur : utilise 10.0.2.2 (adresse spéciale pour localhost du PC hôte)
-  /// Pour un appareil physique : utilise l'IP locale détectée ou une IP par défaut
-  /// En production : utilise l'URL de production
+  /// MODE PRODUCTION: Utilise toujours l'URL Railway
   static String getApiUrl({String? customUrl}) {
     // Si une URL personnalisée est fournie, l'utiliser
     if (customUrl != null && customUrl.isNotEmpty) {
@@ -208,14 +205,15 @@ class NetworkUtils {
       return AppConfig.productionApiUrl;
     }
 
+    // En développement uniquement (ne devrait jamais être atteint en production)
     // Détecter si c'est un émulateur
     if (isEmulator) {
       return 'http://10.0.2.2:3001';
     }
 
-    // Pour un appareil physique, on utilise une IP par défaut détectée sur l'ordinateur
+    // Pour un appareil physique en développement, on utilise une IP par défaut
     // La détection automatique sera faite au moment de la connexion
-    return 'http://192.168.56.1:3001'; // Interface virtuelle détectée
+    return 'http://192.168.56.1:3001';
   }
 
   /// Liste des IPs par défaut à essayer

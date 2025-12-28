@@ -19,16 +19,11 @@ api.interceptors.request.use((config) => {
   // Mettre à jour l'URL de base à chaque requête (au cas où elle changerait)
   const currentApiUrl = getApiBaseUrl();
   
-  // Vérifier qu'on n'utilise jamais localhost en production sur Railway
-  const isRailwayProduction = typeof window !== 'undefined' && 
-    window.location.hostname !== 'localhost' && 
-    window.location.hostname !== '127.0.0.1' &&
-    window.location.hostname.includes('railway.app');
-  
-  if (isRailwayProduction && currentApiUrl.includes('localhost')) {
-    const errorMsg = ' ERREUR CRITIQUE: Le frontend ne peut pas utiliser localhost en production sur Railway!';
+  // Vérifier qu'on n'utilise jamais localhost en production
+  if (currentApiUrl.includes('localhost') || currentApiUrl.includes('127.0.0.1')) {
+    const errorMsg = '❌ ERREUR CRITIQUE: Le frontend ne peut pas utiliser localhost en production!';
     console.error(errorMsg);
-    console.error('Hostname:', window.location.hostname);
+    console.error('Hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A');
     console.error('API URL détectée:', currentApiUrl);
     throw new Error(errorMsg);
   }
@@ -44,7 +39,7 @@ api.interceptors.request.use((config) => {
       'NEXT_PUBLIC_API_URL brute': process.env.NEXT_PUBLIC_API_URL,
       'NODE_ENV': process.env.NODE_ENV,
       'window.location.hostname': window.location.hostname,
-      'isRailwayProduction': isRailwayProduction,
+      'isProduction': !currentApiUrl.includes('localhost') && !currentApiUrl.includes('127.0.0.1'),
     });
   }
   
