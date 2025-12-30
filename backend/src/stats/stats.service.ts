@@ -216,34 +216,43 @@ export class StatsService {
     const prestatairesMap = new Map<string, any>();
     
     for (const row of data) {
-      const prestataireId = row.id || row.submission_id || row.prestataire_id;
+      // Pour la déduplication, utiliser id comme clé principale
+      // Les validations ont le même id que l'enregistrement original
+      // mais ont validation_sequence > 0
+      const prestataireId = row.id || row.prestataire_id || row.prestataireId;
       if (!prestataireId) {
         console.warn(`DEBUG STATS getTableData: Enregistrement sans ID ignoré`);
         continue;
       }
       
       const existing = prestatairesMap.get(prestataireId);
+      const currentSeq = row.validation_sequence ?? 0; // NULL = 0 pour la comparaison
+      const existingSeq = existing?.validation_sequence ?? 0;
+      const currentStatus = (row.status || '').toUpperCase().trim();
       
       if (!existing) {
         // Premier enregistrement pour ce prestataire
         prestatairesMap.set(prestataireId, row);
-      } else {
-        // Comparer les validation_sequence
-        const currentSeq = row.validation_sequence ?? 0; // NULL = 0 pour la comparaison
-        const existingSeq = existing.validation_sequence ?? 0;
-        
-        if (currentSeq > existingSeq) {
-          // Le nouveau a un validation_sequence plus élevé
+      } else if (currentSeq > existingSeq) {
+        // Le nouveau a un validation_sequence plus élevé, le garder (c'est une validation plus récente)
+        prestatairesMap.set(prestataireId, row);
+      } else if (currentSeq === existingSeq && currentSeq === 0) {
+        // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT ou APPROUVE_PAR_MCZ
+        const existingStatus = (existing.status || '').toUpperCase().trim();
+        if ((currentStatus === 'VALIDE_PAR_IT' || currentStatus === 'APPROUVE_PAR_MCZ') && 
+            existingStatus !== 'VALIDE_PAR_IT' && existingStatus !== 'APPROUVE_PAR_MCZ') {
           prestatairesMap.set(prestataireId, row);
-        } else if (currentSeq === existingSeq && currentSeq === 0) {
-          // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT
-          const currentStatus = (row.status || '').toUpperCase();
-          const existingStatus = (existing.status || '').toUpperCase();
-          if (currentStatus === 'VALIDE_PAR_IT' && existingStatus !== 'VALIDE_PAR_IT') {
-            prestatairesMap.set(prestataireId, row);
-          }
+        }
+      } else if (currentSeq === existingSeq && currentSeq > 0) {
+        // Les deux sont des validations avec le même validation_sequence
+        // Priorité au statut VALIDE_PAR_IT ou APPROUVE_PAR_MCZ
+        const existingStatus = (existing.status || '').toUpperCase().trim();
+        if ((currentStatus === 'VALIDE_PAR_IT' || currentStatus === 'APPROUVE_PAR_MCZ') && 
+            existingStatus !== 'VALIDE_PAR_IT' && existingStatus !== 'APPROUVE_PAR_MCZ') {
+          prestatairesMap.set(prestataireId, row);
         }
       }
+      // Si currentSeq < existingSeq, on garde l'existant (validation plus récente)
     }
     
     const deduplicatedData = Array.from(prestatairesMap.values());
@@ -631,15 +640,16 @@ export class StatsService {
     const prestatairesMap = new Map<string, any>();
     
     for (const record of prestataires) {
-      // Utiliser prestataire_id comme clé principale pour la déduplication
-      // Les validations ont le même prestataire_id que l'enregistrement original
-      // mais peuvent avoir un id différent (submission_id)
-      const prestataireId = record.prestataire_id || record.prestataireId || record.id;
+      // Utiliser id comme clé principale pour la déduplication
+      // Les validations ont le même id que l'enregistrement original (c'est l'ID du prestataire)
+      // mais ont un validation_sequence > 0 et un statut VALIDE_PAR_IT
+      const prestataireId = record.id || record.prestataire_id || record.prestataireId;
       if (!prestataireId) {
         console.warn(`[deduplicatePrestataires] Enregistrement sans ID ignoré:`, {
           id: record.id,
           prestataire_id: record.prestataire_id,
           prestataireId: record.prestataireId,
+          submission_id: record.submission_id,
         });
         continue;
       }
@@ -652,7 +662,7 @@ export class StatsService {
         // Premier enregistrement pour ce prestataire
         prestatairesMap.set(prestataireId, record);
       } else if (currentSeq > existingSeq) {
-        // Le nouveau a un validation_sequence plus élevé, le garder
+        // Le nouveau a un validation_sequence plus élevé, le garder (c'est une validation plus récente)
         prestatairesMap.set(prestataireId, record);
       } else if (currentSeq === existingSeq && currentSeq === 0) {
         // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT ou APPROUVE_PAR_MCZ
@@ -663,19 +673,55 @@ export class StatsService {
           prestatairesMap.set(prestataireId, record);
         }
       }
+      // Si currentSeq < existingSeq, on garde l'existant (validation plus récente)
     }
     
     const result = Array.from(prestatairesMap.values());
+    
+    // Log de la répartition par statut après déduplication
+    const statusCount = result.reduce((acc: any, p: any) => {
+      const status = p.status || 'UNKNOWN';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
     console.log(`[deduplicatePrestataires] ${prestataires.length} enregistrements → ${result.length} prestataires uniques`);
+    console.log(`[deduplicatePrestataires] Répartition par statut:`, statusCount);
+    
+    // Log de quelques exemples pour déboguer
+    if (result.length > 0) {
+      console.log(`[deduplicatePrestataires] Exemples (3 premiers):`, 
+        result.slice(0, 3).map(p => ({
+          id: p.id,
+          prestataire_id: p.prestataire_id,
+          status: p.status,
+          validation_sequence: p.validation_sequence,
+        }))
+      );
+    }
+    
     return result;
   }
 
   private groupByStatus(prestataires: any[]) {
     const groups: Record<string, number> = {};
     for (const p of prestataires) {
-      const status = p.status || PrestataireStatus.ENREGISTRE;
+      // Récupérer le statut depuis plusieurs emplacements possibles
+      let status = p.status || p.Status || PrestataireStatus.ENREGISTRE;
+      
+      // Normaliser le statut en majuscules
+      if (typeof status === 'string') {
+        status = status.toUpperCase().trim();
+      }
+      
+      // Si le statut est vide ou null, utiliser ENREGISTRE par défaut
+      if (!status || status === 'NULL' || status === '') {
+        status = PrestataireStatus.ENREGISTRE;
+      }
+      
       groups[status] = (groups[status] || 0) + 1;
     }
+    
+    console.log(`[groupByStatus] Répartition finale:`, groups);
     return groups;
   }
 
