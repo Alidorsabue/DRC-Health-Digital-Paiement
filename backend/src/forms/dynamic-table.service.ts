@@ -2410,20 +2410,29 @@ export class DynamicTableService {
     let paramIndex = 1;
 
     // Mettre à jour kyc_status (toujours)
+    // S'assurer que kycStatus est une chaîne valide
+    const kycStatusValue = String(kycStatus || '').trim();
+    if (!kycStatusValue) {
+      throw new Error(`kycStatus ne peut pas être vide`);
+    }
     updates.push(`kyc_status = $${paramIndex}`);
-    values.push(kycStatus);
+    values.push(kycStatusValue);
     paramIndex++;
 
     // Mettre à jour kyc_date
+    const kycDateValue = new Date().toISOString();
     updates.push(`kyc_date = $${paramIndex}`);
-    values.push(new Date().toISOString());
+    values.push(kycDateValue);
     paramIndex++;
     
     // Si le téléphone est fourni, le mettre à jour
     if (telephone && existingColumnNames.has('telephone')) {
-      updates.push(`telephone = $${paramIndex}`);
-      values.push(telephone);
-      paramIndex++;
+      const telephoneValue = String(telephone).trim();
+      if (telephoneValue) {
+        updates.push(`telephone = $${paramIndex}`);
+        values.push(telephoneValue);
+        paramIndex++;
+      }
     }
 
     // Toujours mettre à jour updated_at
@@ -2474,16 +2483,28 @@ export class DynamicTableService {
     let updatedCount = 0;
     const failedRecords: any[] = [];
     
+    // Le nombre de paramètres dans les updates (kyc_status, kyc_date, telephone si fourni)
+    const numUpdateParams = values.length;
+    
     for (const record of allRecords) {
       const recordId = record.id || record.prestataire_id;
       const submissionId = record.submission_id;
-      const recordValues = [...values];
       
       // Utiliser submission_id pour identifier de manière unique chaque enregistrement
       // car c'est la clé unique pour chaque ligne (original et validations)
       if (submissionId) {
-        recordValues.push(submissionId);
-        const whereClause = `submission_id = $${paramIndex + 1}`;
+        // Construire les valeurs : d'abord les updates, puis le submission_id pour le WHERE
+        // S'assurer que submissionId est une chaîne valide
+        const submissionIdValue = String(submissionId).trim();
+        if (!submissionIdValue) {
+          console.warn(`[updateKycInTable] ⚠️ submission_id vide pour l'enregistrement ${recordId}, passage au suivant...`);
+          failedRecords.push({ submission_id: submissionId, id: recordId, reason: 'submission_id vide' });
+          continue;
+        }
+        
+        const recordValues = [...values, submissionIdValue];
+        const whereParamIndex = numUpdateParams + 1;
+        const whereClause = `submission_id = $${whereParamIndex}::text`;
         
         const updateSQL = `
           UPDATE "${tableName}" 
@@ -2505,13 +2526,23 @@ export class DynamicTableService {
         } catch (error: any) {
           console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de submission_id ${submissionId}:`, error.message);
           console.error(`[updateKycInTable] SQL: ${updateSQL}`);
-          console.error(`[updateKycInTable] Values:`, recordValues);
+          console.error(`[updateKycInTable] Values (${recordValues.length}):`, recordValues);
+          console.error(`[updateKycInTable] Param index pour WHERE: ${whereParamIndex}`);
           failedRecords.push({ submission_id: submissionId, id: recordId, error: error.message });
         }
       } else {
         // Si pas de submission_id, utiliser id avec conditions supplémentaires
-        recordValues.push(recordId);
-        const whereClause = `id = $${paramIndex + 1} AND (submission_id IS NULL OR submission_id = '') AND (validation_sequence IS NULL OR validation_sequence = 0)`;
+        // S'assurer que recordId est une chaîne valide
+        const recordIdValue = String(recordId).trim();
+        if (!recordIdValue) {
+          console.warn(`[updateKycInTable] ⚠️ id vide pour l'enregistrement, passage au suivant...`);
+          failedRecords.push({ id: recordId, reason: 'id vide' });
+          continue;
+        }
+        
+        const recordValues = [...values, recordIdValue];
+        const whereParamIndex = numUpdateParams + 1;
+        const whereClause = `id = $${whereParamIndex}::text AND (submission_id IS NULL OR submission_id = '') AND (validation_sequence IS NULL OR validation_sequence = 0)`;
         
         const updateSQL = `
           UPDATE "${tableName}" 
@@ -2533,7 +2564,8 @@ export class DynamicTableService {
         } catch (error: any) {
           console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de id ${recordId}:`, error.message);
           console.error(`[updateKycInTable] SQL: ${updateSQL}`);
-          console.error(`[updateKycInTable] Values:`, recordValues);
+          console.error(`[updateKycInTable] Values (${recordValues.length}):`, recordValues);
+          console.error(`[updateKycInTable] Param index pour WHERE: ${whereParamIndex}`);
           failedRecords.push({ id: recordId, error: error.message });
         }
       }
