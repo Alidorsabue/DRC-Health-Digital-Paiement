@@ -2122,10 +2122,27 @@ export class DynamicTableService {
     // Normaliser l'ID (enlever les espaces, etc.)
     const normalizedId = prestataireId.trim();
 
-    // Stratégie 1: Recherche par ID exact (id ou prestataire_id)
+    // Stratégie 1: Recherche directe par ID (pour trouver l'enregistrement original)
+    // IMPORTANT: Les enregistrements originaux ont seulement 'id', pas 'prestataire_id'
+    const directQuery = await this.dataSource.query(
+      `SELECT * FROM "${tableName}" 
+       WHERE id = $1
+       AND (validation_sequence IS NULL OR validation_sequence = 0)
+       AND (parent_submission_id IS NULL OR parent_submission_id = '')
+       ORDER BY created_at ASC 
+       LIMIT 1`,
+      [normalizedId],
+    );
+    
+    if (directQuery.length > 0) {
+      console.log(`[findPrestataireForKyc] Prestataire trouvé par ID direct (enregistrement original): ${normalizedId}`);
+      return directQuery[0];
+    }
+    
+    // Stratégie 1b: Recherche par getLastValidationOrOriginal (cherche aussi par prestataire_id pour les validations)
     let baseRecord = await this.getLastValidationOrOriginal(formId, normalizedId);
     if (baseRecord) {
-      console.log(`[findPrestataireForKyc] Prestataire trouvé par ID exact: ${normalizedId}`);
+      console.log(`[findPrestataireForKyc] Prestataire trouvé par getLastValidationOrOriginal: ${normalizedId}`);
       return baseRecord;
     }
 
@@ -2188,17 +2205,18 @@ export class DynamicTableService {
     }
 
     // Stratégie 4: Recherche partielle par ID (si l'ID contient le prestataireId)
+    // IMPORTANT: Chercher d'abord par 'id' (enregistrements originaux), puis par 'prestataire_id' (validations)
     const partialQuery = await this.dataSource.query(
       `SELECT * FROM "${tableName}" 
        WHERE (
          id LIKE $1 
-         OR prestataire_id LIKE $1
          OR id LIKE $2
+         OR prestataire_id LIKE $1
          OR prestataire_id LIKE $2
        )
        AND (validation_sequence IS NULL OR validation_sequence = 0)
        AND (parent_submission_id IS NULL OR parent_submission_id = '')
-       ORDER BY created_at ASC 
+       ORDER BY COALESCE(validation_sequence, 0) ASC, created_at ASC 
        LIMIT 1`,
       [`%${normalizedId}%`, `%${normalizedId.replace(/\s+/g, '')}%`],
     );
@@ -2242,13 +2260,14 @@ export class DynamicTableService {
     let allRecords: any[] = [];
     
     // Chercher tous les enregistrements avec ces variations d'ID
-    // IMPORTANT: Ne pas filtrer par validation_sequence car l'enregistrement original
-    // peut avoir été mis à jour avec des informations de validation (première validation)
-    // IMPORTANT: Chercher par id ET prestataire_id pour trouver tous les enregistrements
+    // IMPORTANT: Les enregistrements originaux ont seulement 'id', pas 'prestataire_id'
+    // Les validations ont 'prestataire_id' qui référence l'id original
+    // Donc on cherche par 'id' (pour trouver l'original + les validations qui ont prestataire_id = id)
+    // OU par 'prestataire_id' (pour trouver les validations)
     for (const idVar of idVariations) {
       const records = await this.dataSource.query(
         `SELECT * FROM "${tableName}" 
-         WHERE (id = $1 OR prestataire_id = $1)
+         WHERE id = $1 OR prestataire_id = $1
          ORDER BY COALESCE(validation_sequence, 0) ASC, created_at ASC`,
         [idVar],
       );
@@ -2257,7 +2276,8 @@ export class DynamicTableService {
         console.log(`[updateKycInTable] Trouvé ${records.length} enregistrement(s) avec ID: ${idVar}`);
         // Log détaillé pour chaque enregistrement
         records.forEach((r: any, idx: number) => {
-          console.log(`[updateKycInTable]   Enregistrement ${idx + 1}:`, {
+          const isOriginal = !r.validation_sequence || r.validation_sequence === 0;
+          console.log(`[updateKycInTable]   Enregistrement ${idx + 1} (${isOriginal ? 'ORIGINAL' : 'VALIDATION'}):`, {
             id: r.id,
             submission_id: r.submission_id,
             prestataire_id: r.prestataire_id,
@@ -2265,6 +2285,7 @@ export class DynamicTableService {
             status: r.status,
             presence_days: r.presence_days,
             kyc_status: r.kyc_status,
+            has_prestataire_id: !!r.prestataire_id,
           });
         });
         allRecords = records;
@@ -2285,6 +2306,8 @@ export class DynamicTableService {
       if (directRecords.length > 0) {
         console.log(`[updateKycInTable] Trouvé ${directRecords.length} enregistrement(s) avec recherche directe`);
         allRecords = directRecords;
+      } else {
+        console.warn(`[updateKycInTable] ⚠️ Aucun enregistrement trouvé avec id ou prestataire_id = ${normalizedId}`);
       }
     }
 
@@ -2407,15 +2430,17 @@ export class DynamicTableService {
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
     // MÉTHODE 1: Mise à jour en une seule requête (plus efficace)
-    // Mettre à jour TOUS les enregistrements du prestataire en une fois en utilisant id
-    // Tous les enregistrements (original + validations) ont le même id
+    // Mettre à jour TOUS les enregistrements du prestataire en une fois
+    // IMPORTANT: Les enregistrements originaux ont seulement 'id', pas 'prestataire_id'
+    // Les validations ont 'prestataire_id' qui référence l'id original
+    // Donc on cherche par 'id' (pour l'original) OU 'prestataire_id' (pour les validations)
     const bulkUpdateValues = [...values];
     bulkUpdateValues.push(normalizedId);
     
     const bulkUpdateSQL = `
       UPDATE "${tableName}" 
       SET ${updates.join(', ')}
-      WHERE (id = $${paramIndex + 1} OR prestataire_id = $${paramIndex + 1})
+      WHERE id = $${paramIndex + 1} OR prestataire_id = $${paramIndex + 1}
     `;
 
     console.log(`[updateKycInTable] Tentative de mise à jour en masse pour prestataire ${normalizedId}`);
