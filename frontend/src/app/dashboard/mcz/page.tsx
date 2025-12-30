@@ -466,14 +466,27 @@ export default function MCZPage() {
   };
 
   const getPaymentStatusBadge = (prestataire: PrestataireForApproval) => {
-    const status = prestataire.paymentStatus || prestataire.payment_status || 'PENDING';
+    // Chercher dans plusieurs emplacements possibles
+    const rawData = prestataire.raw_data || {};
+    const status = prestataire.paymentStatus || 
+                   prestataire.payment_status || 
+                   rawData.paymentStatus || 
+                   rawData.payment_status ||
+                   (prestataire as any).paymentStatus ||
+                   (prestataire as any).payment_status ||
+                   'PENDING';
+    
     const statusMap: Record<string, { label: string; color: string }> = {
       'SENT': { label: 'Envoyé', color: 'bg-blue-100 text-blue-800' },
       'PAID': { label: 'Payé', color: 'bg-green-100 text-green-800' },
+      'PAYE': { label: 'Payé', color: 'bg-green-100 text-green-800' },
+      'PAYÉ': { label: 'Payé', color: 'bg-green-100 text-green-800' },
       'FAILED': { label: 'Échec', color: 'bg-red-100 text-red-800' },
+      'ECHEC': { label: 'Échec', color: 'bg-red-100 text-red-800' },
       'PENDING': { label: 'En attente', color: 'bg-gray-100 text-gray-800' },
+      'EN_ATTENTE': { label: 'En attente', color: 'bg-gray-100 text-gray-800' },
     };
-    const statusInfo = statusMap[status] || statusMap['PENDING'];
+    const statusInfo = statusMap[status.toUpperCase()] || statusMap['PENDING'];
     return (
       <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
         {statusInfo.label}
@@ -584,10 +597,13 @@ export default function MCZPage() {
     const rawData = prestataire.raw_data || {};
     const paymentDate = prestataire.paymentDate || 
                         prestataire.payment_date || 
+                        prestataire.paid_at ||
                         rawData.paymentDate || 
                         rawData.payment_date ||
                         rawData.paid_at ||
-                        prestataire.paid_at;
+                        (prestataire as any).paymentDate ||
+                        (prestataire as any).payment_date ||
+                        (prestataire as any).paid_at;
     
     return formatDate(paymentDate);
   };

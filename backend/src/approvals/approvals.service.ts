@@ -396,6 +396,12 @@ export class ApprovalsService {
             status: record.status,
             kycStatus: record.kyc_status || null, // Statut KYC
             kyc_status: record.kyc_status || null, // Statut KYC (snake_case pour compatibilité)
+            paymentStatus: record.payment_status || null, // Statut de paiement
+            payment_status: record.payment_status || null, // Statut de paiement (snake_case pour compatibilité)
+            paymentDate: record.payment_date || record.paid_at || null, // Date de paiement
+            payment_date: record.payment_date || record.paid_at || null, // Date de paiement (snake_case pour compatibilité)
+            paymentAmount: record.payment_amount || null, // Montant payé
+            payment_amount: record.payment_amount || null, // Montant payé (snake_case pour compatibilité)
             zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.admin2_h_c,
             aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.admin4_h_c || record.admin4_h_c,
             // Inclure les champs du formulaire pour l'affichage
