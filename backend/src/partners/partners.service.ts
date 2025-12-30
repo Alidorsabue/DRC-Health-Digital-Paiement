@@ -595,27 +595,45 @@ export class PartnersService {
     }
 
     let success = 0;
-    const errors: Array<{ prestataireId: string; error: string }> = [];
+    const errors: Array<{ prestataireId: string; error: string; telephone?: string }> = [];
+
+    console.log(`[importKycReport] Début de l'import de ${kycResults.length} résultats KYC pour formId: ${targetFormId}`);
 
     for (const kycResult of kycResults) {
       try {
+        // Normaliser l'ID du prestataire
+        const normalizedId = (kycResult.prestataireId || '').trim();
+        if (!normalizedId) {
+          errors.push({
+            prestataireId: kycResult.prestataireId,
+            error: 'ID du prestataire vide ou invalide',
+            telephone: kycResult.telephone,
+          });
+          continue;
+        }
+
         // Mettre à jour le statut KYC dans la table du formulaire
         await this.prestatairesService.updateKycStatus(
-          kycResult.prestataireId,
+          normalizedId,
           kycResult.status,
           targetFormId,
           kycResult.telephone,
         );
 
         success++;
+        console.log(`[importKycReport] ✓ Prestataire ${normalizedId} mis à jour avec statut KYC: ${kycResult.status}`);
       } catch (error: any) {
+        const errorMessage = error.message || 'Erreur inconnue';
+        console.error(`[importKycReport] ✗ Erreur pour prestataire ${kycResult.prestataireId}: ${errorMessage}`);
         errors.push({
           prestataireId: kycResult.prestataireId,
-          error: error.message || 'Erreur inconnue',
+          error: errorMessage,
+          telephone: kycResult.telephone,
         });
       }
     }
 
+    console.log(`[importKycReport] Import terminé: ${success} succès, ${errors.length} erreurs`);
     return { success, errors };
   }
 

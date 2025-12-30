@@ -1977,6 +1977,113 @@ export class DynamicTableService {
    * Met à jour la dernière validation (ou l'enregistrement original) au lieu de créer une nouvelle ligne
    * Si le numéro de téléphone change, crée une nouvelle ligne
    */
+  /**
+   * Trouve un prestataire par ID ou téléphone avec plusieurs stratégies de recherche
+   */
+  private async findPrestataireForKyc(
+    formId: string,
+    prestataireId: string,
+    telephone?: string,
+  ): Promise<any | null> {
+    const tableName = this.getTableName(formId);
+
+    if (!(await this.tableExists(tableName))) {
+      return null;
+    }
+
+    // Normaliser l'ID (enlever les espaces, etc.)
+    const normalizedId = prestataireId.trim();
+
+    // Stratégie 1: Recherche par ID exact (id ou prestataire_id)
+    let baseRecord = await this.getLastValidationOrOriginal(formId, normalizedId);
+    if (baseRecord) {
+      console.log(`[findPrestataireForKyc] Prestataire trouvé par ID exact: ${normalizedId}`);
+      return baseRecord;
+    }
+
+    // Stratégie 2: Recherche par ID avec variations (espaces, casse)
+    const idVariations = [
+      normalizedId,
+      normalizedId.toUpperCase(),
+      normalizedId.toLowerCase(),
+      normalizedId.replace(/\s+/g, ''),
+      normalizedId.replace(/\s+/g, '-'),
+    ];
+
+    for (const idVar of idVariations) {
+      if (idVar === normalizedId) continue; // Déjà essayé
+      baseRecord = await this.getLastValidationOrOriginal(formId, idVar);
+      if (baseRecord) {
+        console.log(`[findPrestataireForKyc] Prestataire trouvé par ID variation: ${idVar} (original: ${normalizedId})`);
+        return baseRecord;
+      }
+    }
+
+    // Stratégie 3: Recherche par téléphone si fourni
+    if (telephone) {
+      const normalizedPhone = telephone.trim().replace(/\s+/g, '').replace(/[^\d+]/g, '');
+      const phoneVariations = [
+        normalizedPhone,
+        telephone.trim(),
+        telephone.trim().replace(/\s+/g, ''),
+        telephone.trim().replace(/\D/g, ''), // Garder uniquement les chiffres
+      ];
+
+      for (const phoneVar of phoneVariations) {
+        if (!phoneVar) continue;
+
+        // Chercher dans la colonne telephone ou dans raw_data
+        const phoneQuery = await this.dataSource.query(
+          `SELECT * FROM "${tableName}" 
+           WHERE (
+             telephone = $1 
+             OR telephone = $2
+             OR raw_data->>'telephone' = $1
+             OR raw_data->>'telephone' = $2
+             OR raw_data->>'num_phone' = $1
+             OR raw_data->>'num_phone' = $2
+             OR raw_data->>'confirm_phone' = $1
+             OR raw_data->>'confirm_phone' = $2
+           )
+           AND (validation_sequence IS NULL OR validation_sequence = 0)
+           AND (parent_submission_id IS NULL OR parent_submission_id = '')
+           ORDER BY created_at ASC 
+           LIMIT 1`,
+          [phoneVar, normalizedPhone],
+        );
+
+        if (phoneQuery.length > 0) {
+          console.log(`[findPrestataireForKyc] Prestataire trouvé par téléphone: ${phoneVar} (ID recherché: ${normalizedId})`);
+          return phoneQuery[0];
+        }
+      }
+    }
+
+    // Stratégie 4: Recherche partielle par ID (si l'ID contient le prestataireId)
+    const partialQuery = await this.dataSource.query(
+      `SELECT * FROM "${tableName}" 
+       WHERE (
+         id LIKE $1 
+         OR prestataire_id LIKE $1
+         OR id LIKE $2
+         OR prestataire_id LIKE $2
+       )
+       AND (validation_sequence IS NULL OR validation_sequence = 0)
+       AND (parent_submission_id IS NULL OR parent_submission_id = '')
+       ORDER BY created_at ASC 
+       LIMIT 1`,
+      [`%${normalizedId}%`, `%${normalizedId.replace(/\s+/g, '')}%`],
+    );
+
+    if (partialQuery.length > 0) {
+      console.log(`[findPrestataireForKyc] Prestataire trouvé par recherche partielle: ${normalizedId}`);
+      return partialQuery[0];
+    }
+
+    console.warn(`[findPrestataireForKyc] Aucun prestataire trouvé pour ID: ${normalizedId}, téléphone: ${telephone || 'non fourni'}`);
+    return null;
+  }
+
   async updateKycInTable(
     formId: string,
     prestataireId: string,
@@ -1989,10 +2096,15 @@ export class DynamicTableService {
       throw new Error(`La table ${tableName} n'existe pas. Le formulaire doit être publié d'abord.`);
     }
 
-    // Récupérer la dernière validation ou l'enregistrement original
-    const baseRecord = await this.getLastValidationOrOriginal(formId, prestataireId);
+    // Récupérer la dernière validation ou l'enregistrement original avec recherche améliorée
+    let baseRecord = await this.findPrestataireForKyc(formId, prestataireId, telephone);
+    
     if (!baseRecord) {
-      throw new Error(`Aucun enregistrement trouvé pour le prestataire ${prestataireId}`);
+      // Dernière tentative: utiliser la méthode originale
+      baseRecord = await this.getLastValidationOrOriginal(formId, prestataireId);
+      if (!baseRecord) {
+        throw new Error(`Aucun enregistrement trouvé pour le prestataire ${prestataireId}${telephone ? ` (téléphone: ${telephone})` : ''}`);
+      }
     }
 
     // Vérifier si le numéro de téléphone a changé

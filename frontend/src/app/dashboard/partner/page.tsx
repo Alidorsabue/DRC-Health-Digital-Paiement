@@ -363,6 +363,17 @@ export default function PartnerPage() {
   const handleCalculateAmount = async () => {
     setCalculating(true);
     try {
+      // Fonction pour normaliser un texte (enlever accents, espaces, mettre en minuscule)
+      const normalizeText = (text: string): string => {
+        if (!text) return '';
+        return text
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Enlever les accents
+          .replace(/\s+/g, ' ') // Normaliser les espaces
+          .trim();
+      };
+
       // Valider que tous les rôles ont un tarif
       const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
       if (validRules.length === 0) {
@@ -372,10 +383,38 @@ export default function PartnerPage() {
       }
 
       // Créer un map pour accès rapide par rôle (incluant la devise)
-      const rateMap = new Map<string, { rate: number; currency: string }>();
+      // Utiliser la normalisation pour les clés du map
+      const rateMap = new Map<string, { rate: number; currency: string; originalRole: string }>();
       validRules.forEach(rule => {
-        rateMap.set(rule.role.toLowerCase().trim(), { rate: rule.rate, currency: rule.currency });
+        const normalizedRole = normalizeText(rule.role);
+        // Stocker aussi le rôle original pour les logs
+        rateMap.set(normalizedRole, { 
+          rate: rule.rate, 
+          currency: rule.currency,
+          originalRole: rule.role 
+        });
       });
+
+      // Fonction pour extraire le rôle d'un prestataire (chercher dans tous les champs possibles)
+      const extractRole = (p: PrestataireForPartner): string => {
+        // Chercher dans l'ordre de priorité (comme le backend)
+        const role = 
+          p.categorie ||
+          p.role ||
+          p.campaign_role_i_f ||
+          p.campaign_role ||
+          p.role_prestataire ||
+          (p.enregistrementData && (
+            p.enregistrementData.categorie ||
+            p.enregistrementData.campaign_role_i_f ||
+            p.enregistrementData.campaign_role ||
+            p.enregistrementData.role ||
+            p.enregistrementData.role_prestataire
+          )) ||
+          '';
+        
+        return normalizeText(role);
+      };
 
       // Calculer le montant pour chaque prestataire selon son rôle
       const amounts: Array<{ prestataireId: string; amount: number; currency: string }> = [];
@@ -383,20 +422,28 @@ export default function PartnerPage() {
       prestataires.forEach((p) => {
         const days = p.presenceDays || p.presence_days || 0;
         if (days > 0) {
-          const categorie = (p.categorie || p.role || '').toLowerCase().trim();
+          const prestataireRole = extractRole(p);
+          
+          if (!prestataireRole) {
+            console.warn(`[handleCalculateAmount] Prestataire ${p.prestataireId || p.id} n'a pas de rôle défini`);
+            return;
+          }
           
           // Chercher le tarif correspondant au rôle du prestataire
-          let rateInfo: { rate: number; currency: string } | undefined = undefined;
+          let rateInfo: { rate: number; currency: string; originalRole?: string } | undefined = undefined;
           
           // Recherche exacte d'abord
-          if (rateMap.has(categorie)) {
-            rateInfo = rateMap.get(categorie)!;
+          if (rateMap.has(prestataireRole)) {
+            rateInfo = rateMap.get(prestataireRole)!;
+            console.log(`[handleCalculateAmount] Correspondance exacte trouvée: "${prestataireRole}" (règle: "${rateInfo.originalRole}")`);
           } else {
             // Recherche partielle (si le rôle contient un des mots-clés)
             const rateEntries = Array.from(rateMap.entries());
             for (const [roleKey, info] of rateEntries) {
-              if (categorie.includes(roleKey) || roleKey.includes(categorie)) {
+              // Comparaison bidirectionnelle normalisée
+              if (prestataireRole.includes(roleKey) || roleKey.includes(prestataireRole)) {
                 rateInfo = info;
+                console.log(`[handleCalculateAmount] Correspondance partielle trouvée: "${prestataireRole}" correspond à "${info.originalRole || roleKey}"`);
                 break;
               }
             }
@@ -409,6 +456,9 @@ export default function PartnerPage() {
               amount: calculatedAmount,
               currency: rateInfo.currency,
             });
+            console.log(`[handleCalculateAmount] Montant calculé pour ${p.prestataireId || p.id} (rôle: "${prestataireRole}"): ${days} jours × ${rateInfo.rate} = ${calculatedAmount} ${rateInfo.currency}`);
+          } else {
+            console.warn(`[handleCalculateAmount] Aucun tarif trouvé pour le prestataire ${p.prestataireId || p.id} avec le rôle "${prestataireRole}"`);
           }
         }
       });

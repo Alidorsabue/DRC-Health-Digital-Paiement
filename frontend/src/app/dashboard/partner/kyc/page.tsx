@@ -355,9 +355,18 @@ export default function KycVerificationPage() {
       );
 
       if (result.errors.length > 0) {
+        // Afficher les détails des erreurs dans la console pour le débogage
+        console.error('[handleImportKycReport] Erreurs lors de l\'import:', result.errors);
+        
+        // Construire un message détaillé avec les premiers prestataires en erreur
+        const errorDetails = result.errors.slice(0, 5).map(err => 
+          `- ${err.prestataireId}: ${err.error}`
+        ).join('\n');
+        const moreErrors = result.errors.length > 5 ? `\n... et ${result.errors.length - 5} autres erreurs` : '';
+        
         showAlert(
           'Import partiel',
-          `${result.success} résultats KYC importés avec succès. ${result.errors.length} erreurs.`,
+          `${result.success} résultats KYC importés avec succès.\n\n${result.errors.length} erreur(s) rencontrée(s):\n${errorDetails}${moreErrors}\n\nVérifiez la console pour plus de détails.`,
           'warning',
         );
       } else {
