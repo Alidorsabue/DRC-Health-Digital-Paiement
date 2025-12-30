@@ -505,15 +505,23 @@ export class FormsService {
           id: record.id, // record.id est l'ID du prestataire au format ID-YYMM-HHmm-XXX
           prestataireId: record.prestataire_id || record.id,
           submissionId: record.submission_id || record.id,
-          status: record.status || 'ENREGISTRE',
+          status: record.status || 'ENREGISTRE', // Statut global pour compatibilité
+          validationStatus: record.validation_status || record.status || 'ENREGISTRE', // Statut de validation IT (camelCase)
+          validation_status: record.validation_status || record.status || 'ENREGISTRE', // Statut de validation IT (snake_case)
           campaignId: record.campaign_id,
           presenceDays: record.presence_days,
           validationDate: record.validation_date, // camelCase pour faciliter l'accès depuis le mobile
           validation_date: record.validation_date, // snake_case pour compatibilité
           kycStatus: record.kyc_status,
+          kycDate: record.kyc_date,
+          kyc_date: record.kyc_date,
           approvalStatus: record.approval_status,
+          approvalDate: record.approval_date,
+          approval_date: record.approval_date,
           paymentStatus: record.payment_status,
           paymentAmount: record.payment_amount,
+          paymentDate: record.payment_date,
+          payment_date: record.payment_date,
           ...formData, // Toutes les données du formulaire
           createdAt: record.created_at,
           updatedAt: record.updated_at,

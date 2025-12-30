@@ -126,9 +126,11 @@ export class DynamicTableService {
     columns.push(
       'prestataire_id VARCHAR(255)',
       'status VARCHAR(50) DEFAULT \'ENREGISTRE\'',
+      'validation_status VARCHAR(50)',
       'presence_days INTEGER',
       'validation_date TIMESTAMP',
       'kyc_status VARCHAR(50)',
+      'kyc_date TIMESTAMP',
       'approval_status VARCHAR(50)',
       'approval_date TIMESTAMP',
       'payment_status VARCHAR(50)',
@@ -185,18 +187,21 @@ export class DynamicTableService {
     );
 
     // Ajouter les colonnes de statut si elles n'existent pas
+    // Structure avec statuts séparés pour chaque action avec leurs dates
     const statusColumns = [
       { name: 'prestataire_id', type: 'VARCHAR(255)' },
-      { name: 'status', type: 'VARCHAR(50) DEFAULT \'ENREGISTRE\'' },
+      { name: 'status', type: 'VARCHAR(50) DEFAULT \'ENREGISTRE\'' }, // Statut global pour compatibilité
+      { name: 'validation_status', type: 'VARCHAR(50)' }, // Statut de validation IT
       { name: 'presence_days', type: 'INTEGER' },
-      { name: 'validation_date', type: 'TIMESTAMP' },
+      { name: 'validation_date', type: 'TIMESTAMP' }, // Date de validation IT
       { name: 'kyc_status', type: 'VARCHAR(50)' },
-      { name: 'approval_status', type: 'VARCHAR(50)' },
-      { name: 'approval_date', type: 'TIMESTAMP' },
-      { name: 'payment_status', type: 'VARCHAR(50)' },
+      { name: 'kyc_date', type: 'TIMESTAMP' }, // Date de vérification KYC
+      { name: 'approval_status', type: 'VARCHAR(50)' }, // Statut d'approbation MCZ
+      { name: 'approval_date', type: 'TIMESTAMP' }, // Date d'approbation MCZ
+      { name: 'payment_status', type: 'VARCHAR(50)' }, // Statut de paiement
       { name: 'payment_amount', type: 'NUMERIC' },
       { name: 'amount_to_pay', type: 'NUMERIC' },
-      { name: 'payment_date', type: 'TIMESTAMP' },
+      { name: 'payment_date', type: 'TIMESTAMP' }, // Date de paiement
       { name: 'paid_at', type: 'TIMESTAMP' },
       { name: 'parent_submission_id', type: 'VARCHAR(255)' },
       { name: 'validation_sequence', type: 'INTEGER DEFAULT 0' },
@@ -1116,7 +1121,14 @@ export class DynamicTableService {
       paramIndex++;
     }
 
-    // Mettre à jour status
+    // Mettre à jour validation_status (statut spécifique de validation IT)
+    if (existingColumnNames.has('validation_status')) {
+      updates.push(`validation_status = $${paramIndex}`);
+      values.push('VALIDE_PAR_IT');
+      paramIndex++;
+    }
+
+    // Mettre à jour status (statut global pour compatibilité)
     if (existingColumnNames.has('status')) {
       updates.push(`status = $${paramIndex}`);
       values.push('VALIDE_PAR_IT');
@@ -1163,7 +1175,8 @@ export class DynamicTableService {
   }
 
   /**
-   * Met à jour l'invalidation dans la table du formulaire (remet le status à ENREGISTRE)
+   * Met à jour l'invalidation dans la table du formulaire
+   * Réinitialise validation_status et status à ENREGISTRE
    */
   async updateInvalidationInTable(
     formId: string,
@@ -1191,11 +1204,20 @@ export class DynamicTableService {
     // Préparer les mises à jour
     const updates: string[] = [];
     const values: any[] = [];
+    let paramIndex = 1;
 
-    // Mettre à jour status
-    if (existingColumnNames.has('status')) {
-      updates.push(`status = $1`);
+    // Mettre à jour validation_status (statut spécifique de validation IT)
+    if (existingColumnNames.has('validation_status')) {
+      updates.push(`validation_status = $${paramIndex}`);
       values.push('ENREGISTRE');
+      paramIndex++;
+    }
+
+    // Mettre à jour status (statut global pour compatibilité)
+    if (existingColumnNames.has('status')) {
+      updates.push(`status = $${paramIndex}`);
+      values.push('ENREGISTRE');
+      paramIndex++;
     }
 
     // Optionnel: mettre presence_days à null
@@ -1221,7 +1243,7 @@ export class DynamicTableService {
     const updateSQL = `
       UPDATE "${tableName}" 
       SET ${updates.join(', ')}
-      WHERE id = $${values.length}
+      WHERE id = $${paramIndex}
     `;
 
     await this.dataSource.query(updateSQL, values);
@@ -1510,6 +1532,13 @@ export class DynamicTableService {
     } else {
       throw new Error(`La colonne campaign_id est requise dans la table ${tableName} pour créer une validation`);
     }
+    // Mettre à jour validation_status (statut spécifique de validation IT)
+    if (existingColumnNames.has('validation_status')) {
+      columns.push('validation_status');
+      values.push('VALIDE_PAR_IT');
+      paramIndex++;
+    }
+    // Mettre à jour status (statut global pour compatibilité)
     if (existingColumnNames.has('status')) {
       columns.push('status');
       values.push('VALIDE_PAR_IT');
@@ -1799,17 +1828,10 @@ export class DynamicTableService {
     const values: any[] = [];
     let paramIndex = 1;
 
-    // Mettre à jour le status
-    if (existingColumnNames.has('status')) {
-      updates.push(`status = $${paramIndex}`);
-      values.push(approvalStatus === 'APPROVED' ? 'APPROUVE_PAR_MCZ' : 'REJETE_PAR_MCZ');
-      paramIndex++;
-    }
-
-    // Mettre à jour approval_status
+    // Mettre à jour approval_status (statut spécifique d'approbation MCZ)
     if (existingColumnNames.has('approval_status')) {
       updates.push(`approval_status = $${paramIndex}`);
-      values.push(approvalStatus);
+      values.push(approvalStatus === 'APPROVED' ? 'APPROUVE_PAR_MCZ' : 'REJETE_PAR_MCZ');
       paramIndex++;
     }
 
@@ -1817,6 +1839,13 @@ export class DynamicTableService {
     if (existingColumnNames.has('approval_date')) {
       updates.push(`approval_date = $${paramIndex}`);
       values.push(approvalDate);
+      paramIndex++;
+    }
+
+    // Mettre à jour le status global pour compatibilité (basé sur le dernier statut)
+    if (existingColumnNames.has('status')) {
+      updates.push(`status = $${paramIndex}`);
+      values.push(approvalStatus === 'APPROVED' ? 'APPROUVE_PAR_MCZ' : 'REJETE_PAR_MCZ');
       paramIndex++;
     }
 
@@ -1995,6 +2024,13 @@ export class DynamicTableService {
     if (existingColumnNames.has('kyc_status')) {
       updates.push(`kyc_status = $${paramIndex}`);
       values.push(kycStatus);
+      paramIndex++;
+    }
+
+    // Mettre à jour kyc_date (date de vérification KYC)
+    if (existingColumnNames.has('kyc_date')) {
+      updates.push(`kyc_date = $${paramIndex}`);
+      values.push(new Date().toISOString());
       paramIndex++;
     }
     

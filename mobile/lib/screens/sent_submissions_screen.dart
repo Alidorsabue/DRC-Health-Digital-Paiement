@@ -450,6 +450,13 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
 
     // Construire le nom complet en une ligne
     final fullName = '${prestataire.prenom} ${prestataire.nom}${prestataire.postnom != null ? " ${prestataire.postnom}" : ""}';
+    
+    // Afficher les informations de validation si elles existent (même si le prestataire n'est pas actuellement validé)
+    // Cela permet à l'IT de voir s'il a déjà validé ce prestataire
+    final hasValidationInfo = isValidated || 
+                             prestataire.presenceDays != null || 
+                             _validationDates.containsKey(prestataire.id) ||
+                             prestataire.campaignId != null;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -486,12 +493,7 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
                   ],
                 ],
               ),
-              // Afficher les informations de validation si elles existent (même si le prestataire n'est pas actuellement validé)
-              // Cela permet à l'IT de voir s'il a déjà validé ce prestataire
-              final hasValidationInfo = isValidated || 
-                                       prestataire.presenceDays != null || 
-                                       _validationDates.containsKey(prestataire.id) ||
-                                       prestataire.campaignId != null;
+              // Afficher les informations de validation si elles existent
               if (hasValidationInfo) ...[
                 const SizedBox(height: 8),
                 _buildValidationsHistory(context, prestataire),
