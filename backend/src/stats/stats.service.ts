@@ -63,7 +63,8 @@ export class StatsService {
       console.log(`DEBUG STATS: ${combinedData.length} enregistrements avant déduplication, ${deduplicatedData.length} prestataires uniques après déduplication`);
       console.log(`DEBUG STATS: Prestataires payés = ${paidCount}`);
       
-      const byStatus = this.groupByStatus(deduplicatedData);
+      // Passer tous les enregistrements (pas seulement dédupliqués) pour compter correctement les validés par IT
+      const byStatus = this.groupByStatus(deduplicatedData, combinedData);
       console.log(`DEBUG STATS: Répartition par statut:`, byStatus);
 
       return {
@@ -463,7 +464,7 @@ export class StatsService {
 
       return {
         total: deduplicatedData.length,
-        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byStatus: this.groupByStatus(deduplicatedData, combinedData) || {},
         byZone: this.groupByZone(deduplicatedData) || {},
         byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
@@ -540,7 +541,7 @@ export class StatsService {
 
       return {
         total: deduplicatedData.length,
-        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byStatus: this.groupByStatus(deduplicatedData, combinedData) || {},
         byAire: this.groupByAire(deduplicatedData) || {},
         byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
@@ -616,7 +617,7 @@ export class StatsService {
 
       return {
         total: deduplicatedData.length,
-        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byStatus: this.groupByStatus(deduplicatedData, combinedData) || {},
         byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
       };
@@ -702,7 +703,29 @@ export class StatsService {
     return result;
   }
 
-  private groupByStatus(prestataires: any[]) {
+  /**
+   * Compte les prestataires qui ont été validés par IT
+   * Un prestataire est considéré comme validé par IT s'il a au moins un enregistrement avec status = VALIDE_PAR_IT
+   * même s'il a ensuite été approuvé par MCZ
+   */
+  private countValidatedByIT(allRecords: any[]): number {
+    const validatedPrestataires = new Set<string>();
+    
+    for (const record of allRecords) {
+      const prestataireId = record.id || record.prestataire_id || record.prestataireId;
+      if (!prestataireId) continue;
+      
+      const status = (record.status || '').toUpperCase().trim();
+      if (status === 'VALIDE_PAR_IT') {
+        validatedPrestataires.add(prestataireId);
+      }
+    }
+    
+    console.log(`[countValidatedByIT] ${validatedPrestataires.size} prestataires uniques validés par IT sur ${allRecords.length} enregistrements`);
+    return validatedPrestataires.size;
+  }
+
+  private groupByStatus(prestataires: any[], allRecords?: any[]) {
     const groups: Record<string, number> = {};
     for (const p of prestataires) {
       // Récupérer le statut depuis plusieurs emplacements possibles
@@ -719,6 +742,13 @@ export class StatsService {
       }
       
       groups[status] = (groups[status] || 0) + 1;
+    }
+    
+    // Si on a accès à tous les enregistrements, compter les validés par IT séparément
+    if (allRecords && allRecords.length > 0) {
+      const validatedByITCount = this.countValidatedByIT(allRecords);
+      // Ajouter ou mettre à jour le compte des validés par IT
+      groups['VALIDE_PAR_IT'] = validatedByITCount;
     }
     
     console.log(`[groupByStatus] Répartition finale:`, groups);
