@@ -273,7 +273,20 @@ export class StatsService {
         deduplicatedData.slice(0, 3).map(p => ({
           id: p.id,
           status: p.status,
+          validation_status: p.validation_status || p._rawRow?.validation_status,
           validation_sequence: p.validation_sequence,
+        }))
+      );
+    }
+    
+    // Log des données brutes pour vérifier validation_status
+    if (data.length > 0) {
+      console.log(`DEBUG STATS getTableData: Exemple de données brutes (3 premiers):`, 
+        data.slice(0, 3).map((r: any) => ({
+          id: r.id,
+          status: r.status,
+          validation_status: r.validation_status,
+          validation_sequence: r.validation_sequence,
         }))
       );
     }
@@ -321,10 +334,14 @@ export class StatsService {
         zoneId: zoneId || '',
         aireId: aireId || '',
         status: row.status || PrestataireStatus.ENREGISTRE,
+        validation_status: row.validation_status || row.validationStatus || null, // Statut de validation IT
+        validationStatus: row.validation_status || row.validationStatus || null, // camelCase
         campaignId: row.campaign_id || row.campaignId,
         payment_status: row.payment_status || row.paymentStatus || '',
         paymentStatus: row.payment_status || row.paymentStatus || '',
         enregistrementData: row.raw_data || row.enregistrementData || {},
+        // Conserver toutes les données brutes pour le comptage
+        _rawRow: row,
       };
     });
 
@@ -705,23 +722,58 @@ export class StatsService {
 
   /**
    * Compte les prestataires qui ont été validés par IT
-   * Un prestataire est considéré comme validé par IT s'il a au moins un enregistrement avec status = VALIDE_PAR_IT
+   * Un prestataire est considéré comme validé par IT s'il a au moins un enregistrement avec :
+   * - validation_status = VALIDE_PAR_IT OU
+   * - status = VALIDE_PAR_IT (pour compatibilité avec les anciennes données)
    * même s'il a ensuite été approuvé par MCZ
    */
   private countValidatedByIT(allRecords: any[]): number {
     const validatedPrestataires = new Set<string>();
     
     for (const record of allRecords) {
-      const prestataireId = record.id || record.prestataire_id || record.prestataireId;
+      // Utiliser _rawRow si disponible (données brutes de la DB), sinon utiliser record directement
+      const rawRow = record._rawRow || record;
+      const prestataireId = record.id || record.prestataire_id || record.prestataireId || rawRow.id;
       if (!prestataireId) continue;
       
-      const status = (record.status || '').toUpperCase().trim();
-      if (status === 'VALIDE_PAR_IT') {
+      // Vérifier validation_status (nouveau système) OU status (ancien système pour compatibilité)
+      // Chercher dans les données transformées ET dans les données brutes
+      const validationStatus = (
+        record.validation_status || 
+        record.validationStatus || 
+        rawRow.validation_status || 
+        rawRow.validationStatus || 
+        ''
+      ).toUpperCase().trim();
+      
+      const status = (
+        record.status || 
+        rawRow.status || 
+        ''
+      ).toUpperCase().trim();
+      
+      if (validationStatus === 'VALIDE_PAR_IT' || status === 'VALIDE_PAR_IT') {
         validatedPrestataires.add(prestataireId);
+        console.log(`[countValidatedByIT] Prestataire ${prestataireId} validé par IT - validation_status: ${validationStatus || 'N/A'}, status: ${status || 'N/A'}`);
       }
     }
     
     console.log(`[countValidatedByIT] ${validatedPrestataires.size} prestataires uniques validés par IT sur ${allRecords.length} enregistrements`);
+    
+    // Log détaillé pour déboguer si aucun prestataire validé trouvé
+    if (validatedPrestataires.size === 0 && allRecords.length > 0) {
+      console.log(`[countValidatedByIT] DEBUG: Aucun prestataire validé trouvé. Exemples d'enregistrements:`, 
+        allRecords.slice(0, 3).map(r => {
+          const raw = r._rawRow || r;
+          return {
+            id: r.id || raw.id,
+            validation_status: r.validation_status || raw.validation_status,
+            status: r.status || raw.status,
+          };
+        })
+      );
+    }
+    
     return validatedPrestataires.size;
   }
 
