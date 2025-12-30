@@ -1200,6 +1200,40 @@ export default function PartnerPage() {
       },
     },
     {
+      key: 'validationStatus',
+      label: 'Statut Validation',
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const status = prestataire.status || 'ENREGISTRE';
+        const statusMap: Record<string, { label: string; color: string }> = {
+          'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
+          'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
+          'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
+          'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
+          'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
+        };
+        const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
+            {statusInfo.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'validationDate',
+      label: 'Date Validation IT',
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const rawData = prestataire.raw_data || {};
+        const validationDate = prestataire.validationDate || 
+                              prestataire.validation_date || 
+                              rawData.validationDate || 
+                              rawData.validation_date ||
+                              rawData.validated_at ||
+                              prestataire.validated_at;
+        return formatDate(validationDate);
+      },
+    },
+    {
       key: 'kycStatus',
       label: 'Statut KYC',
       render: (value: any, prestataire: PrestataireForPartner) => {

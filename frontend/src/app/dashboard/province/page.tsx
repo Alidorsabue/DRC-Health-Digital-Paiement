@@ -11,6 +11,7 @@ import { Campaign, Form } from '../../../types';
 import DataTable, { Column } from '../../../components/DataTable';
 import { getErrorMessage } from '../../../utils/error-handler';
 import AlertModal from '../../../components/Modal/AlertModal';
+import StatCardGroup, { StatCard } from '../../../components/Statistics/StatCardGroup';
 
 interface GeographicOption {
   id: string;
@@ -424,32 +425,36 @@ export default function ProvincePage() {
 
       {/* Statistiques */}
       {stats && (
-        <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">Total Prestataires</div>
-            <div className="mt-2 text-3xl font-bold text-gray-900">
-              {stats.total || 0}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">Enregistrés</div>
-            <div className="mt-2 text-3xl font-bold text-gray-900">
-              {stats.byStatus?.ENREGISTRE || 0}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">Validés par IT</div>
-            <div className="mt-2 text-3xl font-bold text-blue-600">
-              {stats.byStatus?.VALIDE_PAR_IT || 0}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">Approuvés par MCZ</div>
-            <div className="mt-2 text-3xl font-bold text-green-600">
-              {stats.byStatus?.APPROUVE_PAR_MCZ || 0}
-            </div>
-          </div>
-        </div>
+        <StatCardGroup columns={4}>
+          <StatCard
+            title="Total Prestataires"
+            value={stats.total || 0}
+            icon="👥"
+            color="indigo"
+            progress={100}
+          />
+          <StatCard
+            title="Enregistrés"
+            value={stats.byStatus?.ENREGISTRE || 0}
+            icon="📝"
+            color="gray"
+            progress={stats.total > 0 ? ((stats.byStatus?.ENREGISTRE || 0) / stats.total) * 100 : 0}
+          />
+          <StatCard
+            title="Validés par IT"
+            value={stats.byStatus?.VALIDE_PAR_IT || 0}
+            icon="✅"
+            color="blue"
+            progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
+          />
+          <StatCard
+            title="Approuvés par MCZ"
+            value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
+            icon="✓"
+            color="green"
+            progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
+          />
+        </StatCardGroup>
       )}
 
       {/* Filtres */}
@@ -638,9 +643,24 @@ export default function ProvincePage() {
               render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
             },
             {
-              key: 'kycStatus',
-              label: 'Statut KYC',
-              render: (_, prestataire) => getKycStatusBadge(prestataire),
+              key: 'validationStatus',
+              label: 'Statut Validation',
+              render: (_, prestataire) => {
+                const status = prestataire.status || 'ENREGISTRE';
+                const statusMap: Record<string, { label: string; color: string }> = {
+                  'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
+                  'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
+                  'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
+                  'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
+                  'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
+                };
+                const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+                return (
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
+                    {statusInfo.label}
+                  </span>
+                );
+              },
             },
             {
               key: 'validationDate',
@@ -653,6 +673,11 @@ export default function ProvincePage() {
                   </span>
                 );
               },
+            },
+            {
+              key: 'kycStatus',
+              label: 'Statut KYC',
+              render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'approvalDate',

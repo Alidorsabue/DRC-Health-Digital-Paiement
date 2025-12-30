@@ -10,6 +10,7 @@ import { Campaign, Form } from '../../types';
 import Link from 'next/link';
 import { getErrorMessage } from '../../utils/error-handler';
 import AlertModal from '../../components/Modal/AlertModal';
+import StatCardGroup, { StatCard } from '../../components/Statistics/StatCardGroup';
 
 interface GeographicOption {
   id: string;
@@ -889,113 +890,49 @@ export default function DashboardPage() {
       )}
 
       {!loading && stats && (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-3xl">👥</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Total Prestataires
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stats.total || 0}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-3xl">✅</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Approuvés
-                    </dt>
-                    <dd className="text-lg font-medium text-green-600">
-                      {stats.byStatus.APPROUVE_PAR_MCZ || 0}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-3xl">⏳</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      En attente
-                    </dt>
-                    <dd className="text-lg font-medium text-yellow-600">
-                      {stats.byStatus.VALIDE_PAR_IT || 0}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-3xl">💰</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Payés
-                    </dt>
-                    <dd className="text-lg font-medium text-purple-600">
-                      {stats.paid || 0}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-3xl">🎯</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Campagnes actives
-                    </dt>
-                    <dd className="text-lg font-medium text-blue-600">
-                      {(() => {
-                        let filteredCampaigns = campaigns.filter((c) => c.isActive);
-                        if (filters.campaignId) {
-                          filteredCampaigns = filteredCampaigns.filter(c => c.id === filters.campaignId);
-                        }
-                        return filteredCampaigns.length;
-                      })()}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCardGroup columns={5}>
+          <StatCard
+            title="Total Prestataires"
+            value={stats.total || 0}
+            icon="👥"
+            color="indigo"
+            progress={100}
+          />
+          <StatCard
+            title="Approuvés"
+            value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
+            icon="✅"
+            color="green"
+            progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
+          />
+          <StatCard
+            title="En attente"
+            value={stats.byStatus?.VALIDE_PAR_IT || 0}
+            icon="⏳"
+            color="yellow"
+            progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
+          />
+          <StatCard
+            title="Payés"
+            value={stats.paid || 0}
+            icon="💰"
+            color="purple"
+            progress={stats.total > 0 ? ((stats.paid || 0) / stats.total) * 100 : 0}
+          />
+          <StatCard
+            title="Campagnes actives"
+            value={(() => {
+              let filteredCampaigns = campaigns.filter((c) => c.isActive);
+              if (filters.campaignId) {
+                filteredCampaigns = filteredCampaigns.filter(c => c.id === filters.campaignId);
+              }
+              return filteredCampaigns.length;
+            })()}
+            icon="🎯"
+            color="blue"
+            progress={campaigns.length > 0 ? (campaigns.filter((c) => c.isActive).length / campaigns.length) * 100 : 0}
+          />
+        </StatCardGroup>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
