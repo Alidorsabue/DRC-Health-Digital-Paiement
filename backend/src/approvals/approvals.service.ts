@@ -394,6 +394,8 @@ export class ApprovalsService {
             validationDate: record.validation_date || null, // Date de validation par IT
             validation_date: record.validation_date || null, // Date de validation par IT (snake_case)
             status: record.status,
+            kycStatus: record.kyc_status || null, // Statut KYC
+            kyc_status: record.kyc_status || null, // Statut KYC (snake_case pour compatibilité)
             zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.admin2_h_c,
             aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.admin4_h_c || record.admin4_h_c,
             // Inclure les champs du formulaire pour l'affichage

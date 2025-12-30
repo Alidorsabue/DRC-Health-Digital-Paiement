@@ -287,6 +287,25 @@ export default function ProvincePage() {
     );
   };
 
+  const getKycStatusBadge = (prestataire: Prestataire) => {
+    const kycStatus = prestataire.kycStatus || prestataire.kyc_status;
+    if (!kycStatus) return <span className="text-gray-500 text-xs">Non vérifié</span>;
+    
+    const statusMap: Record<string, { label: string; color: string }> = {
+      'CORRECT': { label: 'Correct', color: 'bg-green-100 text-green-800' },
+      'INCORRECT': { label: 'Incorrect', color: 'bg-red-100 text-red-800' },
+      'SANS_COMPTE': { label: 'Sans compte', color: 'bg-yellow-100 text-yellow-800' },
+    };
+    
+    const statusInfo = statusMap[kycStatus] || { label: kycStatus, color: 'bg-gray-100 text-gray-800' };
+    
+    return (
+      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
+        {statusInfo.label}
+      </span>
+    );
+  };
+
   const formatDate = (dateValue: any): string => {
     // Si la valeur est null, undefined, ou vide, retourner 'N/A'
     if (!dateValue || dateValue === null || dateValue === undefined || dateValue === '') {
@@ -617,6 +636,11 @@ export default function ProvincePage() {
               key: 'status',
               label: 'Statut',
               render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
+            },
+            {
+              key: 'kycStatus',
+              label: 'Statut KYC',
+              render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'validationDate',
