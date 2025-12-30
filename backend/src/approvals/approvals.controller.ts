@@ -43,7 +43,7 @@ export class ApprovalsController {
     // Pour IT, utiliser aireId
     const targetZoneId = zoneId || (user?.role === 'MCZ' ? user?.zoneId : undefined);
     const targetAireId = aireId || (user?.role === 'IT' ? user?.aireId : undefined);
-    return this.approvalsService.findByZoneOrAire(formId, targetZoneId, targetAireId, status);
+    return this.approvalsService.findByZoneOrAire(formId, targetZoneId, targetAireId, status, user?.role);
   }
 
   @Post('prestataires/:prestataireId/approve')

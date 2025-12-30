@@ -533,7 +533,9 @@ export class PrestatairesService {
             status: record.status || 'ENREGISTRE',
             campaignId: record.campaign_id,
             presenceDays: record.presence_days,
-            validationDate: record.validation_date,
+            presence_days: record.presence_days, // snake_case pour compatibilité
+            validationDate: record.validation_date, // camelCase pour faciliter l'accès depuis le mobile
+            validation_date: record.validation_date, // snake_case pour compatibilité
             kycStatus: record.kyc_status,
             approvalStatus: record.approval_status,
             paymentStatus: record.payment_status,

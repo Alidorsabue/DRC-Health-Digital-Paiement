@@ -106,28 +106,63 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
         data = await _apiService.getPrestatairesPendingValidation();
       }
       
-      final prestataires = data.map((json) => Prestataire.fromJson(json)).toList();
-      
-      // Initialize controllers for each prestataire
-      for (var prestataire in prestataires) {
-        if (!_presenceDaysControllers.containsKey(prestataire.id)) {
-          _presenceDaysControllers[prestataire.id] = TextEditingController(
-            text: prestataire.presenceDays?.toString() ?? '',
+      // Créer les prestataires et récupérer les informations de validation depuis le JSON original
+      final prestataires = <Prestataire>[];
+      for (var json in data) {
+        final prestataire = Prestataire.fromJson(json);
+        prestataires.add(prestataire);
+        
+        // Récupérer les informations de validation directement depuis le JSON original
+        // Le backend retourne ces champs comme colonnes directes (pas dans raw_data)
+        final prestataireId = prestataire.id;
+        
+        // Initialiser le contrôleur pour les jours de présence
+        if (!_presenceDaysControllers.containsKey(prestataireId)) {
+          // Chercher presenceDays dans le JSON original (peut être presenceDays ou presence_days)
+          final presenceDays = json['presenceDays'] ?? json['presence_days'];
+          _presenceDaysControllers[prestataireId] = TextEditingController(
+            text: presenceDays?.toString() ?? prestataire.presenceDays?.toString() ?? '',
           );
         }
-        // Récupérer la date de validation depuis enregistrementData si elle existe
-        if (prestataire.enregistrementData != null && 
-            prestataire.enregistrementData!['validationDate'] != null) {
-          try {
-            final dateStr = prestataire.enregistrementData!['validationDate'] as String;
-            _validationDates[prestataire.id] = DateTime.parse(dateStr);
-          } catch (e) {
-            // Ignorer les erreurs de parsing de date
+        
+        // Récupérer la date de validation depuis le JSON original
+        if (!_validationDates.containsKey(prestataireId)) {
+          DateTime? validationDate;
+          
+          // Chercher validationDate ou validation_date dans le JSON original
+          final validationDateStr = json['validationDate'] ?? json['validation_date'];
+          if (validationDateStr != null) {
+            try {
+              validationDate = DateTime.parse(validationDateStr.toString());
+            } catch (e) {
+              // Ignorer les erreurs de parsing
+            }
+          }
+          
+          // Si pas trouvé, chercher dans enregistrementData comme fallback
+          if (validationDate == null && prestataire.enregistrementData != null) {
+            final enregistrementData = prestataire.enregistrementData!;
+            final dateStr = enregistrementData['validationDate'] ?? enregistrementData['validation_date'];
+            if (dateStr != null) {
+              try {
+                validationDate = DateTime.parse(dateStr.toString());
+              } catch (e) {
+                // Ignorer les erreurs de parsing
+              }
+            }
+          }
+          
+          if (validationDate != null) {
+            _validationDates[prestataireId] = validationDate;
           }
         }
-        // Récupérer la campagne depuis le prestataire si elle existe
-        if (prestataire.campaignId != null) {
-          _selectedCampaignIds[prestataire.id] = prestataire.campaignId;
+        
+        // Récupérer la campagne depuis le JSON original ou le prestataire
+        if (!_selectedCampaignIds.containsKey(prestataireId)) {
+          final campaignId = json['campaignId'] ?? json['campaign_id'] ?? prestataire.campaignId;
+          if (campaignId != null && campaignId.toString().isNotEmpty) {
+            _selectedCampaignIds[prestataireId] = campaignId.toString();
+          }
         }
       }
 
@@ -451,8 +486,13 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
                   ],
                 ],
               ),
-              // Si validé, afficher l'historique des validations
-              if (isValidated) ...[
+              // Afficher les informations de validation si elles existent (même si le prestataire n'est pas actuellement validé)
+              // Cela permet à l'IT de voir s'il a déjà validé ce prestataire
+              final hasValidationInfo = isValidated || 
+                                       prestataire.presenceDays != null || 
+                                       _validationDates.containsKey(prestataire.id) ||
+                                       prestataire.campaignId != null;
+              if (hasValidationInfo) ...[
                 const SizedBox(height: 8),
                 _buildValidationsHistory(context, prestataire),
               ],
@@ -479,6 +519,7 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
   }
 
   Widget _buildValidationsHistory(BuildContext context, Prestataire prestataire) {
+    final isValidated = prestataire.status == 'VALIDE_PAR_IT';
     final validations = _prestataireValidations[prestataire.id] ?? [];
     
     // Filtrer seulement les validations (avec parent_submission_id)
@@ -488,38 +529,52 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
     ).toList();
 
     if (validationRecords.isEmpty) {
-      // Afficher la dernière validation depuis la table prestataires
+      // Afficher les informations de validation depuis le prestataire
+      // Récupérer les valeurs depuis les controllers et maps
+      final presenceDays = prestataire.presenceDays ?? 
+                          (_presenceDaysControllers[prestataire.id]?.text.isNotEmpty == true
+                            ? int.tryParse(_presenceDaysControllers[prestataire.id]!.text)
+                            : null);
+      final validationDate = _validationDates[prestataire.id];
+      final campaignId = _selectedCampaignIds[prestataire.id] ?? prestataire.campaignId;
+      
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Statut: Validé',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.green.shade400,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Date: ${_formatDate(_validationDates[prestataire.id] ?? prestataire.updatedAt)}',
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Campagne: ${_getCampaignName(prestataire.campaignId)}',
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          if (prestataire.presenceDays != null) ...[
-            const SizedBox(height: 2),
+          if (isValidated) ...[
             Text(
-              'Jours de présence: ${prestataire.presenceDays}',
+              'Statut: Validé',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.green.shade400,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
+          if (validationDate != null) ...[
+            Text(
+              'Date de validation: ${_formatDate(validationDate)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
+          if (campaignId != null && campaignId.isNotEmpty) ...[
+            Text(
+              'Campagne: ${_getCampaignName(campaignId)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
+          if (presenceDays != null) ...[
+            Text(
+              'Jours de présence: $presenceDays',
               style: TextStyle(
                 fontSize: 10,
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),

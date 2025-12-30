@@ -192,12 +192,12 @@ export default function MCZPage() {
         userRole: user?.role,
       });
       
-      // Ne pas passer le status au backend pour récupérer TOUS les prestataires de la zone
-      // Le filtrage par statut se fera côté frontend
+      // Le backend filtre automatiquement pour MCZ : seuls les prestataires validés par IT sont retournés
+      // Le filtrage par statut (Validés par IT, Approuvés, Rejetés) se fait ensuite côté frontend
       const data = await approvalsApi.getPrestatairesForApproval(
         selectedFormId,
         user.zoneId,
-        undefined, // Ne pas filtrer par status côté backend - récupérer TOUS
+        undefined, // Le backend gère automatiquement le filtrage pour MCZ
       );
       
       console.log('Prestataires reçus du backend:', data.length, data);

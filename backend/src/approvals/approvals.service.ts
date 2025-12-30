@@ -152,8 +152,9 @@ export class ApprovalsService {
    * @param zoneId - ID de la zone (optionnel, pour MCZ)
    * @param aireId - ID de l'aire (optionnel, pour IT)
    * @param status - Statut d'approbation (optionnel)
+   * @param userRole - Rôle de l'utilisateur (pour filtrer automatiquement selon le rôle)
    */
-  async findByZoneOrAire(formId: string, zoneId?: string, aireId?: string, status?: PrestataireStatus): Promise<any[]> {
+  async findByZoneOrAire(formId: string, zoneId?: string, aireId?: string, status?: PrestataireStatus, userRole?: string): Promise<any[]> {
     try {
       // Récupérer depuis la table du formulaire
       // IMPORTANT: Ne PAS filtrer par validationSequence pour inclure TOUS les prestataires
@@ -174,11 +175,17 @@ export class ApprovalsService {
         filters.aireId = aireId;
       }
       
-      // Ne pas filtrer par status pour permettre d'afficher tous les prestataires
-      // (validés par IT, approuvés, rejetés)
-      // if (status) {
-      //   filters.status = status;
-      // }
+      // Pour MCZ: filtrer automatiquement pour ne voir que les prestataires validés par IT
+      // (ceux qui sont prêts à être approuvés/rejetés par MCZ)
+      // MCZ ne doit pas voir les prestataires non validés par IT
+      if (userRole === 'MCZ' && !status) {
+        // Ne pas filtrer par status dans la requête, on filtrera après déduplication
+        // car on veut inclure les prestataires validés par IT (status = VALIDE_PAR_IT ou EN_ATTENTE_PAR_MCZ)
+        // mais aussi ceux déjà approuvés/rejetés pour les statistiques
+      } else if (status) {
+        // Si un status est explicitement demandé, l'utiliser
+        filters.status = status;
+      }
 
       console.log(`[ApprovalsService.findByZoneOrAire] Récupération avec filtres:`, filters);
 
@@ -219,16 +226,37 @@ export class ApprovalsService {
         }
       }
       
-      const data = Array.from(prestatairesMap.values());
+      let data = Array.from(prestatairesMap.values());
       console.log(`[ApprovalsService.findByZoneOrAire] ${data.length} prestataires uniques après déduplication (sur ${allData.length} enregistrements)`);
       
-      // Log de la répartition par statut
-      const statusCount = data.reduce((acc: any, p: any) => {
+      // Log de la répartition par statut AVANT filtrage MCZ
+      const statusCountBefore = data.reduce((acc: any, p: any) => {
         const status = p.status || 'UNKNOWN';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {});
-      console.log(`[ApprovalsService.findByZoneOrAire] Répartition par statut:`, statusCount);
+      console.log(`[ApprovalsService.findByZoneOrAire] Répartition par statut AVANT filtrage MCZ:`, statusCountBefore);
+      
+      // Pour MCZ: filtrer pour ne voir que les prestataires validés par IT
+      // (ceux avec status = VALIDE_PAR_IT ou EN_ATTENTE_PAR_MCZ, ou déjà approuvés/rejetés)
+      if (userRole === 'MCZ' && !status) {
+        data = data.filter((record: any) => {
+          const recordStatus = (record.status || '').toUpperCase();
+          const approvalStatus = (record.approval_status || '').toUpperCase();
+          
+          // Inclure:
+          // 1. Les prestataires validés par IT (en attente d'approbation MCZ)
+          // 2. Les prestataires déjà approuvés par MCZ (pour les statistiques)
+          // 3. Les prestataires déjà rejetés par MCZ (pour les statistiques)
+          return recordStatus === 'VALIDE_PAR_IT' || 
+                 recordStatus === 'EN_ATTENTE_PAR_MCZ' ||
+                 recordStatus === 'APPROUVE_PAR_MCZ' ||
+                 recordStatus === 'REJETE_PAR_MCZ' ||
+                 approvalStatus === 'APPROVED' ||
+                 approvalStatus === 'REJECTED';
+        });
+        console.log(`[ApprovalsService.findByZoneOrAire] Après filtrage MCZ (seulement validés par IT): ${data.length} prestataires`);
+      }
 
       console.log(`[ApprovalsService.findByZoneOrAire] formId=${formId}, zoneId=${zoneId}, aireId=${aireId}, status=${status}, total records=${data.length}`);
 

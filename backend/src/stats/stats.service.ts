@@ -54,20 +54,23 @@ export class StatsService {
         }
       }
       
-      // Compter les prestataires payés depuis les données combinées
-      const paidCount = this.countPaidFromData(combinedData);
+      // Dédupliquer les prestataires avant de calculer les statistiques
+      const deduplicatedData = this.deduplicatePrestataires(combinedData);
+      
+      // Compter les prestataires payés depuis les données dédupliquées
+      const paidCount = this.countPaidFromData(deduplicatedData);
 
-      console.log(`DEBUG STATS: Total final = ${combinedData.length} enregistrements`);
+      console.log(`DEBUG STATS: ${combinedData.length} enregistrements avant déduplication, ${deduplicatedData.length} prestataires uniques après déduplication`);
       console.log(`DEBUG STATS: Prestataires payés = ${paidCount}`);
       
-      const byStatus = this.groupByStatus(combinedData);
+      const byStatus = this.groupByStatus(deduplicatedData);
       console.log(`DEBUG STATS: Répartition par statut:`, byStatus);
 
       return {
-        total: combinedData.length,
+        total: deduplicatedData.length,
         byStatus: byStatus || {},
-        byProvince: this.groupByProvince(combinedData) || {},
-        byCategory: this.groupByCategory(combinedData) || {},
+        byProvince: this.groupByProvince(deduplicatedData) || {},
+        byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
       };
     } catch (error) {
@@ -443,14 +446,17 @@ export class StatsService {
         }
       }
 
-      console.log(`DEBUG STATS PROVINCE: Total final = ${combinedData.length} enregistrements pour la province ${provinceId}`);
-      const paidCount = this.countPaidFromData(combinedData);
+      // Dédupliquer les prestataires avant de calculer les statistiques
+      const deduplicatedData = this.deduplicatePrestataires(combinedData);
+      
+      console.log(`DEBUG STATS PROVINCE: ${combinedData.length} enregistrements avant déduplication, ${deduplicatedData.length} prestataires uniques après déduplication pour la province ${provinceId}`);
+      const paidCount = this.countPaidFromData(deduplicatedData);
 
       return {
-        total: combinedData.length,
-        byStatus: this.groupByStatus(combinedData) || {},
-        byZone: this.groupByZone(combinedData) || {},
-        byCategory: this.groupByCategory(combinedData) || {},
+        total: deduplicatedData.length,
+        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byZone: this.groupByZone(deduplicatedData) || {},
+        byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
       };
     } catch (error) {
@@ -516,14 +522,18 @@ export class StatsService {
         }
       }
 
-      console.log(`DEBUG STATS ZONE: Total final = ${combinedData.length} enregistrements pour la zone ${zoneId}`);
-      const paidCount = this.countPaidFromData(combinedData);
+      // Dédupliquer les prestataires avant de calculer les statistiques
+      // Pour chaque prestataire (id), garder seulement l'enregistrement le plus récent
+      const deduplicatedData = this.deduplicatePrestataires(combinedData);
+      
+      console.log(`DEBUG STATS ZONE: ${combinedData.length} enregistrements avant déduplication, ${deduplicatedData.length} prestataires uniques après déduplication pour la zone ${zoneId}`);
+      const paidCount = this.countPaidFromData(deduplicatedData);
 
       return {
-        total: combinedData.length,
-        byStatus: this.groupByStatus(combinedData) || {},
-        byAire: this.groupByAire(combinedData) || {},
-        byCategory: this.groupByCategory(combinedData) || {},
+        total: deduplicatedData.length,
+        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byAire: this.groupByAire(deduplicatedData) || {},
+        byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
       };
     } catch (error) {
@@ -589,13 +599,16 @@ export class StatsService {
         }
       }
 
-      console.log(`DEBUG STATS AIRE: Total final = ${combinedData.length} enregistrements pour l'aire ${aireId}`);
-      const paidCount = this.countPaidFromData(combinedData);
+      // Dédupliquer les prestataires avant de calculer les statistiques
+      const deduplicatedData = this.deduplicatePrestataires(combinedData);
+      
+      console.log(`DEBUG STATS AIRE: ${combinedData.length} enregistrements avant déduplication, ${deduplicatedData.length} prestataires uniques après déduplication pour l'aire ${aireId}`);
+      const paidCount = this.countPaidFromData(deduplicatedData);
 
       return {
-        total: combinedData.length,
-        byStatus: this.groupByStatus(combinedData) || {},
-        byCategory: this.groupByCategory(combinedData) || {},
+        total: deduplicatedData.length,
+        byStatus: this.groupByStatus(deduplicatedData) || {},
+        byCategory: this.groupByCategory(deduplicatedData) || {},
         paid: paidCount || 0,
       };
     } catch (error) {
@@ -607,6 +620,54 @@ export class StatsService {
         paid: 0,
       };
     }
+  }
+
+  /**
+   * Déduplique les prestataires en gardant seulement l'enregistrement le plus récent pour chaque prestataire unique
+   * Pour chaque prestataire (id), garde soit l'enregistrement original (validation_sequence IS NULL)
+   * soit la dernière validation (validation_sequence le plus élevé)
+   */
+  private deduplicatePrestataires(prestataires: any[]): any[] {
+    const prestatairesMap = new Map<string, any>();
+    
+    for (const record of prestataires) {
+      // Utiliser prestataire_id comme clé principale pour la déduplication
+      // Les validations ont le même prestataire_id que l'enregistrement original
+      // mais peuvent avoir un id différent (submission_id)
+      const prestataireId = record.prestataire_id || record.prestataireId || record.id;
+      if (!prestataireId) {
+        console.warn(`[deduplicatePrestataires] Enregistrement sans ID ignoré:`, {
+          id: record.id,
+          prestataire_id: record.prestataire_id,
+          prestataireId: record.prestataireId,
+        });
+        continue;
+      }
+      
+      const existing = prestatairesMap.get(prestataireId);
+      const currentSeq = record.validation_sequence ?? 0; // NULL = 0 pour la comparaison
+      const existingSeq = existing?.validation_sequence ?? 0;
+      
+      if (!existing) {
+        // Premier enregistrement pour ce prestataire
+        prestatairesMap.set(prestataireId, record);
+      } else if (currentSeq > existingSeq) {
+        // Le nouveau a un validation_sequence plus élevé, le garder
+        prestatairesMap.set(prestataireId, record);
+      } else if (currentSeq === existingSeq && currentSeq === 0) {
+        // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT ou APPROUVE_PAR_MCZ
+        const currentStatus = (record.status || '').toUpperCase();
+        const existingStatus = (existing.status || '').toUpperCase();
+        if ((currentStatus === 'VALIDE_PAR_IT' || currentStatus === 'APPROUVE_PAR_MCZ') && 
+            existingStatus !== 'VALIDE_PAR_IT' && existingStatus !== 'APPROUVE_PAR_MCZ') {
+          prestatairesMap.set(prestataireId, record);
+        }
+      }
+    }
+    
+    const result = Array.from(prestatairesMap.values());
+    console.log(`[deduplicatePrestataires] ${prestataires.length} enregistrements → ${result.length} prestataires uniques`);
+    return result;
   }
 
   private groupByStatus(prestataires: any[]) {

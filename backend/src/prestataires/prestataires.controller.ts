@@ -123,7 +123,14 @@ export class PrestatairesController {
       }
     }
     
-    if (status) filters.status = status;
+    // Pour DPS et PARTNER: filtrer automatiquement pour ne voir que les prestataires approuvés par MCZ
+    // (sauf si un status est explicitement demandé via query param)
+    if ((user.role === 'DPS' || user.role === 'PARTNER') && !status) {
+      filters.status = PrestataireStatus.APPROUVE_PAR_MCZ;
+      console.log('[PrestatairesController.findAll] Filtre automatique pour DPS/PARTNER: seulement prestataires approuvés par MCZ');
+    } else if (status) {
+      filters.status = status;
+    }
 
     console.log('[PrestatairesController.findAll] Filters appliqués:', filters);
 
