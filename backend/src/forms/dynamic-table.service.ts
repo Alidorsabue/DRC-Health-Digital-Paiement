@@ -1162,35 +1162,63 @@ export class DynamicTableService {
       throw new Error(`Aucune colonne de validation trouvée dans la table ${tableName}`);
     }
 
-    // Utiliser id et campaign_id pour identifier la ligne (clé primaire composite)
-    // Cela fonctionne aussi pour l'enregistrement original si campaign_id est défini
+    // IMPORTANT: Pour la première validation, l'enregistrement original peut ne pas avoir de campaign_id
+    // On doit d'abord essayer de mettre à jour avec campaign_id, puis sans campaign_id si nécessaire
     values.push(prestataireId);
     values.push(campaignId);
 
-    const updateSQL = `
+    // Essayer d'abord avec campaign_id (cas normal: validation existante ou original avec campaign_id)
+    let updateSQL = `
       UPDATE "${tableName}" 
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex} AND campaign_id = $${paramIndex + 1}
     `;
 
-    console.log(`[updateValidationInTable] SQL: ${updateSQL}`);
+    console.log(`[updateValidationInTable] SQL (avec campaign_id): ${updateSQL}`);
     console.log(`[updateValidationInTable] Values:`, values);
 
-    const result = await this.dataSource.query(updateSQL, values);
-    const rowsAffected = result[1] || 0;
+    let result = await this.dataSource.query(updateSQL, values);
+    let rowsAffected = result[1] || 0;
+    
+    // Si aucune ligne mise à jour, essayer sans campaign_id (première validation - original sans campaign_id)
+    if (rowsAffected === 0) {
+      console.log(`[updateValidationInTable] Aucune ligne mise à jour avec campaign_id, essai sans campaign_id (première validation)...`);
+      
+      // Retirer campaign_id des valeurs pour la nouvelle requête
+      const valuesWithoutCampaign = values.slice(0, -1); // Enlever le dernier élément (campaignId)
+      
+      // Construire une nouvelle requête qui met à jour l'enregistrement original SANS campaign_id
+      // Mais on inclut quand même campaign_id dans les updates pour le définir
+      updateSQL = `
+        UPDATE "${tableName}" 
+        SET ${updates.join(', ')}
+        WHERE id = $${paramIndex} 
+        AND (campaign_id IS NULL OR campaign_id = '')
+        AND (validation_sequence IS NULL OR validation_sequence = 0)
+        AND (parent_submission_id IS NULL OR parent_submission_id = '')
+      `;
+
+      console.log(`[updateValidationInTable] SQL (sans campaign_id - première validation): ${updateSQL}`);
+      console.log(`[updateValidationInTable] Values (sans campaign_id):`, values);
+
+      result = await this.dataSource.query(updateSQL, values);
+      rowsAffected = result[1] || 0;
+    }
     
     if (rowsAffected === 0) {
       console.warn(`[updateValidationInTable] ⚠️ Aucune ligne mise à jour. Vérification de l'existence de l'enregistrement...`);
       // Vérifier si l'enregistrement existe
       const checkQuery = await this.dataSource.query(
-        `SELECT id, campaign_id, validation_sequence, status FROM "${tableName}" 
-         WHERE id = $1 AND campaign_id = $2`,
-        [prestataireId, campaignId],
+        `SELECT id, campaign_id, validation_sequence, status, presence_days FROM "${tableName}" 
+         WHERE id = $1`,
+        [prestataireId],
       );
-      console.log(`[updateValidationInTable] Enregistrements trouvés:`, checkQuery);
+      console.log(`[updateValidationInTable] Enregistrements trouvés pour ce prestataire:`, checkQuery);
       
       if (checkQuery.length === 0) {
-        throw new Error(`Aucun enregistrement trouvé pour prestataire ${prestataireId} et campagne ${campaignId}`);
+        throw new Error(`Aucun enregistrement trouvé pour prestataire ${prestataireId}`);
+      } else {
+        throw new Error(`Aucun enregistrement trouvé pour prestataire ${prestataireId} et campagne ${campaignId}. Enregistrements existants: ${JSON.stringify(checkQuery.map((r: any) => ({ id: r.id, campaign_id: r.campaign_id, validation_sequence: r.validation_sequence })))}`);
       }
     } else {
       console.log(`[updateValidationInTable] ✅ ${rowsAffected} ligne(s) mise(s) à jour pour prestataire ${prestataireId} et campagne ${campaignId}`);
@@ -1412,6 +1440,11 @@ export class DynamicTableService {
   /**
    * Récupère l'enregistrement original d'un prestataire pour une campagne spécifique
    * Utilisé pour la première validation (mise à jour de l'original au lieu de créer une nouvelle ligne)
+   * 
+   * Logique:
+   * 1. Chercher d'abord un enregistrement original SANS campaign_id (première validation)
+   * 2. Si pas trouvé, chercher un enregistrement original AVEC ce campaign_id
+   * 3. Si trouvé, c'est la première validation pour cette campagne - mettre à jour l'original
    */
   async getOriginalSubmissionByCampaign(
     formId: string,
@@ -1434,13 +1467,34 @@ export class DynamicTableService {
       [tableName],
     );
 
-    if (existingColumns.length === 0) {
+    const hasCampaignIdColumn = existingColumns.length > 0;
+
+    if (!hasCampaignIdColumn) {
       // Si pas de colonne campaign_id, utiliser la méthode standard
       return await this.getOriginalSubmission(formId, prestataireId);
     }
 
-    // Chercher l'enregistrement original pour cette campagne spécifique
-    const result = await this.dataSource.query(
+    // ÉTAPE 1: Chercher d'abord un enregistrement original SANS campaign_id (NULL)
+    // C'est le cas de la première validation - l'enregistrement original n'a pas encore de campaign_id
+    const resultWithoutCampaign = await this.dataSource.query(
+      `SELECT * FROM "${tableName}" 
+       WHERE id = $1 
+       AND (campaign_id IS NULL OR campaign_id = '')
+       AND (validation_sequence IS NULL OR validation_sequence = 0)
+       AND (parent_submission_id IS NULL OR parent_submission_id = '')
+       ORDER BY created_at ASC 
+       LIMIT 1`,
+      [prestataireId],
+    );
+
+    if (resultWithoutCampaign.length > 0) {
+      console.log(`[getOriginalSubmissionByCampaign] Enregistrement original trouvé SANS campaign_id pour prestataire ${prestataireId} - première validation`);
+      return resultWithoutCampaign[0];
+    }
+
+    // ÉTAPE 2: Chercher un enregistrement original AVEC ce campaign_id
+    // C'est le cas où l'enregistrement original a déjà été mis à jour avec un campaign_id
+    const resultWithCampaign = await this.dataSource.query(
       `SELECT * FROM "${tableName}" 
        WHERE id = $1 
        AND campaign_id = $2
@@ -1451,7 +1505,13 @@ export class DynamicTableService {
       [prestataireId, campaignId],
     );
 
-    return result.length > 0 ? result[0] : null;
+    if (resultWithCampaign.length > 0) {
+      console.log(`[getOriginalSubmissionByCampaign] Enregistrement original trouvé AVEC campaign_id ${campaignId} pour prestataire ${prestataireId}`);
+      return resultWithCampaign[0];
+    }
+
+    console.log(`[getOriginalSubmissionByCampaign] Aucun enregistrement original trouvé pour prestataire ${prestataireId} et campagne ${campaignId}`);
+    return null;
   }
 
   /**

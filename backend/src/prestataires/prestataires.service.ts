@@ -664,7 +664,8 @@ export class PrestatairesService {
       return data[0];
     }
 
-    // ÉTAPE 2: Vérifier s'il existe un enregistrement original (validation_sequence IS NULL) pour cette campagne
+    // ÉTAPE 2: Vérifier s'il existe un enregistrement original (validation_sequence IS NULL)
+    // Chercher d'abord sans campaign_id, puis avec campaign_id
     const originalRecord = await this.dynamicTableService.getOriginalSubmissionByCampaign(
       targetFormId,
       id,
@@ -672,28 +673,67 @@ export class PrestatairesService {
     );
 
     if (originalRecord) {
-      console.log(`[validatePrestataire] Enregistrement original trouvé pour campagne ${campaignId}, première validation - mise à jour de l'original...`);
+      const originalCampaignId = originalRecord.campaign_id;
+      const isFirstValidation = !originalCampaignId || originalCampaignId === '' || originalCampaignId === null;
+      
+      console.log(`[validatePrestataire] Enregistrement original trouvé (campaign_id actuel: ${originalCampaignId || 'NULL'}), première validation - mise à jour de l'original...`);
+      console.log(`[validatePrestataire] Détails de l'enregistrement original:`, {
+        id: originalRecord.id,
+        submission_id: originalRecord.submission_id,
+        campaign_id: originalRecord.campaign_id,
+        validation_sequence: originalRecord.validation_sequence,
+        status: originalRecord.status,
+      });
+      
       // PREMIÈRE VALIDATION: Mettre à jour l'enregistrement original
+      // Si l'original n'a pas de campaign_id, on le met à jour avec le campaign_id ET les infos de validation
       await this.dynamicTableService.updateValidationInTable(
         targetFormId,
         id,
         presenceDays,
         validationDate,
-        campaignId,
+        campaignId, // Toujours fournir le campaign_id pour qu'il soit mis à jour si NULL
       );
 
       // Récupérer l'enregistrement mis à jour
-      const { data } = await this.dynamicTableService.getSubmissions(
+      // Essayer d'abord avec campaignId, puis sans si nécessaire
+      let data;
+      const { data: dataWithCampaign } = await this.dynamicTableService.getSubmissions(
         targetFormId,
         1,
         1,
         { prestataireId: id, campaignId },
       );
-
-      if (!data || data.length === 0) {
-        throw new NotFoundException(`Enregistrement original non trouvé après mise à jour`);
+      
+      if (dataWithCampaign && dataWithCampaign.length > 0) {
+        data = dataWithCampaign;
+      } else {
+        // Si pas trouvé avec campaignId, essayer sans filtre campaignId (pour récupérer l'original mis à jour)
+        console.log(`[validatePrestataire] Pas trouvé avec campaignId, recherche sans filtre campaignId...`);
+        const { data: dataWithoutCampaign } = await this.dynamicTableService.getSubmissions(
+          targetFormId,
+          1,
+          10, // Récupérer plusieurs pour trouver l'original
+          { prestataireId: id },
+        );
+        
+        if (dataWithoutCampaign && dataWithoutCampaign.length > 0) {
+          // Trouver l'enregistrement original (validation_sequence IS NULL)
+          const original = dataWithoutCampaign.find((r: any) => 
+            (r.validation_sequence === null || r.validation_sequence === 0) && 
+            (r.id === id || r.prestataire_id === id)
+          );
+          if (original) {
+            data = [original];
+          }
+        }
       }
 
+      if (!data || data.length === 0) {
+        throw new NotFoundException(`Enregistrement original non trouvé après mise à jour pour prestataire ${id}`);
+      }
+
+      console.log(`[validatePrestataire] ✅ Enregistrement original mis à jour avec succès`);
       return data[0];
     }
 
