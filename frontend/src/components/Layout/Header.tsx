@@ -3,28 +3,35 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function Header() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { language, setLanguage, t } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
+      if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
+        setIsLanguageMenuOpen(false);
+      }
     };
 
-    if (isMenuOpen) {
+    if (isMenuOpen || isLanguageMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isLanguageMenuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -48,19 +55,69 @@ export default function Header() {
             <div className="flex items-center space-x-2 max-w-md w-full">
               <input
                 className="block flex-1 pl-3 pr-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm"
-                placeholder="Rechercher..."
+                placeholder={t('common.search')}
                 type="search"
               />
               <button
                 type="button"
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium whitespace-nowrap"
               >
-                Search
+                {t('common.searchButton')}
               </button>
             </div>
           </div>
         </div>
-        <div className="ml-4 flex items-center md:ml-6">
+        <div className="ml-4 flex items-center md:ml-6 gap-3">
+          {/* Sélecteur de langue */}
+          <div className="relative" ref={languageMenuRef}>
+            <button
+              type="button"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
+            >
+              <span className="mr-2">🌐</span>
+              {language === 'fr' ? 'FR' : 'EN'}
+            </button>
+
+            {isLanguageMenuOpen && (
+              <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setLanguage('fr');
+                      setIsLanguageMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center ${
+                      language === 'fr'
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="mr-2">🇫🇷</span>
+                    {t('common.french')}
+                    {language === 'fr' && <span className="ml-auto">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLanguage('en');
+                      setIsLanguageMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center ${
+                      language === 'en'
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="mr-2">🇬🇧</span>
+                    {t('common.english')}
+                    {language === 'en' && <span className="ml-auto">✓</span>}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Menu utilisateur */}
           <div className="ml-3 relative" ref={menuRef}>
             <button
               type="button"
@@ -120,7 +177,7 @@ export default function Header() {
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
                   >
                     <span className="mr-2">🚪</span>
-                    Déconnexion
+                    {t('common.logout')}
                   </button>
                 </div>
               </div>

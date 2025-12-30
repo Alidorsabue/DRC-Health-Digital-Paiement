@@ -12,6 +12,7 @@ import DataTable, { Column } from '../../../components/DataTable';
 import { getErrorMessage } from '../../../utils/error-handler';
 import AlertModal from '../../../components/Modal/AlertModal';
 import StatCardGroup, { StatCard } from '../../../components/Statistics/StatCardGroup';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface GeographicOption {
   id: string;
@@ -20,6 +21,7 @@ interface GeographicOption {
 
 export default function ProvincePage() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadingPrestataires, setLoadingPrestataires] = useState(false);
   const [stats, setStats] = useState<ProvinceStats | null>(null);
@@ -257,52 +259,77 @@ export default function ProvincePage() {
   }, [selectedZoneId]);
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; color: string }> = {
-      'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
-      'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
-      'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
-      'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
-      'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
-    };
-    const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+    let label = status;
+    let color = 'bg-gray-100 text-gray-800';
+    
+    if (status === 'ENREGISTRE') {
+      label = t('status.registered');
+    } else if (status === 'VALIDE_PAR_IT') {
+      label = t('status.validatedByIT');
+      color = 'bg-blue-100 text-blue-800';
+    } else if (status === 'APPROUVE_PAR_MCZ') {
+      label = t('status.approvedByMCZ');
+      color = 'bg-green-100 text-green-800';
+    } else if (status === 'REJETE_PAR_MCZ') {
+      label = t('status.rejectedByMCZ');
+      color = 'bg-red-100 text-red-800';
+    } else if (status === 'EN_ATTENTE_PAR_MCZ') {
+      label = t('status.pendingMCZ');
+      color = 'bg-yellow-100 text-yellow-800';
+    }
+    
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.label}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+        {label}
       </span>
     );
   };
 
   const getPaymentStatusBadge = (prestataire: Prestataire) => {
     const status = prestataire.paymentStatus || 'PENDING';
-    const statusMap: Record<string, { label: string; color: string }> = {
-      'SENT': { label: 'Envoyé', color: 'bg-blue-100 text-blue-800' },
-      'PAID': { label: 'Payé', color: 'bg-green-100 text-green-800' },
-      'FAILED': { label: 'Échec', color: 'bg-red-100 text-red-800' },
-      'PENDING': { label: 'En attente', color: 'bg-gray-100 text-gray-800' },
-    };
-    const statusInfo = statusMap[status] || statusMap['PENDING'];
+    const statusUpper = status.toUpperCase();
+    let label = t('status.pending');
+    let color = 'bg-gray-100 text-gray-800';
+    
+    if (statusUpper === 'SENT') {
+      label = t('status.sent');
+      color = 'bg-blue-100 text-blue-800';
+    } else if (statusUpper === 'PAID' || statusUpper === 'PAYE' || statusUpper === 'PAYÉ') {
+      label = t('status.paid');
+      color = 'bg-green-100 text-green-800';
+    } else if (statusUpper === 'FAILED' || statusUpper === 'ECHEC') {
+      label = t('status.failed');
+      color = 'bg-red-100 text-red-800';
+    }
+    
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.label}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+        {label}
       </span>
     );
   };
 
   const getKycStatusBadge = (prestataire: Prestataire) => {
     const kycStatus = prestataire.kycStatus || prestataire.kyc_status;
-    if (!kycStatus) return <span className="text-gray-500 text-xs">Non vérifié</span>;
+    if (!kycStatus) return <span className="text-gray-500 text-xs">{t('partner.notVerified')}</span>;
     
-    const statusMap: Record<string, { label: string; color: string }> = {
-      'CORRECT': { label: 'Correct', color: 'bg-green-100 text-green-800' },
-      'INCORRECT': { label: 'Incorrect', color: 'bg-red-100 text-red-800' },
-      'SANS_COMPTE': { label: 'Sans compte', color: 'bg-yellow-100 text-yellow-800' },
-    };
+    let label = kycStatus;
+    let color = 'bg-gray-100 text-gray-800';
     
-    const statusInfo = statusMap[kycStatus] || { label: kycStatus, color: 'bg-gray-100 text-gray-800' };
+    if (kycStatus === 'CORRECT') {
+      label = t('partner.correct');
+      color = 'bg-green-100 text-green-800';
+    } else if (kycStatus === 'INCORRECT') {
+      label = t('partner.incorrect');
+      color = 'bg-red-100 text-red-800';
+    } else if (kycStatus === 'SANS_COMPTE') {
+      label = t('partner.noAccount');
+      color = 'bg-yellow-100 text-yellow-800';
+    }
     
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.label}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+        {label}
       </span>
     );
   };
@@ -416,10 +443,10 @@ export default function ProvincePage() {
       )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Interface DPS - Vue Province
+          {t('province.title')}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Province: {user.provinceId || 'Non définie'} (Lecture seule)
+          {t('province.province')}: {user.provinceId || t('mcz.notDefined')} {t('province.readOnly')}
         </p>
       </div>
 
@@ -427,28 +454,28 @@ export default function ProvincePage() {
       {stats && (
         <StatCardGroup columns={4}>
           <StatCard
-            title="Total Prestataires"
+            title={t('dashboard.totalProviders')}
             value={stats.total || 0}
             icon="👥"
             color="indigo"
             progress={100}
           />
           <StatCard
-            title="Enregistrés"
+            title={t('dashboard.registered')}
             value={stats.byStatus?.ENREGISTRE || 0}
             icon="📝"
             color="gray"
             progress={stats.total > 0 ? ((stats.byStatus?.ENREGISTRE || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Validés par IT"
+            title={t('dashboard.validatedByIT')}
             value={stats.byStatus?.VALIDE_PAR_IT || 0}
             icon="✅"
             color="blue"
             progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Approuvés par MCZ"
+            title={t('dashboard.approvedByMCZ')}
             value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
             icon="✓"
             color="green"
@@ -462,17 +489,17 @@ export default function ProvincePage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Zone de Santé {zones.length > 0 && `(${zones.length})`}
+              {t('province.zone')} {zones.length > 0 && `(${zones.length})`}
             </label>
             <select
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={selectedZoneId}
               onChange={(e) => setSelectedZoneId(e.target.value)}
             >
-              <option value="">Toutes les zones</option>
+              <option value="">{t('province.allZones')}</option>
               {zones.length === 0 ? (
                 <option value="" disabled>
-                  Aucune zone disponible
+                  {t('common.noData')}
                 </option>
               ) : (
                 zones.map((zone) => (
@@ -484,13 +511,13 @@ export default function ProvincePage() {
             </select>
             {zones.length === 0 && user?.provinceId && (
               <p className="text-xs text-gray-500 mt-1">
-                Chargement des zones pour {user.provinceId}...
+                {t('common.loading')} {user.provinceId}...
               </p>
             )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Aires de Santé {selectedZoneId && aires.length > 0 && `(${aires.length})`}
+              {t('province.area')} {selectedZoneId && aires.length > 0 && `(${aires.length})`}
             </label>
             <select
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white disabled:bg-gray-100 disabled:text-gray-500"
@@ -498,14 +525,14 @@ export default function ProvincePage() {
               onChange={(e) => setSelectedAireId(e.target.value)}
               disabled={!selectedZoneId}
             >
-              <option value="">Toutes les aires</option>
+              <option value="">{t('province.allAreas')}</option>
               {!selectedZoneId ? (
                 <option value="" disabled>
-                  Sélectionnez d'abord une zone
+                  {t('common.select')} {t('province.zone').toLowerCase()}
                 </option>
               ) : aires.length === 0 ? (
                 <option value="" disabled>
-                  Aucune aire disponible
+                  {t('common.noData')}
                 </option>
               ) : (
                 aires.map((aire) => (
@@ -517,20 +544,20 @@ export default function ProvincePage() {
             </select>
             {selectedZoneId && aires.length === 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                Chargement des aires pour {selectedZoneId}...
+                {t('common.loading')} {selectedZoneId}...
               </p>
             )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Campagne
+              {t('common.campaign')}
             </label>
             <select
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={selectedCampaignId}
               onChange={(e) => setSelectedCampaignId(e.target.value)}
             >
-              <option value="">Toutes les campagnes</option>
+              <option value="">{t('province.allCampaigns')}</option>
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
                   {campaign.name}
@@ -540,18 +567,18 @@ export default function ProvincePage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Statut
+              {t('common.status')}
             </label>
             <select
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="">Tous les statuts</option>
-              <option value="ENREGISTRE">Enregistré</option>
-              <option value="VALIDE_PAR_IT">Validé par IT</option>
-              <option value="APPROUVE_PAR_MCZ">Approuvé par MCZ</option>
-              <option value="REJETE_PAR_MCZ">Rejeté par MCZ</option>
+              <option value="">{t('province.allStatuses')}</option>
+              <option value="ENREGISTRE">{t('status.registered')}</option>
+              <option value="VALIDE_PAR_IT">{t('status.validatedByIT')}</option>
+              <option value="APPROUVE_PAR_MCZ">{t('status.approvedByMCZ')}</option>
+              <option value="REJETE_PAR_MCZ">{t('status.rejectedByMCZ')}</option>
             </select>
           </div>
         </div>
@@ -560,11 +587,11 @@ export default function ProvincePage() {
       {/* Liste des prestataires */}
       {loadingPrestataires ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
-          <p className="text-gray-500">Chargement des prestataires...</p>
+          <p className="text-gray-500">{t('province.loadingProviders')}</p>
         </div>
       ) : prestataires.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
-          <p className="text-gray-500">Aucun prestataire trouvé</p>
+          <p className="text-gray-500">{t('province.noProviders')}</p>
           <p className="text-sm text-gray-400 mt-2">
             {filterStatus || selectedZoneId || selectedAireId || selectedCampaignId
               ? 'Essayez de modifier les filtres pour voir plus de résultats'
@@ -587,11 +614,11 @@ export default function ProvincePage() {
           columns={[
             {
               key: 'id',
-              label: 'ID',
+              label: t('common.id'),
             },
             {
               key: 'nom',
-              label: 'Nom',
+              label: t('province.fullName'),
               render: (_, prestataire) => {
                 const prenom = prestataire.prenom || prestataire.given_name_i_c || prestataire.Prenom || prestataire.Prénom || '';
                 const nom = prestataire.nom || prestataire.family_name_i_c || prestataire.Nom || '';
@@ -609,7 +636,7 @@ export default function ProvincePage() {
             },
             {
               key: 'telephone',
-              label: 'Numéro',
+              label: t('common.phone'),
               render: (_, prestataire) => {
                 const telephone = prestataire.telephone || prestataire.num_phone || prestataire.confirm_phone || prestataire.phone || '';
                 const rawData = prestataire.raw_data || {};
@@ -619,7 +646,7 @@ export default function ProvincePage() {
             },
             {
               key: 'categorie',
-              label: 'Rôle',
+              label: t('common.role'),
               render: (_, prestataire) => {
                 const categorie = prestataire.categorie || prestataire.campaign_role_i_f || prestataire.campaign_role || prestataire.role || prestataire.role_prestataire || '';
                 const rawData = prestataire.raw_data || {};
@@ -629,42 +656,53 @@ export default function ProvincePage() {
             },
             {
               key: 'zoneId',
-              label: 'Zone',
+              label: t('province.zone'),
               render: (_, prestataire) => prestataire.zoneId || prestataire.zone_id || 'N/A',
             },
             {
               key: 'aireId',
-              label: 'Aire',
+              label: t('province.area'),
               render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
             },
             {
               key: 'status',
-              label: 'Statut',
+              label: t('common.status'),
               render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
             },
             {
               key: 'validationStatus',
-              label: 'Statut Validation',
+              label: t('partner.validationStatus'),
               render: (_, prestataire) => {
                 const status = prestataire.status || 'ENREGISTRE';
-                const statusMap: Record<string, { label: string; color: string }> = {
-                  'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
-                  'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
-                  'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
-                  'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
-                  'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
-                };
-                const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+                let label = status;
+                let color = 'bg-gray-100 text-gray-800';
+                
+                if (status === 'ENREGISTRE') {
+                  label = t('status.registered');
+                } else if (status === 'VALIDE_PAR_IT') {
+                  label = t('status.validatedByIT');
+                  color = 'bg-blue-100 text-blue-800';
+                } else if (status === 'APPROUVE_PAR_MCZ') {
+                  label = t('status.approvedByMCZ');
+                  color = 'bg-green-100 text-green-800';
+                } else if (status === 'REJETE_PAR_MCZ') {
+                  label = t('status.rejectedByMCZ');
+                  color = 'bg-red-100 text-red-800';
+                } else if (status === 'EN_ATTENTE_PAR_MCZ') {
+                  label = t('status.pendingMCZ');
+                  color = 'bg-yellow-100 text-yellow-800';
+                }
+                
                 return (
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-                    {statusInfo.label}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+                    {label}
                   </span>
                 );
               },
             },
             {
               key: 'validationDate',
-              label: 'DATE VALIDATION IT',
+              label: t('province.validationDate'),
               render: (_, prestataire) => {
                 const date = getValidationDate(prestataire);
                 return (
@@ -676,12 +714,12 @@ export default function ProvincePage() {
             },
             {
               key: 'kycStatus',
-              label: 'Statut KYC',
+              label: t('partner.kycStatus'),
               render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'approvalDate',
-              label: 'DATE APPROBATION',
+              label: t('province.approvalDate'),
               render: (_, prestataire) => {
                 const date = getApprovalDate(prestataire);
                 return (
@@ -693,12 +731,12 @@ export default function ProvincePage() {
             },
             {
               key: 'paymentStatus',
-              label: 'Statut Paiement',
+              label: t('partner.paymentStatus'),
               render: (_, prestataire) => getPaymentStatusBadge(prestataire),
             },
             {
               key: 'paymentDate',
-              label: 'DATE PAIEMENT',
+              label: t('province.paymentDate'),
               render: (_, prestataire) => {
                 const date = getPaymentDate(prestataire);
                 return (
@@ -709,7 +747,7 @@ export default function ProvincePage() {
               },
             },
           ]}
-          title="Prestataires"
+          title={t('province.providers')}
           exportFilename="prestataires-province"
         />
       )}

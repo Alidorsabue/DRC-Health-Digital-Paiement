@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { getErrorMessage } from '../../utils/error-handler';
 import AlertModal from '../../components/Modal/AlertModal';
 import StatCardGroup, { StatCard } from '../../components/Statistics/StatCardGroup';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface GeographicOption {
   id: string;
@@ -19,6 +20,7 @@ interface GeographicOption {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [stats, setStats] = useState<NationalStats | ProvinceStats | ZoneStats | AireStats | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
@@ -665,10 +667,10 @@ export default function DashboardPage() {
       )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Bienvenue, {user?.fullName}
+          {t('dashboard.welcome')}, {user?.fullName}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Vue d'ensemble de la plateforme
+          {t('dashboard.overview')}
         </p>
       </div>
 
@@ -679,7 +681,7 @@ export default function DashboardPage() {
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Province
+                    {t('common.province')}
                   </label>
                   <select
                     value={filters.provinceId}
@@ -696,10 +698,10 @@ export default function DashboardPage() {
                   >
                     <option value="" className="text-gray-900">
                       {loadingGeographic 
-                        ? 'Chargement...' 
+                        ? t('common.loading') 
                         : provinces.length === 0 
-                          ? 'Aucune province disponible' 
-                          : 'Toutes les provinces'}
+                          ? t('common.noData') 
+                          : t('national.allProvinces')}
                     </option>
                     {provinces.map((province) => (
                       <option key={province.id} value={province.id} className="text-gray-900">
@@ -711,7 +713,7 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Zone de Santé
+                    {t('common.zone')}
                   </label>
                   <select
                     value={filters.zoneId}
@@ -732,10 +734,10 @@ export default function DashboardPage() {
                   >
                     <option value="" style={{ color: '#111827' }}>
                       {!filters.provinceId 
-                        ? 'Sélectionnez d\'abord une province' 
+                        ? t('common.select') + ' ' + t('common.province').toLowerCase()
                         : zones.length === 0 
-                          ? 'Aucune zone disponible' 
-                          : 'Toutes les zones'}
+                          ? t('common.noData') 
+                          : t('national.allZones')}
                     </option>
                     {zones.map((zone) => (
                       <option key={zone.id} value={zone.id} style={{ color: '#111827' }}>
@@ -750,11 +752,11 @@ export default function DashboardPage() {
             {user?.role === 'MCZ' && (
               <div>
                 <label className={`block ${user?.role === 'MCZ' ? 'text-xs' : 'text-sm'} font-medium text-gray-700 ${user?.role === 'MCZ' ? 'mb-1' : 'mb-2'}`}>
-                  Zone de Santé
+                  {t('common.zone')}
                 </label>
                 <input
                   type="text"
-                  value={user.zoneId || 'Non définie'}
+                  value={user.zoneId || t('mcz.notDefined')}
                   disabled
                   className={`w-full ${user?.role === 'MCZ' ? 'px-2 py-1.5 text-sm' : 'px-3 py-2'} border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-600`}
                 />
@@ -764,11 +766,11 @@ export default function DashboardPage() {
             {user?.role === 'DPS' && (
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Province
+                  {t('common.province')}
                 </label>
                 <input
                   type="text"
-                  value={user.provinceId || 'Non définie'}
+                  value={user.provinceId || t('mcz.notDefined')}
                   disabled
                   className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-600"
                 />
@@ -892,35 +894,35 @@ export default function DashboardPage() {
       {!loading && stats && (
         <StatCardGroup columns={5}>
           <StatCard
-            title="Total Prestataires"
+            title={t('dashboard.totalProviders')}
             value={stats.total || 0}
             icon="👥"
             color="indigo"
             progress={100}
           />
           <StatCard
-            title="Approuvés"
+            title={t('dashboard.approvedByMCZ')}
             value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
             icon="✅"
             color="green"
             progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="En attente"
+            title={t('dashboard.pending')}
             value={stats.byStatus?.VALIDE_PAR_IT || 0}
             icon="⏳"
             color="yellow"
             progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Payés"
+            title={t('dashboard.paid')}
             value={stats.paid || 0}
             icon="💰"
             color="purple"
             progress={stats.total > 0 ? ((stats.paid || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Campagnes actives"
+            title={t('dashboard.activeCampaigns')}
             value={(() => {
               let filteredCampaigns = campaigns.filter((c) => c.isActive);
               if (filters.campaignId) {
@@ -939,7 +941,7 @@ export default function DashboardPage() {
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-              Campagnes récentes
+              {t('dashboard.recentCampaigns')}
             </h3>
             <div className="space-y-3">
               {(() => {
@@ -995,7 +997,7 @@ export default function DashboardPage() {
                 href="/dashboard/campaigns"
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
-                Voir toutes les campagnes →
+                {t('dashboard.seeAllCampaigns')}
               </Link>
             </div>
           </div>
@@ -1005,17 +1007,26 @@ export default function DashboardPage() {
           <div className="bg-white shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Répartition par statut
+                {t('dashboard.statusDistribution')}
               </h3>
               <div className="space-y-2">
-                {Object.entries(stats.byStatus).map(([status, count]) => (
-                  <div key={status} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{status}</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {count}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(stats.byStatus).map(([status, count]) => {
+                  let statusLabel = status;
+                  if (status === 'ENREGISTRE') statusLabel = t('status.registered');
+                  else if (status === 'VALIDE_PAR_IT') statusLabel = t('status.validatedByIT');
+                  else if (status === 'APPROUVE_PAR_MCZ') statusLabel = t('status.approvedByMCZ');
+                  else if (status === 'REJETE_PAR_MCZ') statusLabel = t('status.rejectedByMCZ');
+                  else if (status === 'EN_ATTENTE_PAR_MCZ') statusLabel = t('status.pendingMCZ');
+                  
+                  return (
+                    <div key={status} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">{statusLabel}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

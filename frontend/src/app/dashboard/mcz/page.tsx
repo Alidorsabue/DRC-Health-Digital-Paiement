@@ -12,6 +12,7 @@ import AlertModal from '../../../components/Modal/AlertModal';
 import DataTable, { Column } from '../../../components/DataTable';
 import { getErrorMessage } from '../../../utils/error-handler';
 import StatCardGroup, { StatCard } from '../../../components/Statistics/StatCardGroup';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface GeographicOption {
   id: string;
@@ -20,6 +21,7 @@ interface GeographicOption {
 
 export default function MCZPage() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadingStats, setLoadingStats] = useState(false);
   const [stats, setStats] = useState<ZoneStats | null>(null);
@@ -447,19 +449,19 @@ export default function MCZPage() {
     if (isApproved) {
       return (
         <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-          Approuvé
+          {t('mcz.approved')}
         </span>
       );
     } else if (isRejected) {
       return (
         <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
-          Rejeté
+          {t('mcz.rejected')}
         </span>
       );
     } else {
       return (
         <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-          En attente
+          {t('common.pending')}
         </span>
       );
     }
@@ -476,20 +478,24 @@ export default function MCZPage() {
                    (prestataire as any).payment_status ||
                    'PENDING';
     
-    const statusMap: Record<string, { label: string; color: string }> = {
-      'SENT': { label: 'Envoyé', color: 'bg-blue-100 text-blue-800' },
-      'PAID': { label: 'Payé', color: 'bg-green-100 text-green-800' },
-      'PAYE': { label: 'Payé', color: 'bg-green-100 text-green-800' },
-      'PAYÉ': { label: 'Payé', color: 'bg-green-100 text-green-800' },
-      'FAILED': { label: 'Échec', color: 'bg-red-100 text-red-800' },
-      'ECHEC': { label: 'Échec', color: 'bg-red-100 text-red-800' },
-      'PENDING': { label: 'En attente', color: 'bg-gray-100 text-gray-800' },
-      'EN_ATTENTE': { label: 'En attente', color: 'bg-gray-100 text-gray-800' },
-    };
-    const statusInfo = statusMap[status.toUpperCase()] || statusMap['PENDING'];
+    const statusUpper = status.toUpperCase();
+    let label = t('status.pending');
+    let color = 'bg-gray-100 text-gray-800';
+    
+    if (statusUpper === 'SENT') {
+      label = t('status.sent');
+      color = 'bg-blue-100 text-blue-800';
+    } else if (statusUpper === 'PAID' || statusUpper === 'PAYE' || statusUpper === 'PAYÉ') {
+      label = t('status.paid');
+      color = 'bg-green-100 text-green-800';
+    } else if (statusUpper === 'FAILED' || statusUpper === 'ECHEC') {
+      label = t('status.failed');
+      color = 'bg-red-100 text-red-800';
+    }
+    
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.label}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+        {label}
       </span>
     );
   };
@@ -504,19 +510,25 @@ export default function MCZPage() {
                      (prestataire as any).kycStatus ||
                      (prestataire as any).kyc_status;
     
-    if (!kycStatus) return <span className="text-gray-500 text-xs">Non vérifié</span>;
+    if (!kycStatus) return <span className="text-gray-500 text-xs">{t('partner.notVerified')}</span>;
     
-    const statusMap: Record<string, { label: string; color: string }> = {
-      'CORRECT': { label: 'Correct', color: 'bg-green-100 text-green-800' },
-      'INCORRECT': { label: 'Incorrect', color: 'bg-red-100 text-red-800' },
-      'SANS_COMPTE': { label: 'Sans compte', color: 'bg-yellow-100 text-yellow-800' },
-    };
+    let label = kycStatus;
+    let color = 'bg-gray-100 text-gray-800';
     
-    const statusInfo = statusMap[kycStatus] || { label: kycStatus, color: 'bg-gray-100 text-gray-800' };
+    if (kycStatus === 'CORRECT') {
+      label = t('partner.correct');
+      color = 'bg-green-100 text-green-800';
+    } else if (kycStatus === 'INCORRECT') {
+      label = t('partner.incorrect');
+      color = 'bg-red-100 text-red-800';
+    } else if (kycStatus === 'SANS_COMPTE') {
+      label = t('partner.noAccount');
+      color = 'bg-yellow-100 text-yellow-800';
+    }
     
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.label}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+        {label}
       </span>
     );
   };
@@ -620,10 +632,10 @@ export default function MCZPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Interface MCZ - Approbation des Prestataires
+          {t('mcz.title')}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Zone de Santé: {user.zoneId || 'Non définie'}
+          {t('mcz.zone')}: {user.zoneId || t('mcz.notDefined')}
         </p>
       </div>
 
@@ -631,28 +643,28 @@ export default function MCZPage() {
       {stats && (
         <StatCardGroup columns={4}>
           <StatCard
-            title="Total Prestataires"
+            title={t('dashboard.totalProviders')}
             value={stats.total || 0}
             icon="👥"
             color="indigo"
             progress={stats.total > 0 ? 100 : 0}
           />
           <StatCard
-            title="Validés par IT"
+            title={t('dashboard.validatedByIT')}
             value={stats.byStatus?.VALIDE_PAR_IT || 0}
             icon="✅"
             color="blue"
             progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Approuvés"
+            title={t('dashboard.approvedByMCZ')}
             value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
             icon="✓"
             color="green"
             progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title="Rejetés"
+            title={t('dashboard.rejectedByMCZ')}
             value={stats.byStatus?.REJETE_PAR_MCZ || 0}
             icon="✗"
             color="red"
@@ -809,7 +821,7 @@ export default function MCZPage() {
             },
             {
               key: 'nom',
-              label: 'NOM COMPLET',
+              label: t('mcz.fullName'),
               render: (_, prestataire) => {
                 const prenom = prestataire.given_name_i_c || prestataire.prenom || prestataire.Prenom || prestataire.Prénom || '';
                 const nom = prestataire.family_name_i_c || prestataire.nom || prestataire.Nom || '';
@@ -827,7 +839,7 @@ export default function MCZPage() {
             },
             {
               key: 'telephone',
-              label: 'TÉLÉPHONE',
+              label: t('mcz.phone'),
               render: (_, prestataire) => {
                 const telephone = prestataire.num_phone || 
                                 prestataire.confirm_phone || 
@@ -847,7 +859,7 @@ export default function MCZPage() {
             },
             {
               key: 'categorie',
-              label: 'RÔLE',
+              label: t('mcz.role'),
               render: (_, prestataire) => {
                 const role = prestataire.categorie || 
                             prestataire.campaign_role_i_f || 
@@ -865,37 +877,48 @@ export default function MCZPage() {
             },
             {
               key: 'aireId',
-              label: 'AIRE DE SANTÉ',
+              label: t('mcz.healthArea'),
               render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
             },
             {
               key: 'status',
-              label: 'STATUT',
+              label: t('mcz.status'),
               render: (_, prestataire) => getStatusBadge(prestataire),
             },
             {
               key: 'validationStatus',
-              label: 'STATUT VALIDATION',
+              label: t('mcz.validationStatus'),
               render: (_, prestataire) => {
                 const status = prestataire.status || 'ENREGISTRE';
-                const statusMap: Record<string, { label: string; color: string }> = {
-                  'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
-                  'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
-                  'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
-                  'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
-                  'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
-                };
-                const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+                let label = status;
+                let color = 'bg-gray-100 text-gray-800';
+                
+                if (status === 'ENREGISTRE') {
+                  label = t('status.registered');
+                } else if (status === 'VALIDE_PAR_IT') {
+                  label = t('status.validatedByIT');
+                  color = 'bg-blue-100 text-blue-800';
+                } else if (status === 'APPROUVE_PAR_MCZ') {
+                  label = t('status.approvedByMCZ');
+                  color = 'bg-green-100 text-green-800';
+                } else if (status === 'REJETE_PAR_MCZ') {
+                  label = t('status.rejectedByMCZ');
+                  color = 'bg-red-100 text-red-800';
+                } else if (status === 'EN_ATTENTE_PAR_MCZ') {
+                  label = t('status.pendingMCZ');
+                  color = 'bg-yellow-100 text-yellow-800';
+                }
+                
                 return (
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-                    {statusInfo.label}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+                    {label}
                   </span>
                 );
               },
             },
             {
               key: 'validationDate',
-              label: 'DATE VALIDATION IT',
+              label: t('mcz.validationDate'),
               render: (_, prestataire) => {
                 const date = getValidationDate(prestataire);
                 return (
@@ -907,12 +930,12 @@ export default function MCZPage() {
             },
             {
               key: 'kycStatus',
-              label: 'STATUT KYC',
+              label: t('mcz.kycStatus'),
               render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'approvalDate',
-              label: 'DATE APPROBATION',
+              label: t('mcz.approvalDate'),
               render: (_, prestataire) => {
                 const date = getApprovalDate(prestataire);
                 return (
@@ -924,12 +947,12 @@ export default function MCZPage() {
             },
             {
               key: 'paymentStatus',
-              label: 'STATUT PAIEMENT',
+              label: t('mcz.paymentStatus'),
               render: (_, prestataire) => getPaymentStatusBadge(prestataire),
             },
             {
               key: 'paymentDate',
-              label: 'DATE PAIEMENT',
+              label: t('mcz.paymentDate'),
               render: (_, prestataire) => {
                 const date = getPaymentDate(prestataire);
                 return (

@@ -12,6 +12,7 @@ import AlertModal from '../../../components/Modal/AlertModal';
 import DataTable, { Column } from '../../../components/DataTable';
 import { exportData, ExportColumn, ExportRow } from '../../../utils/export';
 import * as XLSX from 'xlsx';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface GeographicOption {
   id: string;
@@ -20,6 +21,7 @@ interface GeographicOption {
 
 export default function PartnerPage() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [prestataires, setPrestataires] = useState<PrestataireForPartner[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -255,7 +257,7 @@ export default function PartnerPage() {
       setAvailableCategories(Array.from(categories).sort());
     } catch (error: any) {
       console.error('Erreur lors du chargement des prestataires:', error);
-      showAlert('Erreur', 'Impossible de charger les prestataires approuvés', 'error');
+      showAlert(t('common.error'), t('partner.errorLoading'), 'error');
       setPrestataires([]);
     } finally {
       setLoading(false);
@@ -378,7 +380,7 @@ export default function PartnerPage() {
       exportColumns,
       filename,
       tableElement as HTMLElement | undefined,
-      'Prestataires Approuvés'
+      t('partner.title')
     );
   };
 
@@ -1084,12 +1086,12 @@ export default function PartnerPage() {
   const columns: Column[] = [
     {
       key: 'prestataireId',
-      label: 'ID Prestataire',
+      label: t('common.id'),
       sortable: true,
     },
     {
       key: 'nom',
-      label: 'Nom',
+      label: t('common.name'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         // Chercher dans plusieurs emplacements possibles (comme dans MCZ page)
@@ -1128,7 +1130,7 @@ export default function PartnerPage() {
     },
     {
       key: 'telephone',
-      label: 'Téléphone',
+      label: t('common.phone'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         // Chercher dans plusieurs emplacements possibles (comme dans MCZ page)
@@ -1162,7 +1164,7 @@ export default function PartnerPage() {
     },
     {
       key: 'categorie',
-      label: 'Rôle/Catégorie',
+      label: t('common.role'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         const categorie = prestataire.categorie || prestataire.role || prestataire.campaign_role || prestataire.campaign_role_i_f || 'N/A';
@@ -1180,7 +1182,7 @@ export default function PartnerPage() {
     },
     {
       key: 'amountToPay',
-      label: 'Montant à payer',
+      label: t('partner.amountToPay'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         // Montant calculé (pas le montant payé)
@@ -1201,27 +1203,38 @@ export default function PartnerPage() {
     },
     {
       key: 'validationStatus',
-      label: 'Statut Validation',
+      label: t('partner.validationStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => {
         const status = prestataire.status || 'ENREGISTRE';
-        const statusMap: Record<string, { label: string; color: string }> = {
-          'ENREGISTRE': { label: 'Enregistré', color: 'bg-gray-100 text-gray-800' },
-          'VALIDE_PAR_IT': { label: 'Validé par IT', color: 'bg-blue-100 text-blue-800' },
-          'APPROUVE_PAR_MCZ': { label: 'Approuvé par MCZ', color: 'bg-green-100 text-green-800' },
-          'REJETE_PAR_MCZ': { label: 'Rejeté par MCZ', color: 'bg-red-100 text-red-800' },
-          'EN_ATTENTE_PAR_MCZ': { label: 'En attente MCZ', color: 'bg-yellow-100 text-yellow-800' },
-        };
-        const statusInfo = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+        let label = status;
+        let color = 'bg-gray-100 text-gray-800';
+        
+        if (status === 'ENREGISTRE') {
+          label = t('status.registered');
+        } else if (status === 'VALIDE_PAR_IT') {
+          label = t('status.validatedByIT');
+          color = 'bg-blue-100 text-blue-800';
+        } else if (status === 'APPROUVE_PAR_MCZ') {
+          label = t('status.approvedByMCZ');
+          color = 'bg-green-100 text-green-800';
+        } else if (status === 'REJETE_PAR_MCZ') {
+          label = t('status.rejectedByMCZ');
+          color = 'bg-red-100 text-red-800';
+        } else if (status === 'EN_ATTENTE_PAR_MCZ') {
+          label = t('status.pendingMCZ');
+          color = 'bg-yellow-100 text-yellow-800';
+        }
+        
         return (
-          <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-            {statusInfo.label}
+          <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+            {label}
           </span>
         );
       },
     },
     {
       key: 'validationDate',
-      label: 'Date Validation IT',
+      label: t('partner.validationDate'),
       render: (value: any, prestataire: PrestataireForPartner) => {
         const rawData = prestataire.raw_data || {};
         const validationDate = prestataire.validationDate || 
@@ -1235,22 +1248,28 @@ export default function PartnerPage() {
     },
     {
       key: 'kycStatus',
-      label: 'Statut KYC',
+      label: t('partner.kycStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => {
         const kycStatus = prestataire.kycStatus || prestataire.kyc_status;
-        if (!kycStatus) return <span className="text-gray-500">Non vérifié</span>;
+        if (!kycStatus) return <span className="text-gray-500">{t('partner.notVerified')}</span>;
         
-        const statusMap: Record<string, { label: string; color: string }> = {
-          'CORRECT': { label: 'Correct', color: 'bg-green-100 text-green-800' },
-          'INCORRECT': { label: 'Incorrect', color: 'bg-red-100 text-red-800' },
-          'SANS_COMPTE': { label: 'Sans compte', color: 'bg-yellow-100 text-yellow-800' },
-        };
+        let label = kycStatus;
+        let color = 'bg-gray-100 text-gray-800';
         
-        const statusInfo = statusMap[kycStatus] || { label: kycStatus, color: 'bg-gray-100 text-gray-800' };
+        if (kycStatus === 'CORRECT') {
+          label = t('partner.correct');
+          color = 'bg-green-100 text-green-800';
+        } else if (kycStatus === 'INCORRECT') {
+          label = t('partner.incorrect');
+          color = 'bg-red-100 text-red-800';
+        } else if (kycStatus === 'SANS_COMPTE') {
+          label = t('partner.noAccount');
+          color = 'bg-yellow-100 text-yellow-800';
+        }
         
         return (
-          <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-            {statusInfo.label}
+          <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+            {label}
           </span>
         );
       },
@@ -1312,10 +1331,10 @@ export default function PartnerPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Interface Partenaire - Prestataires Approuvés
+          {t('partner.title')}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Gestion des prestataires approuvés et des paiements
+          {t('partner.subtitle')}
         </p>
       </div>
 
@@ -1480,7 +1499,7 @@ export default function PartnerPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Exporter
+                  {t('partner.export')}
                 </button>
                 
                 {showExportMenu && (

@@ -4,66 +4,67 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Role } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface NavItem {
-  name: string;
+  translationKey: string;
   href: string;
   icon: string;
   roles?: Role[];
 }
 
 const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { translationKey: 'navigation.dashboard', href: '/dashboard', icon: '📊' },
   {
-    name: 'Formulaires',
+    translationKey: 'navigation.forms',
     href: '/dashboard/forms',
     icon: '📝',
     roles: [Role.SUPERADMIN],
   },
   {
-    name: 'Campagnes',
+    translationKey: 'navigation.campaigns',
     href: '/dashboard/campaigns',
     icon: '🎯',
     roles: [Role.SUPERADMIN],
   },
   {
-    name: 'Utilisateurs',
+    translationKey: 'navigation.users',
     href: '/dashboard/users',
     icon: '👥',
     roles: [Role.SUPERADMIN],
   },
   {
-    name: 'Approbations MCZ',
+    translationKey: 'navigation.mczApprovals',
     href: '/dashboard/mcz',
     icon: '✅',
     roles: [Role.MCZ],
   },
   {
-    name: 'Vue Province',
+    translationKey: 'navigation.provinceView',
     href: '/dashboard/province',
     icon: '🏛️',
     roles: [Role.DPS],
   },
   {
-    name: 'Prestataires Approuvés',
+    translationKey: 'navigation.approvedProviders',
     href: '/dashboard/partner',
     icon: '💰',
     roles: [Role.PARTNER],
   },
   {
-    name: 'Vérification KYC',
+    translationKey: 'navigation.kycVerification',
     href: '/dashboard/partner/kyc',
     icon: '🔍',
     roles: [Role.PARTNER],
   },
   {
-    name: 'Monitoring National',
+    translationKey: 'navigation.nationalMonitoring',
     href: '/dashboard/national',
     icon: '🌍',
     roles: [Role.NATIONAL, Role.SUPERADMIN],
   },
   {
-    name: 'Statistiques',
+    translationKey: 'navigation.statistics',
     href: '/dashboard/stats',
     icon: '📈',
   },
@@ -72,6 +73,7 @@ const navigation: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const { t } = useTranslation();
 
   const filteredNavigation = navigation.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role))
@@ -89,7 +91,7 @@ export default function Sidebar() {
               const isActive = pathname === item.href;
               return (
                 <Link
-                  key={item.name}
+                  key={item.translationKey}
                   href={item.href}
                   className={`${
                     isActive
@@ -98,7 +100,7 @@ export default function Sidebar() {
                   } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                 >
                   <span className="mr-3">{item.icon}</span>
-                  {item.name}
+                  {t(item.translationKey)}
                 </Link>
               );
             })}
