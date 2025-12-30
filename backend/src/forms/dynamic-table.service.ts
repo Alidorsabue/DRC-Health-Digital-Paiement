@@ -2096,23 +2096,92 @@ export class DynamicTableService {
       throw new Error(`La table ${tableName} n'existe pas. Le formulaire doit être publié d'abord.`);
     }
 
-    // Récupérer la dernière validation ou l'enregistrement original avec recherche améliorée
-    let baseRecord = await this.findPrestataireForKyc(formId, prestataireId, telephone);
+    console.log(`[updateKycInTable] Début mise à jour KYC pour prestataire: ${prestataireId}, statut: ${kycStatus}, téléphone: ${telephone || 'non fourni'}`);
+
+    // Normaliser l'ID
+    const normalizedId = prestataireId.trim();
     
-    if (!baseRecord) {
-      // Dernière tentative: utiliser la méthode originale
-      baseRecord = await this.getLastValidationOrOriginal(formId, prestataireId);
-      if (!baseRecord) {
-        throw new Error(`Aucun enregistrement trouvé pour le prestataire ${prestataireId}${telephone ? ` (téléphone: ${telephone})` : ''}`);
+    // Trouver TOUS les enregistrements du prestataire (pas seulement un)
+    // Un prestataire peut avoir plusieurs enregistrements : l'original + les validations
+    const idVariations = [
+      normalizedId,
+      normalizedId.toUpperCase(),
+      normalizedId.toLowerCase(),
+      normalizedId.replace(/\s+/g, ''),
+      normalizedId.replace(/\s+/g, '-'),
+    ];
+
+    let allRecords: any[] = [];
+    
+    // Chercher tous les enregistrements avec ces variations d'ID
+    for (const idVar of idVariations) {
+      const records = await this.dataSource.query(
+        `SELECT * FROM "${tableName}" 
+         WHERE (id = $1 OR prestataire_id = $1)
+         ORDER BY validation_sequence DESC NULLS LAST, created_at ASC`,
+        [idVar],
+      );
+      
+      if (records.length > 0) {
+        console.log(`[updateKycInTable] Trouvé ${records.length} enregistrement(s) avec ID: ${idVar}`);
+        allRecords = records;
+        break; // Utiliser la première variation qui trouve des résultats
       }
     }
 
-    // Vérifier si le numéro de téléphone a changé
-    const existingTelephone = baseRecord.telephone || baseRecord.raw_data?.telephone;
-    const telephoneChanged = telephone && existingTelephone && telephone !== existingTelephone;
+    // Si pas trouvé par ID, essayer par téléphone
+    if (allRecords.length === 0 && telephone) {
+      const normalizedPhone = telephone.trim().replace(/\s+/g, '').replace(/[^\d+]/g, '');
+      const phoneVariations = [
+        normalizedPhone,
+        telephone.trim(),
+        telephone.trim().replace(/\s+/g, ''),
+        telephone.trim().replace(/\D/g, ''),
+      ];
 
-    // Note: Le statut KYC peut être mis à jour même si le numéro ne change pas
-    // (par exemple, lorsque le partenaire vérifie le KYC et importe les résultats)
+      for (const phoneVar of phoneVariations) {
+        if (!phoneVar) continue;
+        
+        const phoneRecords = await this.dataSource.query(
+          `SELECT * FROM "${tableName}" 
+           WHERE (
+             telephone = $1 
+             OR telephone = $2
+             OR raw_data->>'telephone' = $1
+             OR raw_data->>'telephone' = $2
+             OR raw_data->>'num_phone' = $1
+             OR raw_data->>'num_phone' = $2
+             OR raw_data->>'confirm_phone' = $1
+             OR raw_data->>'confirm_phone' = $2
+           )
+           ORDER BY validation_sequence DESC NULLS LAST, created_at ASC`,
+          [phoneVar, normalizedPhone],
+        );
+
+        if (phoneRecords.length > 0) {
+          console.log(`[updateKycInTable] Trouvé ${phoneRecords.length} enregistrement(s) avec téléphone: ${phoneVar}`);
+          allRecords = phoneRecords;
+          break;
+        }
+      }
+    }
+
+    // Si toujours pas trouvé, utiliser la méthode de recherche améliorée
+    if (allRecords.length === 0) {
+      const baseRecord = await this.findPrestataireForKyc(formId, prestataireId, telephone);
+      if (baseRecord) {
+        console.log(`[updateKycInTable] Trouvé 1 enregistrement via findPrestataireForKyc`);
+        allRecords = [baseRecord];
+      }
+    }
+
+    if (allRecords.length === 0) {
+      const errorMsg = `Aucun enregistrement trouvé pour le prestataire ${prestataireId}${telephone ? ` (téléphone: ${telephone})` : ''}`;
+      console.error(`[updateKycInTable] ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    console.log(`[updateKycInTable] ${allRecords.length} enregistrement(s) trouvé(s) pour le prestataire ${prestataireId}`);
 
     // Récupérer les colonnes existantes
     const existingColumns = await this.dataSource.query(
@@ -2127,27 +2196,49 @@ export class DynamicTableService {
       existingColumns.map((col: any) => col.column_name.toLowerCase()),
     );
 
+    // Vérifier que les colonnes KYC existent
+    if (!existingColumnNames.has('kyc_status')) {
+      console.warn(`[updateKycInTable] Colonne kyc_status n'existe pas, création...`);
+      try {
+        await this.dataSource.query(
+          `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(50)`,
+        );
+        existingColumnNames.add('kyc_status');
+        console.log(`[updateKycInTable] Colonne kyc_status créée`);
+      } catch (error: any) {
+        console.error(`[updateKycInTable] Erreur lors de la création de kyc_status:`, error.message);
+      }
+    }
+
+    if (!existingColumnNames.has('kyc_date')) {
+      try {
+        await this.dataSource.query(
+          `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS kyc_date TIMESTAMP`,
+        );
+        existingColumnNames.add('kyc_date');
+        console.log(`[updateKycInTable] Colonne kyc_date créée`);
+      } catch (error: any) {
+        console.error(`[updateKycInTable] Erreur lors de la création de kyc_date:`, error.message);
+      }
+    }
+
     // Préparer les mises à jour
     const updates: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
-    // Mettre à jour kyc_status (toujours, car c'est une vérification manuelle par le partenaire)
-    if (existingColumnNames.has('kyc_status')) {
-      updates.push(`kyc_status = $${paramIndex}`);
-      values.push(kycStatus);
-      paramIndex++;
-    }
+    // Mettre à jour kyc_status (toujours)
+    updates.push(`kyc_status = $${paramIndex}`);
+    values.push(kycStatus);
+    paramIndex++;
 
-    // Mettre à jour kyc_date (date de vérification KYC)
-    if (existingColumnNames.has('kyc_date')) {
-      updates.push(`kyc_date = $${paramIndex}`);
-      values.push(new Date().toISOString());
-      paramIndex++;
-    }
+    // Mettre à jour kyc_date
+    updates.push(`kyc_date = $${paramIndex}`);
+    values.push(new Date().toISOString());
+    paramIndex++;
     
-    // Si le téléphone est fourni et a changé, le mettre à jour
-    if (telephone && telephoneChanged && existingColumnNames.has('telephone')) {
+    // Si le téléphone est fourni, le mettre à jour
+    if (telephone && existingColumnNames.has('telephone')) {
       updates.push(`telephone = $${paramIndex}`);
       values.push(telephone);
       paramIndex++;
@@ -2156,21 +2247,42 @@ export class DynamicTableService {
     // Toujours mettre à jour updated_at
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-    if (updates.length === 0) {
-      throw new Error(`Aucune colonne KYC trouvée dans la table ${tableName}`);
+    // Mettre à jour TOUS les enregistrements trouvés
+    let updatedCount = 0;
+    for (const record of allRecords) {
+      const recordId = record.submission_id || record.id;
+      const recordValues = [...values];
+      recordValues.push(recordId);
+
+      // Utiliser submission_id s'il existe, sinon utiliser id
+      const whereClause = record.submission_id 
+        ? `submission_id = $${paramIndex + 1}`
+        : `id = $${paramIndex + 1} AND (submission_id IS NULL OR submission_id = '')`;
+
+      const updateSQL = `
+        UPDATE "${tableName}" 
+        SET ${updates.join(', ')}
+        WHERE ${whereClause}
+      `;
+
+      try {
+        const result = await this.dataSource.query(updateSQL, recordValues);
+        const rowsAffected = result[1] || 0; // Nombre de lignes affectées
+        updatedCount++;
+        console.log(`[updateKycInTable] ✓ Enregistrement ${recordId} mis à jour (${rowsAffected} ligne(s) affectée(s), prestataire: ${record.id || record.prestataire_id})`);
+      } catch (error: any) {
+        console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de l'enregistrement ${recordId}:`, error.message);
+        console.error(`[updateKycInTable] SQL: ${updateSQL}`);
+        console.error(`[updateKycInTable] Values:`, recordValues);
+        // Continuer avec les autres enregistrements même si un échoue
+      }
     }
 
-    // Utiliser submission_id pour identifier la ligne à mettre à jour
-    values.push(baseRecord.submission_id);
+    if (updatedCount === 0) {
+      throw new Error(`Aucun enregistrement n'a pu être mis à jour pour le prestataire ${prestataireId}`);
+    }
 
-    const updateSQL = `
-      UPDATE "${tableName}" 
-      SET ${updates.join(', ')}
-      WHERE submission_id = $${paramIndex}
-    `;
-
-    await this.dataSource.query(updateSQL, values);
-    console.log(` Enregistrement KYC mis à jour pour prestataire ${prestataireId}`);
+    console.log(`[updateKycInTable] ✓ ${updatedCount}/${allRecords.length} enregistrement(s) mis à jour avec succès pour prestataire ${prestataireId}`);
   }
 
   /**

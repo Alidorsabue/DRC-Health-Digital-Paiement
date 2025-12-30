@@ -397,27 +397,52 @@ export class PartnersService {
     const allPrestataires = await this.prestatairesService.findAll(filters);
     console.log(`[getApprovedPrestataires] ${allPrestataires.length} prestataires trouvés dans la table prestataires`);
 
-    return allPrestataires.map((p: any) => ({
-      id: p.id,
-      prestataireId: p.prestataireId || p.id,
-      status: p.status,
-      presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days,
-      paymentAmount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount,
-      amountToPay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay,
-      amountCurrency: p.amountCurrency || p.amount_currency || p.enregistrementData?.amount_currency || p.enregistrementData?.amountCurrency || 'USD',
-      categorie: p.categorie || p.enregistrementData?.categorie || 
-                p.enregistrementData?.campaign_role_i_f || 
-                p.enregistrementData?.campaign_role ||
-                p.enregistrementData?.role,
-      provinceId: p.provinceId,
-      zoneId: p.zoneId,
-      aireId: p.aireId,
-      nom: p.nom,
-      prenom: p.prenom,
-      postnom: p.postnom,
-      telephone: p.telephone,
-      ...p,
-    }));
+    const mappedPrestataires = allPrestataires.map((p: any) => {
+      const categorie = p.categorie || p.enregistrementData?.categorie || 
+                       p.enregistrementData?.campaign_role_i_f || 
+                       p.enregistrementData?.campaign_role ||
+                       p.enregistrementData?.role;
+      
+      // Log pour les premiers prestataires
+      if (allPrestataires.indexOf(p) < 3) {
+        console.log(`[getApprovedPrestataires] Prestataire ${p.id}:`, {
+          categorie: p.categorie,
+          role: p.role,
+          campaign_role_i_f: p.campaign_role_i_f,
+          campaign_role: p.campaign_role,
+          enregistrementData: p.enregistrementData,
+          categorieExtrait: categorie,
+          presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days,
+        });
+      }
+      
+      return {
+        id: p.id,
+        prestataireId: p.prestataireId || p.id,
+        status: p.status,
+        presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days,
+        paymentAmount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount,
+        amountToPay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay,
+        amountCurrency: p.amountCurrency || p.amount_currency || p.enregistrementData?.amount_currency || p.enregistrementData?.amountCurrency || 'USD',
+        categorie: categorie,
+        role: p.role || p.enregistrementData?.role,
+        campaign_role_i_f: p.campaign_role_i_f || p.enregistrementData?.campaign_role_i_f,
+        campaign_role: p.campaign_role || p.enregistrementData?.campaign_role,
+        role_prestataire: p.role_prestataire || p.enregistrementData?.role_prestataire,
+        provinceId: p.provinceId,
+        zoneId: p.zoneId,
+        aireId: p.aireId,
+        nom: p.nom,
+        prenom: p.prenom,
+        postnom: p.postnom,
+        telephone: p.telephone,
+        enregistrementData: p.enregistrementData,
+        ...p,
+      };
+    });
+    
+    console.log(`[getApprovedPrestataires] ${mappedPrestataires.length} prestataires mappés`);
+    return mappedPrestataires;
   }
 
   /**
@@ -599,19 +624,26 @@ export class PartnersService {
 
     console.log(`[importKycReport] Début de l'import de ${kycResults.length} résultats KYC pour formId: ${targetFormId}`);
 
-    for (const kycResult of kycResults) {
+    for (let i = 0; i < kycResults.length; i++) {
+      const kycResult = kycResults[i];
+      console.log(`[importKycReport] Traitement ${i + 1}/${kycResults.length}: prestataireId=${kycResult.prestataireId}, status=${kycResult.status}, telephone=${kycResult.telephone || 'non fourni'}`);
+      
       try {
         // Normaliser l'ID du prestataire
         const normalizedId = (kycResult.prestataireId || '').trim();
         if (!normalizedId) {
+          const errorMsg = 'ID du prestataire vide ou invalide';
+          console.error(`[importKycReport] ✗ ${errorMsg} pour: ${kycResult.prestataireId}`);
           errors.push({
             prestataireId: kycResult.prestataireId,
-            error: 'ID du prestataire vide ou invalide',
+            error: errorMsg,
             telephone: kycResult.telephone,
           });
           continue;
         }
 
+        console.log(`[importKycReport] Appel updateKycStatus pour prestataire: ${normalizedId}`);
+        
         // Mettre à jour le statut KYC dans la table du formulaire
         await this.prestatairesService.updateKycStatus(
           normalizedId,
@@ -621,10 +653,11 @@ export class PartnersService {
         );
 
         success++;
-        console.log(`[importKycReport] ✓ Prestataire ${normalizedId} mis à jour avec statut KYC: ${kycResult.status}`);
+        console.log(`[importKycReport] ✓ [${i + 1}/${kycResults.length}] Prestataire ${normalizedId} mis à jour avec statut KYC: ${kycResult.status}`);
       } catch (error: any) {
         const errorMessage = error.message || 'Erreur inconnue';
-        console.error(`[importKycReport] ✗ Erreur pour prestataire ${kycResult.prestataireId}: ${errorMessage}`);
+        console.error(`[importKycReport] ✗ [${i + 1}/${kycResults.length}] Erreur pour prestataire ${kycResult.prestataireId}: ${errorMessage}`);
+        console.error(`[importKycReport] Stack trace:`, error.stack);
         errors.push({
           prestataireId: kycResult.prestataireId,
           error: errorMessage,

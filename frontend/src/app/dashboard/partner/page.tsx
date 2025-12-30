@@ -183,6 +183,44 @@ export default function PartnerPage() {
         selectedAireId,
         dataSample: data.length > 0 ? data[0] : null,
       });
+      
+      // Log détaillé pour les premiers prestataires
+      if (data.length > 0) {
+        console.log('[loadPrestataires] ===== ANALYSE DES PRESTATAIRES =====');
+        data.slice(0, 5).forEach((p, index) => {
+          console.log(`[loadPrestataires] Prestataire ${index + 1}:`, {
+            id: p.id,
+            prestataireId: p.prestataireId,
+            nom: p.nom,
+            prenom: p.prenom,
+            categorie: p.categorie,
+            role: p.role,
+            campaign_role_i_f: p.campaign_role_i_f,
+            campaign_role: p.campaign_role,
+            role_prestataire: p.role_prestataire,
+            presenceDays: p.presenceDays,
+            presence_days: p.presence_days,
+            enregistrementData: p.enregistrementData,
+            allKeys: Object.keys(p),
+          });
+        });
+        
+        // Statistiques
+        const avecJours = data.filter(p => (p.presenceDays || p.presence_days || 0) > 0).length;
+        const avecCategorie = data.filter(p => p.categorie).length;
+        const avecRole = data.filter(p => p.role).length;
+        const avecCampaignRole = data.filter(p => p.campaign_role_i_f || p.campaign_role).length;
+        const avecEnregistrementData = data.filter(p => p.enregistrementData).length;
+        
+        console.log('[loadPrestataires] Statistiques:', {
+          total: data.length,
+          avecJours,
+          avecCategorie,
+          avecRole,
+          avecCampaignRole,
+          avecEnregistrementData,
+        });
+      }
 
       // Filtrer par géographie côté client si nécessaire (sécurité supplémentaire)
       if (selectedProvinceId) {
@@ -372,7 +410,7 @@ export default function PartnerPage() {
   }, []);
 
   // Fonction pour extraire le rôle d'un prestataire (chercher dans tous les champs possibles)
-  const extractRole = useCallback((p: PrestataireForPartner): string => {
+  const extractRole = useCallback((p: PrestataireForPartner, debug: boolean = false): string => {
     // Chercher dans l'ordre de priorité (comme le backend)
     const role = 
       p.categorie ||
@@ -389,15 +427,33 @@ export default function PartnerPage() {
       )) ||
       '';
     
+    if (debug) {
+      console.log(`[extractRole] Prestataire ${p.prestataireId || p.id}:`, {
+        categorie: p.categorie,
+        role: p.role,
+        campaign_role_i_f: p.campaign_role_i_f,
+        campaign_role: p.campaign_role,
+        role_prestataire: p.role_prestataire,
+        enregistrementData: p.enregistrementData,
+        roleTrouve: role,
+        roleNormalise: normalizeText(role),
+      });
+    }
+    
     return normalizeText(role);
   }, [normalizeText]);
 
   const handleCalculateAmount = async () => {
     setCalculating(true);
     try {
-
+      console.log('[handleCalculateAmount] ===== DÉBUT DU CALCUL =====');
+      console.log('[handleCalculateAmount] Nombre de prestataires:', prestataires.length);
+      console.log('[handleCalculateAmount] Règles définies:', rateRules);
+      
       // Valider que tous les rôles ont un tarif
       const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
+      console.log('[handleCalculateAmount] Règles valides:', validRules);
+      
       if (validRules.length === 0) {
         showAlert('Erreur', 'Veuillez définir au moins une règle de tarification avec un rôle, une devise et un montant unitaire', 'error');
         setCalculating(false);
@@ -415,21 +471,54 @@ export default function PartnerPage() {
           currency: rule.currency,
           originalRole: rule.role 
         });
+        console.log(`[handleCalculateAmount] Règle ajoutée au map: "${rule.role}" -> "${normalizedRole}" (normalisé)`);
       });
+      
+      console.log('[handleCalculateAmount] RateMap créé avec', rateMap.size, 'entrées:', Array.from(rateMap.entries()));
 
 
       // Calculer le montant pour chaque prestataire selon son rôle
       const amounts: Array<{ prestataireId: string; amount: number; currency: string }> = [];
+      let prestatairesAvecJours = 0;
+      let prestatairesSansRole = 0;
+      let prestatairesSansCorrespondance = 0;
       
-      prestataires.forEach((p) => {
+      prestataires.forEach((p, index) => {
         const days = p.presenceDays || p.presence_days || 0;
+        
+        // Log pour les premiers prestataires
+        if (index < 5) {
+          console.log(`[handleCalculateAmount] Prestataire ${index + 1}/${prestataires.length}:`, {
+            id: p.prestataireId || p.id,
+            nom: p.nom || p.prenom,
+            days,
+            presenceDays: p.presenceDays,
+            presence_days: p.presence_days,
+            categorie: p.categorie,
+            role: p.role,
+            campaign_role_i_f: p.campaign_role_i_f,
+            campaign_role: p.campaign_role,
+            enregistrementData: p.enregistrementData,
+          });
+        }
+        
         if (days > 0) {
-          const prestataireRole = extractRole(p);
+          prestatairesAvecJours++;
+          const prestataireRole = extractRole(p, index < 5); // Debug pour les 5 premiers
           
           if (!prestataireRole) {
-            console.warn(`[handleCalculateAmount] Prestataire ${p.prestataireId || p.id} n'a pas de rôle défini`);
+            prestatairesSansRole++;
+            console.warn(`[handleCalculateAmount] Prestataire ${p.prestataireId || p.id} n'a pas de rôle défini. Données:`, {
+              categorie: p.categorie,
+              role: p.role,
+              campaign_role_i_f: p.campaign_role_i_f,
+              campaign_role: p.campaign_role,
+              enregistrementData: p.enregistrementData,
+            });
             return;
           }
+          
+          console.log(`[handleCalculateAmount] Prestataire ${p.prestataireId || p.id}: rôle extrait = "${prestataireRole}" (normalisé)`);
           
           // Chercher le tarif correspondant au rôle du prestataire
           let rateInfo: { rate: number; currency: string; originalRole?: string } | undefined = undefined;
@@ -437,15 +526,20 @@ export default function PartnerPage() {
           // Recherche exacte d'abord
           if (rateMap.has(prestataireRole)) {
             rateInfo = rateMap.get(prestataireRole)!;
-            console.log(`[handleCalculateAmount] Correspondance exacte trouvée: "${prestataireRole}" (règle: "${rateInfo.originalRole}")`);
+            console.log(`[handleCalculateAmount] ✓ Correspondance exacte trouvée: "${prestataireRole}" (règle: "${rateInfo.originalRole}")`);
           } else {
             // Recherche partielle (si le rôle contient un des mots-clés)
             const rateEntries = Array.from(rateMap.entries());
+            console.log(`[handleCalculateAmount] Recherche partielle pour "${prestataireRole}" parmi ${rateEntries.length} règles...`);
             for (const [roleKey, info] of rateEntries) {
               // Comparaison bidirectionnelle normalisée
-              if (prestataireRole.includes(roleKey) || roleKey.includes(prestataireRole)) {
+              const match1 = prestataireRole.includes(roleKey);
+              const match2 = roleKey.includes(prestataireRole);
+              console.log(`[handleCalculateAmount]   Comparaison: "${prestataireRole}" vs "${roleKey}" (règle: "${info.originalRole}") -> includes1=${match1}, includes2=${match2}`);
+              
+              if (match1 || match2) {
                 rateInfo = info;
-                console.log(`[handleCalculateAmount] Correspondance partielle trouvée: "${prestataireRole}" correspond à "${info.originalRole || roleKey}"`);
+                console.log(`[handleCalculateAmount] ✓ Correspondance partielle trouvée: "${prestataireRole}" correspond à "${info.originalRole || roleKey}"`);
                 break;
               }
             }
@@ -458,12 +552,21 @@ export default function PartnerPage() {
               amount: calculatedAmount,
               currency: rateInfo.currency,
             });
-            console.log(`[handleCalculateAmount] Montant calculé pour ${p.prestataireId || p.id} (rôle: "${prestataireRole}"): ${days} jours × ${rateInfo.rate} = ${calculatedAmount} ${rateInfo.currency}`);
+            console.log(`[handleCalculateAmount] ✓ Montant calculé pour ${p.prestataireId || p.id} (rôle: "${prestataireRole}"): ${days} jours × ${rateInfo.rate} = ${calculatedAmount} ${rateInfo.currency}`);
           } else {
-            console.warn(`[handleCalculateAmount] Aucun tarif trouvé pour le prestataire ${p.prestataireId || p.id} avec le rôle "${prestataireRole}"`);
+            prestatairesSansCorrespondance++;
+            console.warn(`[handleCalculateAmount] ✗ Aucun tarif trouvé pour le prestataire ${p.prestataireId || p.id} avec le rôle "${prestataireRole}"`);
+            console.warn(`[handleCalculateAmount]   Rôles disponibles dans les règles:`, Array.from(rateMap.keys()));
           }
         }
       });
+      
+      console.log('[handleCalculateAmount] ===== RÉSUMÉ =====');
+      console.log(`[handleCalculateAmount] Total prestataires: ${prestataires.length}`);
+      console.log(`[handleCalculateAmount] Prestataires avec jours > 0: ${prestatairesAvecJours}`);
+      console.log(`[handleCalculateAmount] Prestataires sans rôle: ${prestatairesSansRole}`);
+      console.log(`[handleCalculateAmount] Prestataires sans correspondance: ${prestatairesSansCorrespondance}`);
+      console.log(`[handleCalculateAmount] Montants calculés: ${amounts.length}`);
 
       if (amounts.length === 0) {
         showAlert('Avertissement', 'Aucun prestataire correspondant aux rôles définis avec des jours de présence trouvé', 'warning');
@@ -1548,23 +1651,53 @@ export default function PartnerPage() {
 
             <div className="mb-6">
               <h3 className="font-medium mb-3" style={{ color: '#111827' }}>
-                Aperçu des calculs ({prestataires.filter(p => {
-                  const days = p.presenceDays || p.presence_days || 0;
-                  if (days === 0) return false;
-                  
-                  const prestataireRole = extractRole(p);
-                  if (!prestataireRole) return false;
-                  
-                  // Créer un map des règles normalisées
+                Aperçu des calculs ({(() => {
+                  // Log pour déboguer l'aperçu
                   const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
-                  return validRules.some(rule => {
-                    const normalizedRuleRole = normalizeText(rule.role);
-                    // Comparaison bidirectionnelle normalisée
-                    return prestataireRole === normalizedRuleRole || 
-                           prestataireRole.includes(normalizedRuleRole) || 
-                           normalizedRuleRole.includes(prestataireRole);
+                  console.log('[Aperçu] Règles valides:', validRules);
+                  console.log('[Aperçu] Nombre de prestataires:', prestataires.length);
+                  
+                  const matchingPrestataires = prestataires.filter((p, index) => {
+                    const days = p.presenceDays || p.presence_days || 0;
+                    if (days === 0) {
+                      if (index < 3) console.log(`[Aperçu] Prestataire ${p.prestataireId || p.id}: pas de jours (${days})`);
+                      return false;
+                    }
+                    
+                    const prestataireRole = extractRole(p, index < 3);
+                    if (!prestataireRole) {
+                      if (index < 3) console.log(`[Aperçu] Prestataire ${p.prestataireId || p.id}: pas de rôle extrait`);
+                      return false;
+                    }
+                    
+                    if (index < 3) {
+                      console.log(`[Aperçu] Prestataire ${p.prestataireId || p.id}: rôle="${prestataireRole}", jours=${days}`);
+                    }
+                    
+                    const matches = validRules.some(rule => {
+                      const normalizedRuleRole = normalizeText(rule.role);
+                      const exactMatch = prestataireRole === normalizedRuleRole;
+                      const partialMatch1 = prestataireRole.includes(normalizedRuleRole);
+                      const partialMatch2 = normalizedRuleRole.includes(prestataireRole);
+                      const matches = exactMatch || partialMatch1 || partialMatch2;
+                      
+                      if (index < 3 && matches) {
+                        console.log(`[Aperçu] ✓ Correspondance trouvée: "${prestataireRole}" vs "${normalizedRuleRole}" (règle: "${rule.role}")`);
+                      }
+                      
+                      return matches;
+                    });
+                    
+                    if (index < 3 && !matches) {
+                      console.log(`[Aperçu] ✗ Aucune correspondance pour "${prestataireRole}". Règles disponibles:`, validRules.map(r => normalizeText(r.role)));
+                    }
+                    
+                    return matches;
                   });
-                }).length} prestataires concernés)
+                  
+                  console.log(`[Aperçu] Prestataires correspondants: ${matchingPrestataires.length}`);
+                  return matchingPrestataires.length;
+                })()} prestataires concernés)
               </h3>
               <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md p-2">
                 <table className="min-w-full text-sm">
