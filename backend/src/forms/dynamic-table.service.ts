@@ -2244,6 +2244,7 @@ export class DynamicTableService {
     // Chercher tous les enregistrements avec ces variations d'ID
     // IMPORTANT: Ne pas filtrer par validation_sequence car l'enregistrement original
     // peut avoir été mis à jour avec des informations de validation (première validation)
+    // IMPORTANT: Chercher par id ET prestataire_id pour trouver tous les enregistrements
     for (const idVar of idVariations) {
       const records = await this.dataSource.query(
         `SELECT * FROM "${tableName}" 
@@ -2254,12 +2255,36 @@ export class DynamicTableService {
       
       if (records.length > 0) {
         console.log(`[updateKycInTable] Trouvé ${records.length} enregistrement(s) avec ID: ${idVar}`);
-        // Log pour voir les validation_sequence
+        // Log détaillé pour chaque enregistrement
         records.forEach((r: any, idx: number) => {
-          console.log(`[updateKycInTable]   Enregistrement ${idx + 1}: id=${r.id}, validation_sequence=${r.validation_sequence}, status=${r.status}, presence_days=${r.presence_days}`);
+          console.log(`[updateKycInTable]   Enregistrement ${idx + 1}:`, {
+            id: r.id,
+            submission_id: r.submission_id,
+            prestataire_id: r.prestataire_id,
+            validation_sequence: r.validation_sequence,
+            status: r.status,
+            presence_days: r.presence_days,
+            kyc_status: r.kyc_status,
+          });
         });
         allRecords = records;
         break; // Utiliser la première variation qui trouve des résultats
+      }
+    }
+    
+    // Si toujours pas trouvé, essayer une recherche plus large (sans variations)
+    if (allRecords.length === 0) {
+      console.log(`[updateKycInTable] Aucun enregistrement trouvé avec variations, essai recherche directe...`);
+      const directRecords = await this.dataSource.query(
+        `SELECT * FROM "${tableName}" 
+         WHERE id = $1 OR prestataire_id = $1
+         ORDER BY COALESCE(validation_sequence, 0) ASC, created_at ASC`,
+        [normalizedId],
+      );
+      
+      if (directRecords.length > 0) {
+        console.log(`[updateKycInTable] Trouvé ${directRecords.length} enregistrement(s) avec recherche directe`);
+        allRecords = directRecords;
       }
     }
 
@@ -2381,39 +2406,122 @@ export class DynamicTableService {
     // Toujours mettre à jour updated_at
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-    // Mettre à jour TOUS les enregistrements trouvés
+    // MÉTHODE 1: Mise à jour en une seule requête (plus efficace)
+    // Mettre à jour TOUS les enregistrements du prestataire en une fois en utilisant id
+    // Tous les enregistrements (original + validations) ont le même id
+    const bulkUpdateValues = [...values];
+    bulkUpdateValues.push(normalizedId);
+    
+    const bulkUpdateSQL = `
+      UPDATE "${tableName}" 
+      SET ${updates.join(', ')}
+      WHERE (id = $${paramIndex + 1} OR prestataire_id = $${paramIndex + 1})
+    `;
+
+    console.log(`[updateKycInTable] Tentative de mise à jour en masse pour prestataire ${normalizedId}`);
+    console.log(`[updateKycInTable] SQL (bulk): ${bulkUpdateSQL}`);
+    console.log(`[updateKycInTable] Values (bulk):`, bulkUpdateValues);
+
+    try {
+      const bulkResult = await this.dataSource.query(bulkUpdateSQL, bulkUpdateValues);
+      const bulkRowsAffected = bulkResult[1] || 0;
+      
+      if (bulkRowsAffected > 0) {
+        console.log(`[updateKycInTable] ✅ Mise à jour en masse réussie: ${bulkRowsAffected} ligne(s) mise(s) à jour pour prestataire ${normalizedId}`);
+        
+        // Vérifier que tous les enregistrements ont été mis à jour
+        if (bulkRowsAffected === allRecords.length) {
+          console.log(`[updateKycInTable] ✅ Tous les enregistrements (${allRecords.length}) ont été mis à jour`);
+          return; // Succès complet
+        } else {
+          console.warn(`[updateKycInTable] ⚠️ Mise à jour partielle: ${bulkRowsAffected} lignes mises à jour sur ${allRecords.length} enregistrements trouvés`);
+        }
+      } else {
+        console.warn(`[updateKycInTable] ⚠️ Mise à jour en masse n'a affecté aucune ligne, passage à la méthode individuelle...`);
+      }
+    } catch (error: any) {
+      console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour en masse:`, error.message);
+      console.log(`[updateKycInTable] Passage à la méthode individuelle...`);
+    }
+
+    // MÉTHODE 2: Mise à jour individuelle (fallback si la méthode en masse échoue)
+    // Mettre à jour chaque enregistrement individuellement pour plus de précision
     let updatedCount = 0;
+    const failedRecords: any[] = [];
+    
     for (const record of allRecords) {
-      const recordId = record.submission_id || record.id;
+      const recordId = record.id || record.prestataire_id;
+      const submissionId = record.submission_id;
       const recordValues = [...values];
-      recordValues.push(recordId);
+      
+      // Utiliser submission_id pour identifier de manière unique chaque enregistrement
+      // car c'est la clé unique pour chaque ligne (original et validations)
+      if (submissionId) {
+        recordValues.push(submissionId);
+        const whereClause = `submission_id = $${paramIndex + 1}`;
+        
+        const updateSQL = `
+          UPDATE "${tableName}" 
+          SET ${updates.join(', ')}
+          WHERE ${whereClause}
+        `;
 
-      // Utiliser submission_id s'il existe, sinon utiliser id
-      const whereClause = record.submission_id 
-        ? `submission_id = $${paramIndex + 1}`
-        : `id = $${paramIndex + 1} AND (submission_id IS NULL OR submission_id = '')`;
+        try {
+          const result = await this.dataSource.query(updateSQL, recordValues);
+          const rowsAffected = result[1] || 0;
+          
+          if (rowsAffected > 0) {
+            updatedCount++;
+            console.log(`[updateKycInTable] ✓ Enregistrement ${submissionId} (id: ${recordId}) mis à jour - ${rowsAffected} ligne(s) affectée(s)`);
+          } else {
+            console.warn(`[updateKycInTable] ⚠️ Aucune ligne affectée pour submission_id: ${submissionId}`);
+            failedRecords.push({ submission_id: submissionId, id: recordId, reason: 'Aucune ligne affectée' });
+          }
+        } catch (error: any) {
+          console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de submission_id ${submissionId}:`, error.message);
+          console.error(`[updateKycInTable] SQL: ${updateSQL}`);
+          console.error(`[updateKycInTable] Values:`, recordValues);
+          failedRecords.push({ submission_id: submissionId, id: recordId, error: error.message });
+        }
+      } else {
+        // Si pas de submission_id, utiliser id avec conditions supplémentaires
+        recordValues.push(recordId);
+        const whereClause = `id = $${paramIndex + 1} AND (submission_id IS NULL OR submission_id = '') AND (validation_sequence IS NULL OR validation_sequence = 0)`;
+        
+        const updateSQL = `
+          UPDATE "${tableName}" 
+          SET ${updates.join(', ')}
+          WHERE ${whereClause}
+        `;
 
-      const updateSQL = `
-        UPDATE "${tableName}" 
-        SET ${updates.join(', ')}
-        WHERE ${whereClause}
-      `;
-
-      try {
-        const result = await this.dataSource.query(updateSQL, recordValues);
-        const rowsAffected = result[1] || 0; // Nombre de lignes affectées
-        updatedCount++;
-        console.log(`[updateKycInTable] ✓ Enregistrement ${recordId} mis à jour (${rowsAffected} ligne(s) affectée(s), prestataire: ${record.id || record.prestataire_id})`);
-      } catch (error: any) {
-        console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de l'enregistrement ${recordId}:`, error.message);
-        console.error(`[updateKycInTable] SQL: ${updateSQL}`);
-        console.error(`[updateKycInTable] Values:`, recordValues);
-        // Continuer avec les autres enregistrements même si un échoue
+        try {
+          const result = await this.dataSource.query(updateSQL, recordValues);
+          const rowsAffected = result[1] || 0;
+          
+          if (rowsAffected > 0) {
+            updatedCount++;
+            console.log(`[updateKycInTable] ✓ Enregistrement original (id: ${recordId}, pas de submission_id) mis à jour - ${rowsAffected} ligne(s) affectée(s)`);
+          } else {
+            console.warn(`[updateKycInTable] ⚠️ Aucune ligne affectée pour id: ${recordId} (sans submission_id)`);
+            failedRecords.push({ id: recordId, reason: 'Aucune ligne affectée' });
+          }
+        } catch (error: any) {
+          console.error(`[updateKycInTable] ✗ Erreur lors de la mise à jour de id ${recordId}:`, error.message);
+          console.error(`[updateKycInTable] SQL: ${updateSQL}`);
+          console.error(`[updateKycInTable] Values:`, recordValues);
+          failedRecords.push({ id: recordId, error: error.message });
+        }
       }
     }
 
-    if (updatedCount === 0) {
-      throw new Error(`Aucun enregistrement n'a pu être mis à jour pour le prestataire ${prestataireId}`);
+    if (updatedCount === 0 && allRecords.length > 0) {
+      const errorMsg = `Aucun enregistrement n'a pu être mis à jour pour le prestataire ${prestataireId}. Enregistrements trouvés: ${allRecords.length}, Échecs: ${JSON.stringify(failedRecords)}`;
+      console.error(`[updateKycInTable] ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    if (failedRecords.length > 0) {
+      console.warn(`[updateKycInTable] ⚠️ ${failedRecords.length} enregistrement(s) n'ont pas pu être mis à jour:`, failedRecords);
     }
 
     console.log(`[updateKycInTable] ✓ ${updatedCount}/${allRecords.length} enregistrement(s) mis à jour avec succès pour prestataire ${prestataireId}`);
