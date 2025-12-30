@@ -282,7 +282,10 @@ export class PartnersService {
       try {
         const filters: any = {
           status: PrestataireStatus.APPROUVE_PAR_MCZ,
-          validationSequence: null, // Seulement les enregistrements originaux
+          // IMPORTANT: Récupérer les enregistrements originaux (validation_sequence IS NULL)
+          // Même si l'enregistrement original a été mis à jour avec des informations de validation,
+          // il reste l'enregistrement original (première validation met à jour l'original, ne crée pas de nouvelle ligne)
+          validationSequence: null,
         };
         
         if (campaignId) {

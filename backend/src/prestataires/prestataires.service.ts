@@ -629,7 +629,9 @@ export class PrestatairesService {
       throw new BadRequestException('campaignId est requis pour valider un prestataire');
     }
     
-    // Vérifier si une validation existe déjà pour ce prestataire et cette campagne
+    console.log(`[validatePrestataire] Validation pour prestataire ${id}, campagne ${campaignId}`);
+    
+    // ÉTAPE 1: Vérifier si une validation existe déjà pour ce prestataire et cette campagne
     const existingValidation = await this.dynamicTableService.findValidationByCampaign(
       targetFormId,
       id,
@@ -637,10 +639,11 @@ export class PrestatairesService {
     );
 
     if (existingValidation) {
+      console.log(`[validatePrestataire] Validation existante trouvée pour campagne ${campaignId}, mise à jour...`);
       // Mettre à jour la validation existante pour cette campagne
       await this.dynamicTableService.updateValidationInTable(
         targetFormId,
-        id, // Utiliser l'ID du prestataire (qui est le même)
+        id,
         presenceDays,
         validationDate,
         campaignId,
@@ -659,44 +662,27 @@ export class PrestatairesService {
       }
 
       return data[0];
-    } else {
-      // Créer une nouvelle ligne pour cette nouvelle campagne
-      // insertValidationRecord vérifiera automatiquement si une validation existe déjà
-      try {
-        await this.dynamicTableService.insertValidationRecord(
-          targetFormId,
-          id,
-          campaignId,
-          validationDate,
-          presenceDays,
-        );
-      } catch (error: any) {
-        // Si une validation existe déjà (erreur de duplication), essayer de la mettre à jour
-        if (error.message && error.message.includes('existe déjà')) {
-          // Re-vérifier et mettre à jour la validation existante
-          const existingValidationRetry = await this.dynamicTableService.findValidationByCampaign(
-            targetFormId,
-            id,
-            campaignId,
-          );
-          
-          if (existingValidationRetry) {
-            await this.dynamicTableService.updateValidationInTable(
-              targetFormId,
-              id,
-              presenceDays,
-              validationDate,
-              campaignId,
-            );
-          } else {
-            throw error; // Relancer l'erreur si on ne peut pas la résoudre
-          }
-        } else {
-          throw error; // Relancer les autres erreurs
-        }
-      }
+    }
 
-      // Récupérer le nouvel enregistrement créé pour le retourner
+    // ÉTAPE 2: Vérifier s'il existe un enregistrement original (validation_sequence IS NULL) pour cette campagne
+    const originalRecord = await this.dynamicTableService.getOriginalSubmissionByCampaign(
+      targetFormId,
+      id,
+      campaignId,
+    );
+
+    if (originalRecord) {
+      console.log(`[validatePrestataire] Enregistrement original trouvé pour campagne ${campaignId}, première validation - mise à jour de l'original...`);
+      // PREMIÈRE VALIDATION: Mettre à jour l'enregistrement original
+      await this.dynamicTableService.updateValidationInTable(
+        targetFormId,
+        id,
+        presenceDays,
+        validationDate,
+        campaignId,
+      );
+
+      // Récupérer l'enregistrement mis à jour
       const { data } = await this.dynamicTableService.getSubmissions(
         targetFormId,
         1,
@@ -705,11 +691,61 @@ export class PrestatairesService {
       );
 
       if (!data || data.length === 0) {
-        throw new NotFoundException(`Nouvelle validation non trouvée après création`);
+        throw new NotFoundException(`Enregistrement original non trouvé après mise à jour`);
       }
-    
+
       return data[0];
     }
+
+    // ÉTAPE 3: Aucun enregistrement pour cette campagne, créer une nouvelle ligne
+    console.log(`[validatePrestataire] Aucun enregistrement trouvé pour campagne ${campaignId}, création d'une nouvelle ligne...`);
+    try {
+      await this.dynamicTableService.insertValidationRecord(
+        targetFormId,
+        id,
+        campaignId,
+        validationDate,
+        presenceDays,
+      );
+    } catch (error: any) {
+      // Si une validation existe déjà (erreur de duplication), essayer de la mettre à jour
+      if (error.message && error.message.includes('existe déjà')) {
+        console.log(`[validatePrestataire] Validation détectée après tentative de création, mise à jour...`);
+        const existingValidationRetry = await this.dynamicTableService.findValidationByCampaign(
+          targetFormId,
+          id,
+          campaignId,
+        );
+        
+        if (existingValidationRetry) {
+          await this.dynamicTableService.updateValidationInTable(
+            targetFormId,
+            id,
+            presenceDays,
+            validationDate,
+            campaignId,
+          );
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    // Récupérer le nouvel enregistrement créé pour le retourner
+    const { data } = await this.dynamicTableService.getSubmissions(
+      targetFormId,
+      1,
+      1,
+      { prestataireId: id, campaignId },
+    );
+
+    if (!data || data.length === 0) {
+      throw new NotFoundException(`Nouvelle validation non trouvée après création`);
+    }
+
+    return data[0];
   }
 
   /**

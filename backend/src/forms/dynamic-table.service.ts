@@ -1096,6 +1096,12 @@ export class DynamicTableService {
       throw new Error(`La table ${tableName} n'existe pas. Le formulaire doit être publié d'abord.`);
     }
 
+    if (!campaignId) {
+      throw new Error(`campaignId est requis pour mettre à jour une validation`);
+    }
+
+    console.log(`[updateValidationInTable] Mise à jour validation pour prestataire ${prestataireId}, campagne ${campaignId}, jours: ${presenceDays}`);
+
     // Récupérer les colonnes existantes
     const existingColumns = await this.dataSource.query(
       `SELECT column_name 
@@ -1142,7 +1148,7 @@ export class DynamicTableService {
       paramIndex++;
     }
 
-    // Mettre à jour campaign_id si fourni
+    // Mettre à jour campaign_id si fourni (pour s'assurer qu'il est défini)
     if (campaignId && existingColumnNames.has('campaign_id')) {
       updates.push(`campaign_id = $${paramIndex}`);
       values.push(campaignId);
@@ -1156,11 +1162,8 @@ export class DynamicTableService {
       throw new Error(`Aucune colonne de validation trouvée dans la table ${tableName}`);
     }
 
-    if (!campaignId) {
-      throw new Error(`campaignId est requis pour mettre à jour une validation`);
-    }
-
     // Utiliser id et campaign_id pour identifier la ligne (clé primaire composite)
+    // Cela fonctionne aussi pour l'enregistrement original si campaign_id est défini
     values.push(prestataireId);
     values.push(campaignId);
 
@@ -1170,8 +1173,28 @@ export class DynamicTableService {
       WHERE id = $${paramIndex} AND campaign_id = $${paramIndex + 1}
     `;
 
-    await this.dataSource.query(updateSQL, values);
-    console.log(`✅ Validation mise à jour pour prestataire ${prestataireId} dans la table ${tableName}`);
+    console.log(`[updateValidationInTable] SQL: ${updateSQL}`);
+    console.log(`[updateValidationInTable] Values:`, values);
+
+    const result = await this.dataSource.query(updateSQL, values);
+    const rowsAffected = result[1] || 0;
+    
+    if (rowsAffected === 0) {
+      console.warn(`[updateValidationInTable] ⚠️ Aucune ligne mise à jour. Vérification de l'existence de l'enregistrement...`);
+      // Vérifier si l'enregistrement existe
+      const checkQuery = await this.dataSource.query(
+        `SELECT id, campaign_id, validation_sequence, status FROM "${tableName}" 
+         WHERE id = $1 AND campaign_id = $2`,
+        [prestataireId, campaignId],
+      );
+      console.log(`[updateValidationInTable] Enregistrements trouvés:`, checkQuery);
+      
+      if (checkQuery.length === 0) {
+        throw new Error(`Aucun enregistrement trouvé pour prestataire ${prestataireId} et campagne ${campaignId}`);
+      }
+    } else {
+      console.log(`[updateValidationInTable] ✅ ${rowsAffected} ligne(s) mise(s) à jour pour prestataire ${prestataireId} et campagne ${campaignId}`);
+    }
   }
 
   /**
@@ -1381,6 +1404,51 @@ export class DynamicTableService {
        ORDER BY created_at ASC 
        LIMIT 1`,
       [prestataireId],
+    );
+
+    return result.length > 0 ? result[0] : null;
+  }
+
+  /**
+   * Récupère l'enregistrement original d'un prestataire pour une campagne spécifique
+   * Utilisé pour la première validation (mise à jour de l'original au lieu de créer une nouvelle ligne)
+   */
+  async getOriginalSubmissionByCampaign(
+    formId: string,
+    prestataireId: string,
+    campaignId: string,
+  ): Promise<any | null> {
+    const tableName = this.getTableName(formId);
+
+    if (!(await this.tableExists(tableName))) {
+      return null;
+    }
+
+    // Vérifier si la colonne campaign_id existe
+    const existingColumns = await this.dataSource.query(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = $1 
+       AND table_schema = 'public'
+       AND column_name = 'campaign_id'`,
+      [tableName],
+    );
+
+    if (existingColumns.length === 0) {
+      // Si pas de colonne campaign_id, utiliser la méthode standard
+      return await this.getOriginalSubmission(formId, prestataireId);
+    }
+
+    // Chercher l'enregistrement original pour cette campagne spécifique
+    const result = await this.dataSource.query(
+      `SELECT * FROM "${tableName}" 
+       WHERE id = $1 
+       AND campaign_id = $2
+       AND (validation_sequence IS NULL OR validation_sequence = 0)
+       AND (parent_submission_id IS NULL OR parent_submission_id = '')
+       ORDER BY created_at ASC 
+       LIMIT 1`,
+      [prestataireId, campaignId],
     );
 
     return result.length > 0 ? result[0] : null;
@@ -2114,16 +2182,22 @@ export class DynamicTableService {
     let allRecords: any[] = [];
     
     // Chercher tous les enregistrements avec ces variations d'ID
+    // IMPORTANT: Ne pas filtrer par validation_sequence car l'enregistrement original
+    // peut avoir été mis à jour avec des informations de validation (première validation)
     for (const idVar of idVariations) {
       const records = await this.dataSource.query(
         `SELECT * FROM "${tableName}" 
          WHERE (id = $1 OR prestataire_id = $1)
-         ORDER BY validation_sequence DESC NULLS LAST, created_at ASC`,
+         ORDER BY COALESCE(validation_sequence, 0) ASC, created_at ASC`,
         [idVar],
       );
       
       if (records.length > 0) {
         console.log(`[updateKycInTable] Trouvé ${records.length} enregistrement(s) avec ID: ${idVar}`);
+        // Log pour voir les validation_sequence
+        records.forEach((r: any, idx: number) => {
+          console.log(`[updateKycInTable]   Enregistrement ${idx + 1}: id=${r.id}, validation_sequence=${r.validation_sequence}, status=${r.status}, presence_days=${r.presence_days}`);
+        });
         allRecords = records;
         break; // Utiliser la première variation qui trouve des résultats
       }
