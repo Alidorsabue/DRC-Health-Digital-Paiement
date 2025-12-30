@@ -360,19 +360,41 @@ export default function PartnerPage() {
     setRateRules(updated);
   };
 
+  // Fonction pour normaliser un texte (enlever accents, espaces, mettre en minuscule)
+  const normalizeText = useCallback((text: string): string => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Enlever les accents
+      .replace(/\s+/g, ' ') // Normaliser les espaces
+      .trim();
+  }, []);
+
+  // Fonction pour extraire le rôle d'un prestataire (chercher dans tous les champs possibles)
+  const extractRole = useCallback((p: PrestataireForPartner): string => {
+    // Chercher dans l'ordre de priorité (comme le backend)
+    const role = 
+      p.categorie ||
+      p.role ||
+      p.campaign_role_i_f ||
+      p.campaign_role ||
+      p.role_prestataire ||
+      (p.enregistrementData && (
+        p.enregistrementData.categorie ||
+        p.enregistrementData.campaign_role_i_f ||
+        p.enregistrementData.campaign_role ||
+        p.enregistrementData.role ||
+        p.enregistrementData.role_prestataire
+      )) ||
+      '';
+    
+    return normalizeText(role);
+  }, [normalizeText]);
+
   const handleCalculateAmount = async () => {
     setCalculating(true);
     try {
-      // Fonction pour normaliser un texte (enlever accents, espaces, mettre en minuscule)
-      const normalizeText = (text: string): string => {
-        if (!text) return '';
-        return text
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '') // Enlever les accents
-          .replace(/\s+/g, ' ') // Normaliser les espaces
-          .trim();
-      };
 
       // Valider que tous les rôles ont un tarif
       const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
@@ -395,26 +417,6 @@ export default function PartnerPage() {
         });
       });
 
-      // Fonction pour extraire le rôle d'un prestataire (chercher dans tous les champs possibles)
-      const extractRole = (p: PrestataireForPartner): string => {
-        // Chercher dans l'ordre de priorité (comme le backend)
-        const role = 
-          p.categorie ||
-          p.role ||
-          p.campaign_role_i_f ||
-          p.campaign_role ||
-          p.role_prestataire ||
-          (p.enregistrementData && (
-            p.enregistrementData.categorie ||
-            p.enregistrementData.campaign_role_i_f ||
-            p.enregistrementData.campaign_role ||
-            p.enregistrementData.role ||
-            p.enregistrementData.role_prestataire
-          )) ||
-          '';
-        
-        return normalizeText(role);
-      };
 
       // Calculer le montant pour chaque prestataire selon son rôle
       const amounts: Array<{ prestataireId: string; amount: number; currency: string }> = [];
@@ -1549,11 +1551,18 @@ export default function PartnerPage() {
                 Aperçu des calculs ({prestataires.filter(p => {
                   const days = p.presenceDays || p.presence_days || 0;
                   if (days === 0) return false;
-                  const categorie = (p.categorie || p.role || '').toLowerCase().trim();
-                  return rateRules.some(rule => {
-                    if (!rule.role || !rule.currency || rule.rate <= 0) return false;
-                    const ruleRole = rule.role.toLowerCase().trim();
-                    return categorie === ruleRole || categorie.includes(ruleRole) || ruleRole.includes(categorie);
+                  
+                  const prestataireRole = extractRole(p);
+                  if (!prestataireRole) return false;
+                  
+                  // Créer un map des règles normalisées
+                  const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
+                  return validRules.some(rule => {
+                    const normalizedRuleRole = normalizeText(rule.role);
+                    // Comparaison bidirectionnelle normalisée
+                    return prestataireRole === normalizedRuleRole || 
+                           prestataireRole.includes(normalizedRuleRole) || 
+                           normalizedRuleRole.includes(prestataireRole);
                   });
                 }).length} prestataires concernés)
               </h3>
@@ -1569,36 +1578,59 @@ export default function PartnerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {prestataires.map((p) => {
-                      const days = p.presenceDays || p.presence_days || 0;
-                      if (days === 0) return null;
-                      
-                      const categorie = (p.categorie || p.role || '').toLowerCase().trim();
-                      let matchedRule = rateRules.find(rule => {
-                        if (!rule.role || !rule.currency || rule.rate <= 0) return false;
-                        const ruleRole = rule.role.toLowerCase().trim();
-                        return categorie === ruleRole || categorie.includes(ruleRole) || ruleRole.includes(categorie);
+                    {(() => {
+                      // Créer le map des règles normalisées une seule fois (optimisation)
+                      const validRules = rateRules.filter(rule => rule.role && rule.currency && rule.rate > 0);
+                      const rateMap = new Map<string, typeof validRules[0]>();
+                      validRules.forEach(rule => {
+                        const normalizedRuleRole = normalizeText(rule.role);
+                        rateMap.set(normalizedRuleRole, rule);
                       });
-
-                      if (!matchedRule) return null;
-
-                      const calculatedAmount = days * matchedRule.rate;
-                      const currencySymbol = matchedRule.currency === 'USD' ? '$' : matchedRule.currency === 'CDF' ? 'FC' : '€';
                       
-                      return (
-                        <tr key={p.id} className="border-b">
-                          <td className="p-2" style={{ color: '#374151' }}>
-                            {p.nom || p.nom_complet || p.prenom || 'N/A'}
-                          </td>
-                          <td className="p-2" style={{ color: '#374151' }}>{p.categorie || p.role || 'N/A'}</td>
-                          <td className="p-2" style={{ color: '#374151' }}>{days}</td>
-                          <td className="p-2" style={{ color: '#374151' }}>{matchedRule.rate} {currencySymbol}</td>
-                          <td className="p-2 font-medium" style={{ color: '#111827' }}>
-                            {calculatedAmount > 0 ? `${calculatedAmount} ${currencySymbol}` : 'N/A'}
-                          </td>
-                        </tr>
-                      );
-                    }).filter(Boolean)}
+                      return prestataires.map((p) => {
+                        const days = p.presenceDays || p.presence_days || 0;
+                        if (days === 0) return null;
+                        
+                        const prestataireRole = extractRole(p);
+                        if (!prestataireRole) return null;
+                        
+                        // Recherche exacte d'abord
+                        let matchedRule = rateMap.get(prestataireRole);
+                        
+                        // Si pas trouvé, recherche partielle
+                        if (!matchedRule) {
+                          const rateEntries = Array.from(rateMap.entries());
+                          for (const [normalizedRuleRole, rule] of rateEntries) {
+                            if (prestataireRole.includes(normalizedRuleRole) || normalizedRuleRole.includes(prestataireRole)) {
+                              matchedRule = rule;
+                              break;
+                            }
+                          }
+                        }
+
+                        if (!matchedRule) return null;
+
+                        const calculatedAmount = days * matchedRule.rate;
+                        const currencySymbol = matchedRule.currency === 'USD' ? '$' : matchedRule.currency === 'CDF' ? 'FC' : '€';
+                        
+                        // Afficher le rôle original (pas normalisé) pour l'affichage
+                        const displayRole = p.categorie || p.role || p.campaign_role_i_f || p.campaign_role || prestataireRole || 'N/A';
+                        
+                        return (
+                          <tr key={p.id} className="border-b">
+                            <td className="p-2" style={{ color: '#374151' }}>
+                              {p.nom || p.nom_complet || (p.prenom && p.postnom ? `${p.prenom} ${p.postnom}` : p.prenom) || 'N/A'}
+                            </td>
+                            <td className="p-2" style={{ color: '#374151' }}>{displayRole}</td>
+                            <td className="p-2" style={{ color: '#374151' }}>{days}</td>
+                            <td className="p-2" style={{ color: '#374151' }}>{matchedRule.rate} {currencySymbol}</td>
+                            <td className="p-2 font-medium" style={{ color: '#111827' }}>
+                              {calculatedAmount > 0 ? `${calculatedAmount} ${currencySymbol}` : 'N/A'}
+                            </td>
+                          </tr>
+                        );
+                      }).filter(Boolean);
+                    })()}
                   </tbody>
                 </table>
               </div>
