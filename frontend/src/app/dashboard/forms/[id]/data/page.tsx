@@ -822,8 +822,8 @@ export default function FormDataPage() {
     return getUniqueValuesWithLabels(fieldName).map(item => item.value);
   };
 
-  // Fonction pour convertir une valeur technique en libellé
-  const getLabelFromValue = (value: any, fieldSchema?: any): string | null => {
+  // Fonction pour convertir une valeur technique en libellé (mémorisée pour éviter les changements de référence)
+  const getLabelFromValue = useCallback((value: any, fieldSchema?: any): string | null => {
     if (!fieldSchema || value === undefined || value === null) {
       return null;
     }
@@ -841,10 +841,10 @@ export default function FormDataPage() {
     });
 
     return option?.label || null;
-  };
+  }, []);
 
-  // Fonction pour formater l'affichage des valeurs dans le tableau
-  const formatCellValue = (value: any, fieldName: string, fieldSchema?: any): { display: string; isImage: boolean; fullValue: string } => {
+  // Fonction pour formater l'affichage des valeurs dans le tableau (mémorisée pour éviter les changements de référence)
+  const formatCellValue = useCallback((value: any, fieldName: string, fieldSchema?: any): { display: string; isImage: boolean; fullValue: string } => {
     if (value === undefined || value === null) {
       return { display: '-', isImage: false, fullValue: '' };
     }
@@ -901,7 +901,7 @@ export default function FormDataPage() {
       isImage: isImageField,
       fullValue: fullValue,
     };
-  };
+  }, [getLabelFromValue]);
 
   const handleExport = async (format: 'csv' | 'excel' | 'json') => {
     try {
@@ -1120,10 +1120,26 @@ export default function FormDataPage() {
   // Important: ces hooks doivent être appelés dans le même ordre à chaque render
   // Utiliser formId pour éviter les changements de référence de l'objet form
   const formId = form?.id;
+  // Stabiliser la dépendance en utilisant une chaîne JSON des IDs des versions publiées
+  // Utiliser formId et une chaîne stable des IDs pour éviter les changements de référence de form?.versions
+  const versionsIdsString = useMemo(() => {
+    if (!form?.versions || !formId) return '';
+    return form.versions.map((v) => v.id).sort().join(',');
+  }, [formId, form?.versions?.length]);
+  
+  const publishedVersionIds = useMemo(() => {
+    if (!form?.versions || !formId) return '';
+    return form.versions
+      .filter((v) => v.isPublished)
+      .map((v) => v.id)
+      .sort()
+      .join(',');
+  }, [formId, versionsIdsString]);
+  
   const publishedVersion = useMemo(() => {
     if (!form?.versions) return undefined;
     return form.versions.find((v) => v.isPublished);
-  }, [formId, form?.versions?.length]);
+  }, [formId, publishedVersionIds]);
   
   // Utiliser publishedVersionId comme dépendance pour éviter les changements de référence d'objet
   const publishedVersionId = publishedVersion?.id;
@@ -1592,7 +1608,7 @@ export default function FormDataPage() {
     // Utiliser la fonction formatCellValue existante pour formater
     const formatted = formatCellValue(value, fieldName, fieldSchema);
     return formatted.display || String(value);
-  }, [getValueFromRow, formatCellValue]);
+  }, [getValueFromRow, formatCellValue, schema]);
 
   // Fonction pour obtenir les colonnes importantes selon l'onglet
   const getImportantColumns = useCallback((tab: string): string[] => {
