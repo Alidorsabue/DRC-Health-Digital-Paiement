@@ -1117,9 +1117,18 @@ export default function FormDataPage() {
   };
 
   // Obtenir publishedVersion et schema AVANT les hooks (toujours calculer, même si form est null)
-  const publishedVersion = form?.versions?.find((v) => v.isPublished);
-  const schema = publishedVersion?.schema;
-  const fields = schema?.properties ? Object.keys(schema.properties) : [];
+  // Utiliser useMemo pour stabiliser la référence et éviter les re-renders inutiles
+  const publishedVersion = useMemo(() => {
+    return form?.versions?.find((v) => v.isPublished);
+  }, [form?.versions]);
+  
+  const schema = useMemo(() => {
+    return publishedVersion?.schema;
+  }, [publishedVersion]);
+  
+  const fields = useMemo(() => {
+    return schema?.properties ? Object.keys(schema.properties) : [];
+  }, [schema]);
 
   // Fonction pour récupérer une valeur depuis les données (cherche dans plusieurs variantes)
   const getValueFromRow = useCallback((fieldName: string, row: any): any => {
