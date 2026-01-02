@@ -1118,15 +1118,18 @@ export default function FormDataPage() {
 
   // Obtenir publishedVersion et schema - utiliser useMemo pour stabiliser les références
   // Important: ces hooks doivent être appelés dans le même ordre à chaque render
-  // Utiliser form?.id comme dépendance principale pour éviter les recalculs inutiles
+  // Utiliser formId pour éviter les changements de référence de l'objet form
+  const formId = form?.id;
   const publishedVersion = useMemo(() => {
     if (!form?.versions) return undefined;
     return form.versions.find((v) => v.isPublished);
-  }, [form?.id]);
+  }, [formId, form?.versions?.length]);
   
+  // Utiliser publishedVersionId comme dépendance pour éviter les changements de référence d'objet
+  const publishedVersionId = publishedVersion?.id;
   const schema = useMemo(() => {
     return publishedVersion?.schema;
-  }, [publishedVersion]);
+  }, [publishedVersionId]);
   
   const fields = useMemo(() => {
     if (!schema?.properties) return [];
@@ -1769,19 +1772,23 @@ export default function FormDataPage() {
       
       return filteredCols;
     }
-  }, [fields, schema, allData, getImportantColumns, findColumnName]);
+  }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
 
   // Colonnes à afficher selon l'onglet actif (mémorisé pour éviter les re-renders)
+  // Utiliser formId et publishedVersionId pour éviter les changements de référence
   const orderedFields = useMemo(() => {
     if (!form || !publishedVersion) return [];
     return getColumnsForTab(activeTab);
-  }, [activeTab, getColumnsForTab, form, publishedVersion]);
+  }, [activeTab, getColumnsForTab, formId, publishedVersionId]);
 
   // Initialiser les colonnes visibles pour les nouveaux onglets
   useEffect(() => {
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, afficher toutes les colonnes importantes
-      setVisibleColumns(new Set(orderedFields));
+      // Utiliser une copie pour éviter les problèmes de référence
+      if (orderedFields.length > 0) {
+        setVisibleColumns(new Set(orderedFields));
+      }
     }
   }, [activeTab, orderedFields]);
 
