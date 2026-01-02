@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
@@ -1121,28 +1121,35 @@ export default function FormDataPage() {
   // Important: ces hooks doivent être appelés dans le même ordre à chaque render
   // Utiliser formId pour éviter les changements de référence de l'objet form
   const formId = form?.id;
-  // Stabiliser la dépendance en utilisant une chaîne JSON des IDs des versions publiées
-  // Utiliser formId et une chaîne stable des IDs pour éviter les changements de référence de form?.versions
+  
+  // Créer une chaîne stable basée sur les IDs des versions pour éviter les changements de référence
+  // Utiliser uniquement formId et versionsLength comme dépendances stables
+  const versionsLength = form?.versions?.length ?? 0;
   const versionsIdsString = useMemo(() => {
-    if (!form?.versions || !formId) return '';
-    // Créer une chaîne stable basée sur les IDs triés
+    if (!form?.versions || !formId || versionsLength === 0) return '';
+    // Accéder à form?.versions via closure (pas dans les dépendances pour éviter les boucles)
     const ids = form.versions.map((v) => v.id).sort();
     return ids.join(',');
-  }, [formId, form?.versions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formId, versionsLength]);
   
   const publishedVersionIds = useMemo(() => {
-    if (!form?.versions || !formId) return '';
+    if (!form?.versions || !formId || versionsLength === 0) return '';
+    // Accéder à form?.versions via closure
     return form.versions
       .filter((v) => v.isPublished)
       .map((v) => v.id)
       .sort()
       .join(',');
-  }, [formId, versionsIdsString]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formId, versionsIdsString, versionsLength]);
   
   const publishedVersion = useMemo(() => {
-    if (!form?.versions) return undefined;
+    if (!form?.versions || versionsLength === 0) return undefined;
+    // Accéder à form?.versions via closure
     return form.versions.find((v) => v.isPublished);
-  }, [formId, publishedVersionIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formId, publishedVersionIds, versionsLength]);
   
   // Utiliser publishedVersionId comme dépendance pour éviter les changements de référence d'objet
   const publishedVersionId = publishedVersion?.id;
@@ -1662,6 +1669,9 @@ export default function FormDataPage() {
     return [];
   }, []);
 
+  // Stabiliser allData.length pour éviter les changements de référence
+  const allDataLength = allData.length;
+  
   // Obtenir les colonnes à afficher selon l'onglet
   const getColumnsForTab = useCallback((tab: string): string[] => {
     if (tab === 'data') {
@@ -1776,9 +1786,10 @@ export default function FormDataPage() {
           continue;
         }
         
-        if (allData.length > 0) {
-          const firstRow = allData[0];
+        if (allDataLength > 0) {
           // Utiliser getValueFromRow pour vérifier si la colonne existe
+          // Note: allData est accessible via closure, mais on utilise allDataLength pour la dépendance
+          const firstRow = allData[0];
           const value = getValueFromRow(finalCol, firstRow);
           if (value !== null) {
             filteredCols.push(finalCol);
@@ -1791,22 +1802,29 @@ export default function FormDataPage() {
       
       return filteredCols;
     }
-  }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
+  }, [fields, schema, allDataLength, getImportantColumns, getValueFromRow]);
 
   // Colonnes à afficher selon l'onglet actif (mémorisé pour éviter les re-renders)
   // Utiliser formId et publishedVersionId pour éviter les changements de référence
+  // Stabiliser orderedFields en utilisant une chaîne JSON pour la comparaison
   const orderedFields = useMemo(() => {
     if (!form || !publishedVersion) return [];
     return getColumnsForTab(activeTab);
   }, [activeTab, getColumnsForTab, formId, publishedVersionId]);
-
+  
   // Initialiser les colonnes visibles pour les nouveaux onglets
+  // Utiliser useRef pour stocker la dernière valeur et éviter les boucles infinies
+  const prevOrderedFieldsRef = useRef<string>('');
   useEffect(() => {
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, afficher toutes les colonnes importantes
-      // Utiliser une copie pour éviter les problèmes de référence
       if (orderedFields.length > 0) {
-        setVisibleColumns(new Set(orderedFields));
+        const newFieldsString = [...orderedFields].sort().join(',');
+        // Ne mettre à jour que si les colonnes ont vraiment changé
+        if (prevOrderedFieldsRef.current !== newFieldsString) {
+          prevOrderedFieldsRef.current = newFieldsString;
+          setVisibleColumns(new Set(orderedFields));
+        }
       }
     }
   }, [activeTab, orderedFields]);
