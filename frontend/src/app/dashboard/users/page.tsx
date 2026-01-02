@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { usersApi } from '../../../lib/api/auth';
 import { User, CreateUserDto, Role, GeographicScope } from '../../../types';
@@ -25,13 +25,7 @@ export default function UsersPage() {
     aireId: '',
   });
 
-  useEffect(() => {
-    if (currentUser?.role === Role.SUPERADMIN) {
-      loadUsers();
-    }
-  }, [currentUser]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const data = await usersApi.getAll();
       setUsers(data);
@@ -40,7 +34,13 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (currentUser?.role === Role.SUPERADMIN) {
+      loadUsers();
+    }
+  }, [currentUser, loadUsers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

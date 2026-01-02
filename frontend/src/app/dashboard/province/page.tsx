@@ -116,7 +116,7 @@ export default function ProvincePage() {
     }
   }, []);
 
-  const loadAires = async (zoneId: string) => {
+  const loadAires = useCallback(async (zoneId: string) => {
     if (!zoneId) {
       setAires([]);
       return;
@@ -164,7 +164,7 @@ export default function ProvincePage() {
       });
       setAires([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (user?.role === 'DPS' && user?.provinceId) {
@@ -245,8 +245,7 @@ export default function ProvincePage() {
       });
       loadPrestataires();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.provinceId, selectedZoneId, selectedAireId, selectedCampaignId, filterStatus]);
+  }, [user?.role, user?.provinceId, selectedZoneId, selectedAireId, selectedCampaignId, filterStatus, loadPrestataires]);
 
   useEffect(() => {
     if (selectedZoneId) {
@@ -256,7 +255,7 @@ export default function ProvincePage() {
       setAires([]);
       setSelectedAireId('');
     }
-  }, [selectedZoneId]);
+  }, [selectedZoneId, loadAires]);
 
   const getStatusBadge = (status: string) => {
     let label = status;
@@ -626,7 +625,7 @@ export default function ProvincePage() {
           {stats && stats.total > 0 && (
             <p className="text-xs text-gray-500 mt-2">
               Total selon les statistiques: {stats.total} | 
-              {/*Enregistrés: {stats.byStatus?.ENREGISTRE || 0} | */}
+              Enregistrés: {stats.byStatus?.ENREGISTRE || 0} |
               Validés par IT: {stats.byStatus?.VALIDE_PAR_IT || 0} | 
               Approuvés: {stats.byStatus?.APPROUVE_PAR_MCZ || 0}
             </p>

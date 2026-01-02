@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../store/authStore';
 import { formsApi } from '../../../../lib/api/forms';
@@ -19,13 +19,7 @@ export default function FormEditorPage() {
   });
   const [showVersionModal, setShowVersionModal] = useState(false);
 
-  useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
-      loadForm();
-    }
-  }, [params.id, user]);
-
-  const loadForm = async () => {
+  const loadForm = useCallback(async () => {
     try {
       const data = await formsApi.getById(params.id as string);
       setForm(data);
@@ -38,7 +32,13 @@ export default function FormEditorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    if (user?.role === 'SUPERADMIN' && params.id) {
+      loadForm();
+    }
+  }, [params.id, user, loadForm]);
 
   const handleAddField = () => {
     const fieldName = prompt('Nom du champ (ex: nom, prenom, telephone):');

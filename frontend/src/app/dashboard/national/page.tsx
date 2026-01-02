@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { statsApi, NationalStats } from '../../../lib/api/stats';
 import { prestatairesApi, Prestataire } from '../../../lib/api/prestataires';
@@ -29,30 +29,7 @@ export default function NationalPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
 
-  useEffect(() => {
-    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
-      loadData();
-      loadProvinces();
-      loadCampaigns();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedProvinceId) {
-      loadZones();
-    } else {
-      setZones([]);
-      setSelectedZoneId('');
-    }
-  }, [selectedProvinceId]);
-
-  useEffect(() => {
-    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
-      loadPrestataires();
-    }
-  }, [selectedProvinceId, selectedZoneId, selectedCampaignId, filterStatus, user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const filters: any = {};
@@ -65,18 +42,18 @@ export default function NationalPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCampaignId]);
 
-  const loadProvinces = async () => {
+  const loadProvinces = useCallback(async () => {
     try {
       const data = await statsApi.getProvincesFromData();
       setProvinces(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des provinces:', error);
     }
-  };
+  }, []);
 
-  const loadZones = async () => {
+  const loadZones = useCallback(async () => {
     if (!selectedProvinceId) return;
     
     try {
@@ -85,18 +62,18 @@ export default function NationalPage() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des zones:', error);
     }
-  };
+  }, [selectedProvinceId]);
 
-  const loadCampaigns = async () => {
+  const loadCampaigns = useCallback(async () => {
     try {
       const data = await campaignsApi.getAll();
       setCampaigns(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des campagnes:', error);
     }
-  };
+  }, []);
 
-  const loadPrestataires = async () => {
+  const loadPrestataires = useCallback(async () => {
     try {
       const filters: any = {};
       if (selectedProvinceId) filters.provinceId = selectedProvinceId;
@@ -109,7 +86,30 @@ export default function NationalPage() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des prestataires:', error);
     }
-  };
+  }, [selectedProvinceId, selectedZoneId, selectedCampaignId, filterStatus]);
+
+  useEffect(() => {
+    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+      loadData();
+      loadProvinces();
+      loadCampaigns();
+    }
+  }, [user, loadData, loadProvinces, loadCampaigns]);
+
+  useEffect(() => {
+    if (selectedProvinceId) {
+      loadZones();
+    } else {
+      setZones([]);
+      setSelectedZoneId('');
+    }
+  }, [selectedProvinceId, loadZones]);
+
+  useEffect(() => {
+    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+      loadPrestataires();
+    }
+  }, [selectedProvinceId, selectedZoneId, selectedCampaignId, filterStatus, user, loadPrestataires]);
 
   const getStatusBadge = (status: string) => {
     let label = status;

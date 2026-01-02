@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -233,6 +233,8 @@ interface FormField {
       };
       order?: number; // Ordre d'apparition pour préserver l'ordre
       // Propriétés XlsForm
+      relevant?: string; // Expression relevant complète
+      constraint?: string; // Expression de contrainte complète
       choiceFilter?: string; // Expression choice_filter complète
       filterField?: string; // Champ de référence pour le filtrage
       filterValue?: string; // Valeur de référence pour le filtrage
@@ -241,6 +243,7 @@ interface FormField {
       metadata?: boolean; // Indique si c'est un champ métadonnées
       displayOnly?: boolean; // Indique si c'est un champ en lecture seule (calculate)
       appearance?: string; // Apparence du champ (ex: number, multiline, etc.)
+      parameters?: string; // Paramètres (pour audit, etc.)
     }
 
 const FIELD_TYPES = [
@@ -494,23 +497,7 @@ export default function FormBuilderPage() {
     setConfirmModal({ isOpen: true, title, message, type, onConfirm });
   };
 
-  useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
-      loadForm();
-    }
-  }, [params.id, user]);
-
-  // Charger les formulaires d'enregistrement si le formulaire est de type validation
-  useEffect(() => {
-    if (form?.type === 'validation') {
-      loadEnregistrementForms();
-      if (form.linkedEnregistrementFormId) {
-        loadEnregistrementFields();
-      }
-    }
-  }, [form?.type, form?.linkedEnregistrementFormId]);
-
-  const loadEnregistrementForms = async () => {
+  const loadEnregistrementForms = useCallback(async () => {
     try {
       const allForms = await formsApi.getAll();
       const enregistrementFormsList = allForms.filter(f => f.type === 'enregistrement');
@@ -518,9 +505,9 @@ export default function FormBuilderPage() {
     } catch (error) {
       console.error('Erreur lors du chargement des formulaires d\'enregistrement:', error);
     }
-  };
+  }, []);
 
-  const loadEnregistrementFields = async () => {
+  const loadEnregistrementFields = useCallback(async () => {
     if (!form?.id) return;
     try {
       const data = await formsApi.getEnregistrementFields(form.id);
@@ -529,21 +516,90 @@ export default function FormBuilderPage() {
       console.error('Erreur lors du chargement des champs d\'enregistrement:', error);
       setEnregistrementFields([]);
     }
-  };
+  }, [form?.id]);
 
-  const handleLinkEnregistrementForm = async (formId: string) => {
-    if (!form?.id) return;
-    try {
-      await formsApi.update(form.id, { linkedEnregistrementFormId: formId });
-      setForm({ ...form, linkedEnregistrementFormId: formId });
-      await loadEnregistrementFields();
-      showAlert('Succès', 'Formulaire d\'enregistrement lié avec succès', 'success');
-    } catch (error: any) {
-      showAlert('Erreur', error.response?.data?.message || 'Erreur lors de la liaison', 'error');
+  const extractGroupsFromSchema = useCallback((schema: any) => {
+    if (!schema.properties) return;
+    const groupSet = new Set<string>();
+    Object.values(schema.properties).forEach((prop: any) => {
+      if (prop['x-group']) {
+        groupSet.add(prop['x-group']);
+      }
+    });
+    setGroups(Array.from(groupSet)); // Pas de tri, garder l'ordre d'apparition
+  }, []);
+
+  const parseSchemaToFields = useCallback((schema: any) => {
+    if (!schema || !schema.properties) {
+      console.warn('Schema invalide ou vide:', schema);
+      setFields([]);
+      return;
     }
-  };
+    
+    console.log('Parsing schema:', schema);
+    const parsedFields: FormField[] = [];
+    
+    Object.entries(schema.properties).forEach(([name, prop]: [string, any]) => {
+      try {
+        // Ignorer les champs cachés (métadonnées) et les champs calculate
+        if (prop['x-type'] === 'hidden' || prop['x-metadata'] === true) {
+          return; // Ne pas afficher les champs métadonnées
+        }
 
-  const loadForm = async () => {
+        // Déterminer le type de champ - priorité à x-type
+        let fieldType = prop['x-type'] || prop.type || 'text';
+        
+        // Si c'est un array avec items.enum, c'est un select_multiple
+        if (prop.type === 'array' && prop.items?.enum) {
+          fieldType = 'select_multiple';
+        }
+        // Si c'est un string avec enum, c'est un select_one
+        else if (prop.type === 'string' && prop.enum) {
+          fieldType = 'select_one';
+        }
+
+        // Ignorer les champs calculate (ils ne doivent pas s'afficher comme des questions)
+        if (prop['x-type'] === 'calculate') {
+          return;
+        }
+
+        const field: FormField = {
+          id: name,
+          name,
+          label: prop.title || name,
+          type: fieldType,
+          required: schema.required?.includes(name) || false,
+          options: prop['x-options'] || (prop.enum ? prop.enum.map((val: string) => ({ label: val, value: val })) : []),
+          group: prop['x-group'],
+          order: prop['x-order'] !== undefined ? prop['x-order'] : parsedFields.length,
+          relevant: prop['x-relevant'],
+          constraint: prop['x-constraint'],
+          appearance: prop['x-appearance'],
+          defaultValue: prop.default,
+          parameters: prop['x-auditParams'] || prop['x-parameters'],
+          filterField: prop['x-filterField'],
+          choiceFilter: prop['x-choiceFilter'],
+        };
+        
+        console.log('Parsed field:', field);
+      } catch (error) {
+        console.error(`Erreur lors du parsing du champ ${name}:`, error, prop);
+      }
+    });
+    
+    // Trier les champs parsés par leur ordre pour garantir l'ordre correct lors du chargement
+    // C'est nécessaire car Object.entries() ne garantit pas toujours l'ordre d'insertion
+    const sortedFields = parsedFields.sort((a, b) => {
+      const orderA = a.order !== undefined ? a.order : Infinity;
+      const orderB = b.order !== undefined ? b.order : Infinity;
+      return orderA - orderB;
+    });
+    
+    console.log('Total fields parsed:', sortedFields.length);
+    setFields(sortedFields);
+  }, []);
+
+  const loadForm = useCallback(async () => {
     try {
       setLoading(true);
       console.log('=== Loading Form ===');
@@ -609,119 +665,34 @@ export default function FormBuilderPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, parseSchemaToFields, extractGroupsFromSchema, showAlert]);
 
-  const extractGroupsFromSchema = (schema: any) => {
-    if (!schema.properties) return;
-    const groupSet = new Set<string>();
-    Object.values(schema.properties).forEach((prop: any) => {
-      if (prop['x-group']) {
-        groupSet.add(prop['x-group']);
-      }
-    });
-    setGroups(Array.from(groupSet)); // Pas de tri, garder l'ordre d'apparition
-  };
-
-  const parseSchemaToFields = (schema: any) => {
-    if (!schema || !schema.properties) {
-      console.warn('Schema invalide ou vide:', schema);
-      setFields([]);
-      return;
+  const handleLinkEnregistrementForm = useCallback(async (formId: string) => {
+    if (!form?.id) return;
+    try {
+      await formsApi.update(form.id, { linkedEnregistrementFormId: formId });
+      setForm((prev) => prev ? { ...prev, linkedEnregistrementFormId: formId } : null);
+      await loadEnregistrementFields();
+      showAlert('Succès', 'Formulaire d\'enregistrement lié avec succès', 'success');
+    } catch (error: any) {
+      showAlert('Erreur', error.response?.data?.message || 'Erreur lors de la liaison', 'error');
     }
-    
-    console.log('Parsing schema:', schema);
-    const parsedFields: FormField[] = [];
-    
-    Object.entries(schema.properties).forEach(([name, prop]: [string, any]) => {
-      try {
-        // Ignorer les champs cachés (métadonnées) et les champs calculate
-        if (prop['x-type'] === 'hidden' || prop['x-metadata'] === true) {
-          return; // Ne pas afficher les champs métadonnées
-        }
+  }, [form?.id, loadEnregistrementFields, showAlert]);
 
-        // Déterminer le type de champ - priorité à x-type
-        let fieldType = prop['x-type'] || prop.type || 'text';
-        
-        // Si c'est un array avec items.enum, c'est un select_multiple
-        if (prop.type === 'array' && prop.items?.enum) {
-          fieldType = 'select_multiple';
-        }
-        // Si c'est un string avec enum, c'est un select_one
-        else if (prop.type === 'string' && prop.enum) {
-          fieldType = 'select_one';
-        }
+  useEffect(() => {
+    if (user?.role === 'SUPERADMIN' && params.id) {
+      loadForm();
+    }
+  }, [params.id, user, loadForm]);
 
-        // Ignorer les champs calculate (ils ne doivent pas s'afficher comme des questions)
-        if (fieldType === 'calculate' || prop['x-displayOnly'] === true) {
-          return; // Ne pas afficher les champs calculate
-        }
-
-        // Charger les options : priorité à x-options (options complètes), sinon reconstruire depuis enum
-        let options: { label: string; value: string; filter?: string }[] | undefined;
-        if (prop['x-options'] && Array.isArray(prop['x-options']) && prop['x-options'].length > 0) {
-          // Options complètes sauvegardées (incluant la propriété filter)
-          options = prop['x-options'].map((opt: any) => ({
-            label: opt.label || opt.value || '',
-            value: opt.value || opt.label || '',
-            filter: opt.filter, // Conserver la propriété filter pour le filtrage dynamique
-          }));
-        } else if (prop.enum && Array.isArray(prop.enum) && prop.enum.length > 0) {
-          // Reconstruire depuis enum (fallback pour compatibilité)
-          options = prop.enum.map((val: string) => ({ label: val, value: val }));
-        } else if (prop.items?.enum && Array.isArray(prop.items.enum) && prop.items.enum.length > 0) {
-          // Pour select_multiple avec items.enum
-          options = prop.items.enum.map((val: string) => ({ label: val, value: val }));
-        }
-
-        const field: FormField = {
-          id: name,
-          name,
-          label: prop.title || name,
-          type: fieldType,
-          required: schema.required?.includes(name) || false,
-          group: prop['x-group'],
-          dependsOn: prop['x-dependsOn'],
-          dependsValue: prop['x-dependsValue'],
-          options: options,
-          noteText: prop['x-noteText'],
-          defaultValue: prop['default'] !== undefined && prop['default'] !== null && prop['default'] !== '' ? prop['default'] : undefined,
-          validation: (prop.minimum !== undefined || prop.maximum !== undefined || prop.minLength !== undefined || prop.maxLength !== undefined || prop['x-minLength'] !== undefined || prop['x-maxLength'] !== undefined || prop['x-calculate'] || prop['calculate']) ? {
-            min: prop.minimum,
-            max: prop.maximum,
-            minLength: prop.minLength ?? prop['x-minLength'],
-            maxLength: prop.maxLength ?? prop['x-maxLength'],
-            formula: prop['x-calculate'] || prop['calculate'],
-          } : undefined,
-          order: prop['x-order'] !== undefined ? prop['x-order'] : parsedFields.length, // Préserver l'ordre
-          // Propriétés XlsForm
-          choiceFilter: prop['x-choiceFilter'],
-          filterField: prop['x-filterField'],
-          filterValue: prop['x-filterValue'],
-          filterOperator: prop['x-filterOperator'],
-          repeat: prop['x-repeat'],
-          metadata: prop['x-metadata'],
-          displayOnly: prop['x-displayOnly'],
-          appearance: prop['x-appearance'],
-        };
-        
-        parsedFields.push(field);
-        console.log('Parsed field:', field);
-      } catch (error) {
-        console.error(`Erreur lors du parsing du champ ${name}:`, error, prop);
+  useEffect(() => {
+    if (form?.type === 'validation') {
+      loadEnregistrementForms();
+      if (form.linkedEnregistrementFormId) {
+        loadEnregistrementFields();
       }
-    });
-    
-    // Trier les champs parsés par leur ordre pour garantir l'ordre correct lors du chargement
-    // C'est nécessaire car Object.entries() ne garantit pas toujours l'ordre d'insertion
-    const sortedFields = parsedFields.sort((a, b) => {
-      const orderA = a.order !== undefined ? a.order : Infinity;
-      const orderB = b.order !== undefined ? b.order : Infinity;
-      return orderA - orderB;
-    });
-    
-    console.log('Total fields parsed:', sortedFields.length);
-    setFields(sortedFields);
-  };
+    }
+  }, [form?.type, form?.linkedEnregistrementFormId, loadEnregistrementForms, loadEnregistrementFields]);
 
   const fieldsToSchema = (fields: FormField[]) => {
     const properties: Record<string, any> = {};

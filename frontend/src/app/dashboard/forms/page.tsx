@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { formsApi } from '../../../lib/api/forms';
 import { Form, CreateFormDto } from '../../../types';
@@ -70,49 +70,7 @@ function FormsPageContent() {
     setConfirmModal({ isOpen: true, title, message, type, onConfirm });
   };
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    console.log('DEBUG FORMS: useEffect [user, mounted] déclenché', {
-      userRole: user?.role,
-      mounted,
-      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
-    });
-    if (user?.role === 'SUPERADMIN' && mounted) {
-      loadForms();
-    } else {
-      console.warn('DEBUG FORMS: Conditions non remplies pour charger les formulaires:', {
-        isSuperAdmin: user?.role === 'SUPERADMIN',
-        isMounted: mounted,
-      });
-    }
-  }, [user, mounted]);
-
-  // Mettre à jour l'onglet actif selon les paramètres de l'URL
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'published' || tab === 'draft') {
-      setActiveTab(tab);
-    }
-  }, [searchParams]);
-
-  // Recharger les formulaires quand on change d'onglet ou quand on arrive sur la page avec un paramètre tab
-  useEffect(() => {
-    console.log('DEBUG FORMS: useEffect [activeTab, user, mounted] déclenché', {
-      activeTab,
-      userRole: user?.role,
-      mounted,
-      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
-    });
-    if (user?.role === 'SUPERADMIN' && mounted) {
-      // Ne pas recharger si on change juste d'onglet, les données sont déjà chargées
-      // loadForms();
-    }
-  }, [activeTab, user, mounted]);
-
-  const loadForms = async () => {
+  const loadForms = useCallback(async () => {
     try {
       setLoading(true);
       console.log('DEBUG FORMS: Début du chargement des formulaires...');
@@ -167,7 +125,49 @@ function FormsPageContent() {
       setLoading(false);
       console.log('DEBUG FORMS: Chargement terminé');
     }
-  };
+  }, [user?.role, mounted, showAlert]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    console.log('DEBUG FORMS: useEffect [user, mounted] déclenché', {
+      userRole: user?.role,
+      mounted,
+      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
+    });
+    if (user?.role === 'SUPERADMIN' && mounted) {
+      loadForms();
+    } else {
+      console.warn('DEBUG FORMS: Conditions non remplies pour charger les formulaires:', {
+        isSuperAdmin: user?.role === 'SUPERADMIN',
+        isMounted: mounted,
+      });
+    }
+  }, [user, mounted, loadForms]);
+
+  // Mettre à jour l'onglet actif selon les paramètres de l'URL
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'published' || tab === 'draft') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  // Recharger les formulaires quand on change d'onglet ou quand on arrive sur la page avec un paramètre tab
+  useEffect(() => {
+    console.log('DEBUG FORMS: useEffect [activeTab, user, mounted] déclenché', {
+      activeTab,
+      userRole: user?.role,
+      mounted,
+      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
+    });
+    if (user?.role === 'SUPERADMIN' && mounted) {
+      // Ne pas recharger si on change juste d'onglet, les données sont déjà chargées
+      // loadForms();
+    }
+  }, [activeTab, user, mounted]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

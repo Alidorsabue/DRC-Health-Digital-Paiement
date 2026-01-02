@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { statsApi, NationalStats, ZoneStats, AireStats, ProvinceStats } from '../../../lib/api/stats';
 import { campaignsApi } from '../../../lib/api/campaigns';
@@ -20,7 +20,7 @@ export default function StatsPage() {
     setAlert({ title, message, type });
   };
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       console.log('Chargement des statistiques nationales...', { campaignId: selectedCampaignId });
@@ -36,9 +36,9 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCampaignId, showAlert]);
 
-  const loadStatsForMCZ = async () => {
+  const loadStatsForMCZ = useCallback(async () => {
     if (!user?.zoneId) {
       console.warn('MCZ sans zoneId, impossible de charger les stats');
       setLoading(false);
@@ -60,9 +60,9 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.zoneId, selectedCampaignId, showAlert]);
 
-  const loadStatsForDPS = async () => {
+  const loadStatsForDPS = useCallback(async () => {
     if (!user?.provinceId) {
       console.warn('DPS sans provinceId, impossible de charger les stats');
       setLoading(false);
@@ -84,7 +84,7 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.provinceId, selectedCampaignId, showAlert]);
 
   // Charger les campagnes au démarrage
   useEffect(() => {
@@ -152,7 +152,7 @@ export default function StatsPage() {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [user, selectedCampaignId]);
+  }, [user, selectedCampaignId, loadStats, loadStatsForMCZ, loadStatsForDPS]);
 
   if (loading) {
     return <div className="text-center py-12">Chargement...</div>;

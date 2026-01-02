@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
@@ -251,58 +251,7 @@ export default function FormPreviewPage() {
   const [groups, setGroups] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
-      loadForm();
-    }
-  }, [params.id, user]);
-
-  const loadForm = async () => {
-    try {
-      setLoading(true);
-      const data = await formsApi.getById(params.id as string);
-      setForm(data);
-      
-      // Trier les versions par numéro de version (ordre décroissant)
-      const sortedVersions = data.versions?.sort((a, b) => b.version - a.version) || [];
-      const latestVersion = sortedVersions[0];
-      
-      if (latestVersion?.schema && latestVersion.schema.properties) {
-        // Debug: vérifier les propriétés du schéma
-        console.log('[FormPreview] Schéma chargé:', {
-          totalFields: Object.keys(latestVersion.schema.properties).length,
-          sampleField: Object.entries(latestVersion.schema.properties)[0],
-        });
-        
-        parseSchemaToFields(latestVersion.schema);
-        extractGroupsFromSchema(latestVersion.schema);
-      } else {
-        setFields([]);
-        setGroups([]);
-      }
-      
-      // Initialiser les valeurs par défaut
-      if (latestVersion?.schema && latestVersion.schema.properties) {
-        const defaultValues: Record<string, any> = {};
-        Object.entries(latestVersion.schema.properties).forEach(([name, prop]: [string, any]) => {
-          if (prop.default !== undefined && prop.default !== null && prop.default !== '') {
-            defaultValues[name] = prop.default;
-            console.log(`[FormPreview] Valeur par défaut pour ${name}:`, prop.default);
-          }
-        });
-        if (Object.keys(defaultValues).length > 0) {
-          console.log('[FormPreview] Initialisation des valeurs par défaut:', defaultValues);
-          setFormData(defaultValues);
-        }
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const extractGroupsFromSchema = (schema: any) => {
+  const extractGroupsFromSchema = useCallback((schema: any) => {
     if (!schema.properties) return;
     const groupOrderMap = new Map<string, number>(); // Map pour stocker l'ordre d'apparition de chaque groupe
     
@@ -322,9 +271,9 @@ export default function FormPreviewPage() {
       .map(([groupName]) => groupName);
     
     setGroups(sortedGroups);
-  };
+  }, []);
 
-  const parseSchemaToFields = (schema: any) => {
+  const parseSchemaToFields = useCallback((schema: any) => {
     if (!schema || !schema.properties) {
       setFields([]);
       return;
@@ -406,7 +355,52 @@ export default function FormPreviewPage() {
     });
     
     setFields(parsedFields);
-  };
+  }, []);
+
+  const loadForm = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await formsApi.getById(params.id as string);
+      setForm(data);
+      
+      // Trier les versions par numéro de version (ordre décroissant)
+      const sortedVersions = data.versions?.sort((a, b) => b.version - a.version) || [];
+      const latestVersion = sortedVersions[0];
+      
+      if (latestVersion?.schema && latestVersion.schema.properties) {
+        // Debug: vérifier les propriétés du schéma
+        console.log('[FormPreview] Schéma chargé:', {
+          totalFields: Object.keys(latestVersion.schema.properties).length,
+          sampleField: Object.entries(latestVersion.schema.properties)[0],
+        });
+        
+        parseSchemaToFields(latestVersion.schema);
+        extractGroupsFromSchema(latestVersion.schema);
+      } else {
+        setFields([]);
+        setGroups([]);
+      }
+      
+      // Initialiser les valeurs par défaut
+      if (latestVersion?.schema && latestVersion.schema.properties) {
+        const defaultValues: Record<string, any> = {};
+        Object.entries(latestVersion.schema.properties).forEach(([name, prop]: [string, any]) => {
+          if (prop.default !== undefined && prop.default !== null && prop.default !== '') {
+            defaultValues[name] = prop.default;
+            console.log(`[FormPreview] Valeur par défaut pour ${name}:`, prop.default);
+          }
+        });
+        if (Object.keys(defaultValues).length > 0) {
+          console.log('[FormPreview] Initialisation des valeurs par défaut:', defaultValues);
+          setFormData(defaultValues);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id, parseSchemaToFields, extractGroupsFromSchema]);
 
   // Évaluer une expression relevant complexe
   const evaluateRelevant = (expression: string): boolean => {

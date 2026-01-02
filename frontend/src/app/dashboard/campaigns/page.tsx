@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { campaignsApi } from '../../../lib/api/campaigns';
 import { formsApi } from '../../../lib/api/forms';
@@ -24,11 +24,7 @@ export default function CampaignsPage() {
     durationDays: 0,
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [campaignsData, formsData] = await Promise.all([
         campaignsApi.getAll(),
@@ -41,7 +37,11 @@ export default function CampaignsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
