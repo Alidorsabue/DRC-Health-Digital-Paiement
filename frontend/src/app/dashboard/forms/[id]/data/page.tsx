@@ -1116,13 +1116,13 @@ export default function FormDataPage() {
     setShowColumnModal(false);
   };
 
-  // Obtenir publishedVersion et schema - utiliser form.id comme dépendance principale
-  // Utiliser useMemo pour stabiliser la référence et éviter les re-renders inutiles
-  const publishedVersionId = form?.versions?.find((v) => v.isPublished)?.id;
+  // Obtenir publishedVersion et schema - utiliser useMemo pour stabiliser les références
+  // Important: ces hooks doivent être appelés dans le même ordre à chaque render
+  // Utiliser form?.id comme dépendance principale pour éviter les recalculs inutiles
   const publishedVersion = useMemo(() => {
     if (!form?.versions) return undefined;
     return form.versions.find((v) => v.isPublished);
-  }, [form, publishedVersionId]);
+  }, [form?.id]);
   
   const schema = useMemo(() => {
     return publishedVersion?.schema;
