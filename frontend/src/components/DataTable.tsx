@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useTableSortAndFilter } from '../hooks/useTableSortAndFilter';
 import { exportData, ExportColumn, ExportRow } from '../utils/export';
+import { useTranslation } from '../hooks/useTranslation';
 
 export interface Column {
   key: string;
@@ -48,6 +49,7 @@ export default function DataTable({
   const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(data);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   // Préparer les colonnes pour l'export
   const exportColumns: ExportColumn[] = columns.map((col) => ({
@@ -175,34 +177,36 @@ export default function DataTable({
       )}
 
       {/* Tableau avec tri et filtres */}
-      <div ref={tableRef} className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {selectable && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <input
-                    type="checkbox"
-                    checked={processedData.length > 0 && processedData.every(row => selectedItems.has(getRowId(row)))}
-                    onChange={onSelectAll}
-                    className="rounded"
-                  />
-                </th>
-              )}
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  <div className="flex flex-col gap-2">
-                    {/* En-tête avec tri */}
-                    <div className="flex items-center gap-2">
-                      <span>{column.label}</span>
+      <div ref={tableRef} className="overflow-x-auto -mx-4 sm:mx-0">
+        <div className="inline-block min-w-full align-middle">
+          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {selectable && (
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        checked={processedData.length > 0 && processedData.every(row => selectedItems.has(getRowId(row)))}
+                        onChange={onSelectAll}
+                        className="rounded"
+                      />
+                    </th>
+                  )}
+                  {columns.map((column) => (
+                    <th
+                      key={column.key}
+                      className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex flex-col gap-1 sm:gap-2">
+                        {/* En-tête avec tri */}
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <span className="truncate">{column.label}</span>
                       {column.sortable !== false && (
                         <button
                           onClick={() => handleSort(column.key)}
-                          className="hover:text-gray-700 transition-colors"
-                          title="Trier"
+                          className="hover:text-gray-700 transition-colors flex-shrink-0"
+                          title={t('common.sort')}
                         >
                           {getSortIcon(column.key)}
                         </button>
@@ -212,69 +216,73 @@ export default function DataTable({
                     {column.filterable !== false && (
                       <input
                         type="text"
-                        placeholder={`Filtrer ${column.label.toLowerCase()}...`}
+                        placeholder={t('common.filterPlaceholder')}
                         value={filters[column.key] || ''}
                         onChange={(e) => handleFilter(column.key, e.target.value)}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
                       />
                     )}
-                  </div>
-                </th>
-              ))}
-              {actions && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {processedData.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0) + (actions ? 1 : 0)} className="px-6 py-4 text-center text-sm text-gray-500">
-                  Aucune donnée disponible
-                </td>
-              </tr>
-            ) : (
-              processedData.map((row, index) => {
-                const rowId = getRowId(row);
-                const isSelected = selectedItems.has(rowId);
-                const isDisabled = isRowDisabled(row);
-                
-                return (
-                  <tr 
-                    key={index} 
-                    className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''} ${isDisabled ? 'opacity-50' : ''}`}
-                  >
-                    {selectable && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => onSelectItem?.(rowId)}
-                          className="rounded"
-                          disabled={isDisabled}
-                        />
-                      </td>
-                    )}
-                    {columns.map((column) => (
-                      <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {column.render
-                          ? column.render(row[column.key], row)
-                          : String(row[column.key] || 'N/A')}
-                      </td>
-                    ))}
-                    {actions && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {actions(row)}
-                      </td>
-                    )}
+                      </div>
+                    </th>
+                  ))}
+                  {actions && (
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('common.actions')}
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {processedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={columns.length + (selectable ? 1 : 0) + (actions ? 1 : 0)} className="px-3 sm:px-6 py-4 text-center text-xs sm:text-sm text-gray-500">
+                      {t('common.noDataAvailable')}
+                    </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  processedData.map((row, index) => {
+                    const rowId = getRowId(row);
+                    const isSelected = selectedItems.has(rowId);
+                    const isDisabled = isRowDisabled(row);
+                    
+                    return (
+                      <tr 
+                        key={index} 
+                        className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''} ${isDisabled ? 'opacity-50' : ''}`}
+                      >
+                        {selectable && (
+                          <td className="px-3 sm:px-6 py-3 sm:py-4">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => onSelectItem?.(rowId)}
+                              className="rounded"
+                              disabled={isDisabled}
+                            />
+                          </td>
+                        )}
+                        {columns.map((column) => (
+                          <td key={column.key} className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900">
+                            <div className="truncate max-w-xs sm:max-w-none">
+                              {column.render
+                                ? column.render(row[column.key], row)
+                                : String(row[column.key] || 'N/A')}
+                            </div>
+                          </td>
+                        ))}
+                        {actions && (
+                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500">
+                            {actions(row)}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

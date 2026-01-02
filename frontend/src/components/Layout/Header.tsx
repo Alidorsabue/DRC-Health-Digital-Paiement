@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../contexts/LanguageContext';
 
-export default function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export default function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { language, setLanguage, t } = useLanguage();
@@ -48,13 +52,36 @@ export default function Header() {
   };
 
   return (
-    <div className="sticky top-0 z-10 md:pl-64 flex-shrink-0 flex h-16 bg-white shadow">
-      <div className="flex-1 px-4 flex justify-between">
-        <div className="flex-1 flex">
-          <div className="w-full flex md:ml-0 items-center">
+    <div className="sticky top-0 z-30 md:z-10 flex-shrink-0 flex h-16 bg-white shadow">
+      <div className="flex-1 px-2 sm:px-4 flex justify-between items-center">
+        {/* Bouton menu mobile */}
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="md:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+            aria-label={t('common.openMenu')}
+          >
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Barre de recherche - cachée sur mobile, visible sur tablette et plus */}
+        <div className="hidden sm:flex flex-1 sm:ml-4 md:ml-0">
+          <div className="w-full flex items-center">
             <div className="flex items-center space-x-2 max-w-md w-full">
               <input
-                className="block flex-1 pl-3 pr-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm"
+                className="block flex-1 pl-3 pr-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 placeholder={t('common.search')}
                 type="search"
               />
@@ -67,7 +94,8 @@ export default function Header() {
             </div>
           </div>
         </div>
-        <div className="ml-4 flex items-center md:ml-6 gap-3">
+
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Sélecteur de langue */}
           <div className="relative" ref={languageMenuRef}>
             <button

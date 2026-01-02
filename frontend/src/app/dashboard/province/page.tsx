@@ -401,6 +401,30 @@ export default function ProvincePage() {
     return formatDate(approvalDate);
   };
 
+  // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
+  const getValidationStatus = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    // Chercher validation_status dans raw_data ou directement sur l'objet
+    const validationStatus = (prestataire as any).validation_status ||
+                            rawData.validation_status ||
+                            (prestataire as any).validationStatus ||
+                            rawData.validationStatus ||
+                            'ENREGISTRE';
+    
+    return validationStatus;
+  };
+
+  // Fonction helper pour récupérer le montant payé
+  const getPaymentAmount = (prestataire: Prestataire): number => {
+    const rawData = prestataire.raw_data || {};
+    const paymentAmount = (prestataire as any).paymentAmount ||
+                         (prestataire as any).payment_amount ||
+                         rawData.paymentAmount ||
+                         rawData.payment_amount ||
+                         0;
+    return paymentAmount;
+  };
+
   const getPaymentDate = (prestataire: Prestataire): string => {
     // Chercher dans plusieurs emplacements possibles
     const rawData = prestataire.raw_data || {};
@@ -602,7 +626,7 @@ export default function ProvincePage() {
           {stats && stats.total > 0 && (
             <p className="text-xs text-gray-500 mt-2">
               Total selon les statistiques: {stats.total} | 
-              Enregistrés: {stats.byStatus?.ENREGISTRE || 0} | 
+              {/*Enregistrés: {stats.byStatus?.ENREGISTRE || 0} | */}
               Validés par IT: {stats.byStatus?.VALIDE_PAR_IT || 0} | 
               Approuvés: {stats.byStatus?.APPROUVE_PAR_MCZ || 0}
             </p>
@@ -635,6 +659,21 @@ export default function ProvincePage() {
               },
             },
             {
+              key: 'gender',
+              label: t('common.gender'),
+              render: (_, prestataire) => {
+                const rawData = prestataire.raw_data || {};
+                const gender = (prestataire as any).gender_i_c ||
+                              (prestataire as any).gender ||
+                              (prestataire as any).sexe ||
+                              rawData.gender_i_c ||
+                              rawData.gender ||
+                              rawData.sexe ||
+                              'N/A';
+                return gender;
+              },
+            },
+            {
               key: 'telephone',
               label: t('common.phone'),
               render: (_, prestataire) => {
@@ -655,25 +694,15 @@ export default function ProvincePage() {
               },
             },
             {
-              key: 'zoneId',
-              label: t('province.zone'),
-              render: (_, prestataire) => prestataire.zoneId || prestataire.zone_id || 'N/A',
-            },
-            {
-              key: 'aireId',
-              label: t('province.area'),
-              render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
-            },
-            {
-              key: 'status',
-              label: t('common.status'),
-              render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
+              key: 'kycStatus',
+              label: t('partner.kycStatus'),
+              render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'validationStatus',
               label: t('partner.validationStatus'),
               render: (_, prestataire) => {
-                const status = prestataire.status || 'ENREGISTRE';
+                const status = getValidationStatus(prestataire);
                 let label = status;
                 let color = 'bg-gray-100 text-gray-800';
                 
@@ -682,15 +711,8 @@ export default function ProvincePage() {
                 } else if (status === 'VALIDE_PAR_IT') {
                   label = t('status.validatedByIT');
                   color = 'bg-blue-100 text-blue-800';
-                } else if (status === 'APPROUVE_PAR_MCZ') {
-                  label = t('status.approvedByMCZ');
-                  color = 'bg-green-100 text-green-800';
-                } else if (status === 'REJETE_PAR_MCZ') {
-                  label = t('status.rejectedByMCZ');
-                  color = 'bg-red-100 text-red-800';
-                } else if (status === 'EN_ATTENTE_PAR_MCZ') {
-                  label = t('status.pendingMCZ');
-                  color = 'bg-yellow-100 text-yellow-800';
+                } else {
+                  label = status;
                 }
                 
                 return (
@@ -713,9 +735,9 @@ export default function ProvincePage() {
               },
             },
             {
-              key: 'kycStatus',
-              label: t('partner.kycStatus'),
-              render: (_, prestataire) => getKycStatusBadge(prestataire),
+              key: 'approvalStatus',
+              label: t('partner.approvalStatus'),
+              render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
             },
             {
               key: 'approvalDate',
@@ -733,6 +755,23 @@ export default function ProvincePage() {
               key: 'paymentStatus',
               label: t('partner.paymentStatus'),
               render: (_, prestataire) => getPaymentStatusBadge(prestataire),
+            },
+            {
+              key: 'paymentAmount',
+              label: t('common.paidAmount'),
+              render: (_, prestataire) => {
+                const amount = getPaymentAmount(prestataire);
+                if (amount <= 0) return 'N/A';
+                const rawData = prestataire.raw_data || {};
+                const currency = (prestataire as any).paymentCurrency || rawData.paymentCurrency || 'USD';
+                let currencySymbol = '$';
+                if (currency === 'CDF') {
+                  currencySymbol = 'FC';
+                } else if (currency === 'EURO') {
+                  currencySymbol = '€';
+                }
+                return `${amount} ${currencySymbol}`;
+              },
             },
             {
               key: 'paymentDate',

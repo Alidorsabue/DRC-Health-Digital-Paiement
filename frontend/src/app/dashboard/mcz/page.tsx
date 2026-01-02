@@ -604,6 +604,30 @@ export default function MCZPage() {
     return formatDate(approvalDate);
   };
 
+  // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
+  const getValidationStatus = (prestataire: PrestataireForApproval): string => {
+    const rawData = prestataire.raw_data || {};
+    // Chercher validation_status dans raw_data ou directement sur l'objet
+    const validationStatus = (prestataire as any).validation_status ||
+                            rawData.validation_status ||
+                            (prestataire as any).validationStatus ||
+                            rawData.validationStatus ||
+                            'ENREGISTRE';
+    
+    return validationStatus;
+  };
+
+  // Fonction helper pour récupérer le montant payé
+  const getPaymentAmount = (prestataire: PrestataireForApproval): number => {
+    const rawData = prestataire.raw_data || {};
+    const paymentAmount = prestataire.paymentAmount ||
+                         prestataire.payment_amount ||
+                         rawData.paymentAmount ||
+                         rawData.payment_amount ||
+                         0;
+    return paymentAmount;
+  };
+
   const getPaymentDate = (prestataire: PrestataireForApproval): string => {
     // Chercher dans plusieurs emplacements possibles
     const rawData = prestataire.raw_data || {};
@@ -817,7 +841,17 @@ export default function MCZPage() {
           columns={[
             {
               key: 'id',
-              label: 'ID',
+              label: t('common.id'),
+            },
+            {
+              key: 'zoneId',
+              label: t('mcz.zone'),
+              render: (_, prestataire) => prestataire.zoneId || prestataire.zone_id || user.zoneId || 'N/A',
+            },
+            {
+              key: 'aireId',
+              label: t('mcz.healthArea'),
+              render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
             },
             {
               key: 'nom',
@@ -835,6 +869,21 @@ export default function MCZPage() {
                 const finalPostnom = postnom || postnomRaw;
                 const parts = [finalPrenom, finalNom, finalPostnom].filter(p => p && String(p).trim() && p !== 'null' && p !== 'undefined');
                 return parts.length > 0 ? parts.join(' ') : (prestataire.nom_complet || prestataire.fullName || 'N/A');
+              },
+            },
+            {
+              key: 'gender',
+              label: t('common.gender'),
+              render: (_, prestataire) => {
+                const rawData = prestataire.raw_data || {};
+                const gender = (prestataire as any).gender_i_c ||
+                              (prestataire as any).gender ||
+                              (prestataire as any).sexe ||
+                              rawData.gender_i_c ||
+                              rawData.gender ||
+                              rawData.sexe ||
+                              'N/A';
+                return gender;
               },
             },
             {
@@ -876,20 +925,15 @@ export default function MCZPage() {
               },
             },
             {
-              key: 'aireId',
-              label: t('mcz.healthArea'),
-              render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
-            },
-            {
-              key: 'status',
-              label: t('mcz.status'),
-              render: (_, prestataire) => getStatusBadge(prestataire),
+              key: 'kycStatus',
+              label: t('mcz.kycStatus'),
+              render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'validationStatus',
               label: t('mcz.validationStatus'),
               render: (_, prestataire) => {
-                const status = prestataire.status || 'ENREGISTRE';
+                const status = getValidationStatus(prestataire);
                 let label = status;
                 let color = 'bg-gray-100 text-gray-800';
                 
@@ -898,15 +942,8 @@ export default function MCZPage() {
                 } else if (status === 'VALIDE_PAR_IT') {
                   label = t('status.validatedByIT');
                   color = 'bg-blue-100 text-blue-800';
-                } else if (status === 'APPROUVE_PAR_MCZ') {
-                  label = t('status.approvedByMCZ');
-                  color = 'bg-green-100 text-green-800';
-                } else if (status === 'REJETE_PAR_MCZ') {
-                  label = t('status.rejectedByMCZ');
-                  color = 'bg-red-100 text-red-800';
-                } else if (status === 'EN_ATTENTE_PAR_MCZ') {
-                  label = t('status.pendingMCZ');
-                  color = 'bg-yellow-100 text-yellow-800';
+                } else {
+                  label = status;
                 }
                 
                 return (
@@ -929,9 +966,9 @@ export default function MCZPage() {
               },
             },
             {
-              key: 'kycStatus',
-              label: t('mcz.kycStatus'),
-              render: (_, prestataire) => getKycStatusBadge(prestataire),
+              key: 'approvalStatus',
+              label: t('partner.approvalStatus'),
+              render: (_, prestataire) => getStatusBadge(prestataire),
             },
             {
               key: 'approvalDate',
@@ -949,6 +986,23 @@ export default function MCZPage() {
               key: 'paymentStatus',
               label: t('mcz.paymentStatus'),
               render: (_, prestataire) => getPaymentStatusBadge(prestataire),
+            },
+            {
+              key: 'paymentAmount',
+              label: t('common.paidAmount'),
+              render: (_, prestataire) => {
+                const amount = getPaymentAmount(prestataire);
+                if (amount <= 0) return 'N/A';
+                const rawData = prestataire.raw_data || {};
+                const currency = (prestataire as any).paymentCurrency || rawData.paymentCurrency || 'USD';
+                let currencySymbol = '$';
+                if (currency === 'CDF') {
+                  currencySymbol = 'FC';
+                } else if (currency === 'EURO') {
+                  currencySymbol = '€';
+                }
+                return `${amount} ${currencySymbol}`;
+              },
             },
             {
               key: 'paymentDate',

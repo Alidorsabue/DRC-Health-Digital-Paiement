@@ -10,6 +10,7 @@
     "english": "Anglais",
     "loading": "Chargement...",
     "noData": "Aucune donnée",
+    "noDataAvailable": "Aucune donnée disponible",
     "save": "Enregistrer",
     "cancel": "Annuler",
     "delete": "Supprimer",
@@ -17,6 +18,8 @@
     "view": "Voir",
     "export": "Exporter",
     "filter": "Filtrer",
+    "filterPlaceholder": "Filtrer...",
+    "sort": "Trier",
     "close": "Fermer",
     "confirm": "Confirmer",
     "yes": "Oui",
@@ -33,12 +36,18 @@
     "id": "ID",
     "phone": "Téléphone",
     "role": "Rôle",
+    "gender": "Sexe",
     "actions": "Actions",
     "noResults": "Aucun résultat trouvé",
     "error": "Erreur",
     "success": "Succès",
     "warning": "Attention",
-    "info": "Information"
+    "info": "Information",
+    "redirecting": "Redirection en cours...",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "amountPaid": "Montant payé",
+    "paidAmount": "Montant payé"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -146,6 +155,7 @@
     "paymentStatus": "Statut Paiement",
     "paymentDate": "Date Paiement",
     "amountToPay": "Montant à payer",
+    "presenceDays": "Nombre de jours",
     "correct": "Correct",
     "incorrect": "Incorrect",
     "noAccount": "Sans compte",
@@ -162,6 +172,16 @@
     "paid": "Payé",
     "failed": "Échec",
     "pending": "En attente"
+  },
+  "login": {
+    "connectToAccount": "Connectez-vous à votre compte",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "loginButton": "Se connecter",
+    "connecting": "Connexion...",
+    "sessionExpired": "Session expirée",
+    "sessionExpiredMessage": "Votre session a expiré pour des raisons de sécurité. Veuillez vous reconnecter.",
+    "connectionError": "Erreur de connexion. Vérifiez vos identifiants."
   }
 }
 

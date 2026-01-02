@@ -10,6 +10,7 @@
     "english": "English",
     "loading": "Loading...",
     "noData": "No data",
+    "noDataAvailable": "No data available",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -17,6 +18,8 @@
     "view": "View",
     "export": "Export",
     "filter": "Filter",
+    "filterPlaceholder": "Filter...",
+    "sort": "Sort",
     "close": "Close",
     "confirm": "Confirm",
     "yes": "Yes",
@@ -33,12 +36,18 @@
     "id": "ID",
     "phone": "Phone",
     "role": "Role",
+    "gender": "Gender",
     "actions": "Actions",
     "noResults": "No results found",
     "error": "Error",
     "success": "Success",
     "warning": "Warning",
-    "info": "Information"
+    "info": "Information",
+    "redirecting": "Redirecting...",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "amountPaid": "Amount Paid",
+    "paidAmount": "Amount Paid"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -146,6 +155,7 @@
     "paymentStatus": "Payment Status",
     "paymentDate": "Payment Date",
     "amountToPay": "Amount to Pay",
+    "presenceDays": "Number of Days",
     "correct": "Correct",
     "incorrect": "Incorrect",
     "noAccount": "No Account",
@@ -162,6 +172,16 @@
     "paid": "Paid",
     "failed": "Failed",
     "pending": "Pending"
+  },
+  "login": {
+    "connectToAccount": "Sign in to your account",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign in",
+    "connecting": "Connecting...",
+    "sessionExpired": "Session expired",
+    "sessionExpiredMessage": "Your session has expired for security reasons. Please sign in again.",
+    "connectionError": "Connection error. Please check your credentials."
   }
 }
 

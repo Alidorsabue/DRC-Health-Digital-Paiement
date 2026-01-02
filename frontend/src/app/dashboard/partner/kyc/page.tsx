@@ -11,6 +11,7 @@ import AlertModal from '../../../../components/Modal/AlertModal';
 import DataTable, { Column } from '../../../../components/DataTable';
 import { exportData, ExportColumn, ExportRow } from '../../../../utils/export';
 import * as XLSX from 'xlsx';
+import { useTranslation } from '../../../../hooks/useTranslation';
 
 interface GeographicOption {
   id: string;
@@ -19,6 +20,7 @@ interface GeographicOption {
 
 export default function KycVerificationPage() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [prestataires, setPrestataires] = useState<PrestataireForPartner[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -432,12 +434,47 @@ export default function KycVerificationPage() {
   const columns: Column[] = [
     {
       key: 'prestataireId',
-      label: 'ID Prestataire',
+      label: t('common.id'),
       sortable: true,
     },
     {
+      key: 'province',
+      label: t('common.province'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const provinceId = prestataire.provinceId || prestataire.province_id;
+        if (!provinceId) return 'N/A';
+        const province = provinces.find(p => p.id === provinceId);
+        return province?.name || provinceId;
+      },
+    },
+    {
+      key: 'zone',
+      label: t('common.zone'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const zoneId = prestataire.zoneId || prestataire.zone_id;
+        if (!zoneId) return 'N/A';
+        // Chercher dans allZones d'abord, puis dans zones (pour les filtres)
+        const zone = allZones.get(zoneId) || zones.find(z => z.id === zoneId);
+        return zone?.name || zoneId;
+      },
+    },
+    {
+      key: 'aire',
+      label: t('common.area'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const aireId = prestataire.aireId || prestataire.aire_id;
+        if (!aireId) return 'N/A';
+        // Chercher dans allAires d'abord, puis dans aires (pour les filtres)
+        const aire = allAires.get(aireId) || aires.find(a => a.id === aireId);
+        return aire?.name || aireId;
+      },
+    },
+    {
       key: 'nom',
-      label: 'Nom',
+      label: t('common.name'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         const rawData = prestataire.rawData || prestataire.raw_data || {};
@@ -478,8 +515,24 @@ export default function KycVerificationPage() {
       },
     },
     {
+      key: 'gender',
+      label: t('common.gender'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const rawData = prestataire.rawData || prestataire.raw_data || {};
+        const gender = (prestataire as any).gender_i_c ||
+                      (prestataire as any).gender ||
+                      (prestataire as any).sexe ||
+                      rawData.gender_i_c ||
+                      rawData.gender ||
+                      rawData.sexe ||
+                      'N/A';
+        return gender;
+      },
+    },
+    {
       key: 'telephone',
-      label: 'Téléphone',
+      label: t('common.phone'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         const rawData = prestataire.rawData || prestataire.raw_data || {};
@@ -511,7 +564,7 @@ export default function KycVerificationPage() {
     },
     {
       key: 'categorie',
-      label: 'Rôle/Catégorie',
+      label: t('common.role'),
       sortable: true,
       render: (value: any, prestataire: PrestataireForPartner) => {
         const categorie = prestataire.categorie || prestataire.role || prestataire.campaign_role || prestataire.campaign_role_i_f || 'N/A';
@@ -519,58 +572,29 @@ export default function KycVerificationPage() {
       },
     },
     {
-      key: 'province',
-      label: 'Province',
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const provinceId = prestataire.provinceId || prestataire.province_id;
-        if (!provinceId) return 'N/A';
-        const province = provinces.find(p => p.id === provinceId);
-        return province?.name || provinceId;
-      },
-    },
-    {
-      key: 'zone',
-      label: 'Zone de Santé',
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const zoneId = prestataire.zoneId || prestataire.zone_id;
-        if (!zoneId) return 'N/A';
-        // Chercher dans allZones d'abord, puis dans zones (pour les filtres)
-        const zone = allZones.get(zoneId) || zones.find(z => z.id === zoneId);
-        return zone?.name || zoneId;
-      },
-    },
-    {
-      key: 'aire',
-      label: 'Aire de Santé',
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const aireId = prestataire.aireId || prestataire.aire_id;
-        if (!aireId) return 'N/A';
-        // Chercher dans allAires d'abord, puis dans aires (pour les filtres)
-        const aire = allAires.get(aireId) || aires.find(a => a.id === aireId);
-        return aire?.name || aireId;
-      },
-    },
-    {
       key: 'kycStatus',
-      label: 'Statut KYC',
+      label: t('partner.kycStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => {
         const kycStatus = prestataire.kycStatus || prestataire.kyc_status;
-        if (!kycStatus) return <span className="text-gray-500">Non vérifié</span>;
+        if (!kycStatus) return <span className="text-gray-500">{t('partner.notVerified')}</span>;
         
-        const statusMap: Record<string, { label: string; color: string }> = {
-          'CORRECT': { label: 'Correct', color: 'bg-green-100 text-green-800' },
-          'INCORRECT': { label: 'Incorrect', color: 'bg-red-100 text-red-800' },
-          'SANS_COMPTE': { label: 'Sans compte', color: 'bg-yellow-100 text-yellow-800' },
-        };
+        let label = kycStatus;
+        let color = 'bg-gray-100 text-gray-800';
         
-        const statusInfo = statusMap[kycStatus] || { label: kycStatus, color: 'bg-gray-100 text-gray-800' };
+        if (kycStatus === 'CORRECT') {
+          label = t('partner.correct');
+          color = 'bg-green-100 text-green-800';
+        } else if (kycStatus === 'INCORRECT') {
+          label = t('partner.incorrect');
+          color = 'bg-red-100 text-red-800';
+        } else if (kycStatus === 'SANS_COMPTE') {
+          label = t('partner.noAccount');
+          color = 'bg-yellow-100 text-yellow-800';
+        }
         
         return (
-          <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>
-            {statusInfo.label}
+          <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+            {label}
           </span>
         );
       },

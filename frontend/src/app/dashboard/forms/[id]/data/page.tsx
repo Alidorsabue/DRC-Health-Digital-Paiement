@@ -376,10 +376,28 @@ export default function FormDataPage() {
       setLoadingData(true);
       // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
       const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
-      // Filtrer les prestataires validés (validation_status non null/vide)
+      // Filtrer les prestataires validés : validation_status = VALIDE_PAR_IT
+      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
       let validated = result.data.filter((row: any) => {
-        const validationStatus = row.validation_status || row.kyc_status || row.status;
-        return validationStatus && validationStatus !== 'ENREGISTRE' && validationStatus !== '' && validationStatus !== null;
+        // Prioriser validation_status sur status
+        let validationStatus = row.validation_status || 
+                               (row.raw_data && row.raw_data.validation_status);
+        
+        // Si validation_status n'existe pas, vérifier status
+        if (!validationStatus) {
+          const status = row.status || (row.raw_data && row.raw_data.status);
+          const statusStr = String(status || '').trim().toUpperCase();
+          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+            validationStatus = 'VALIDE_PAR_IT';
+          } else {
+            // Sinon, utiliser kyc_status ou status tel quel
+            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
+          }
+        }
+        
+        const statusStr = String(validationStatus || '').trim().toUpperCase();
+        return statusStr === 'VALIDE_PAR_IT' || statusStr === 'VALIDÉ_PAR_IT';
       });
       // Filtrer par campagne si sélectionnée
       if (selectedCampaignId) {
@@ -413,16 +431,45 @@ export default function FormDataPage() {
       setLoadingData(true);
       // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
       const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
-      // Filtrer les prestataires approuvés (approval_status = 'APPROVED' ou 'APPROUVE_PAR_MCZ')
+      // Filtrer les prestataires : validation_status = VALIDE_PAR_IT ET approval_status = APPROUVE_PAR_MCZ
+      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
       let approved = result.data.filter((row: any) => {
-        const approvalStatus = row.approval_status || row.approvalStatus;
-        return approvalStatus && 
-               approvalStatus !== '' && 
-               approvalStatus !== null &&
-               (approvalStatus === 'APPROVED' || 
-                approvalStatus === 'APPROUVE_PAR_MCZ' ||
-                approvalStatus === 'approuve_par_mcz' ||
-                approvalStatus === 'approuve');
+        // Vérifier validation_status = VALIDE_PAR_IT (prioriser validation_status sur status)
+        let validationStatus = row.validation_status || 
+                               (row.raw_data && row.raw_data.validation_status);
+        
+        // Si validation_status n'existe pas, vérifier status
+        if (!validationStatus) {
+          const status = row.status || (row.raw_data && row.raw_data.status);
+          const statusStr = String(status || '').trim().toUpperCase();
+          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+            validationStatus = 'VALIDE_PAR_IT';
+          } else {
+            // Sinon, utiliser kyc_status ou status tel quel
+            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
+          }
+        }
+        
+        const validationStatusStr = String(validationStatus || '').trim().toUpperCase();
+        const isValidated = validationStatusStr === 'VALIDE_PAR_IT' || validationStatusStr === 'VALIDÉ_PAR_IT';
+        
+        // Vérifier approval_status = APPROUVE_PAR_MCZ (prioriser approval_status sur status)
+        let approvalStatus = row.approval_status || 
+                             row.approvalStatus ||
+                             (row.raw_data && row.raw_data.approval_status);
+        
+        // Si approval_status n'existe pas, utiliser status
+        if (!approvalStatus) {
+          approvalStatus = row.status || (row.raw_data && row.raw_data.status);
+        }
+        
+        const approvalStatusStr = String(approvalStatus || '').trim().toUpperCase();
+        const isApproved = approvalStatusStr === 'APPROUVE_PAR_MCZ' || 
+                          approvalStatusStr === 'APPROUVÉ_PAR_MCZ' ||
+                          approvalStatusStr === 'APPROVED';
+        
+        return isValidated && isApproved;
       });
       // Filtrer par campagne si sélectionnée
       if (selectedCampaignId) {
@@ -1086,6 +1133,10 @@ export default function FormDataPage() {
       'family_name_i_c': ['family_name_i_c', 'Nom', 'nom'],
       'postnom': ['middle_name_i_c', 'Post nom', 'Postnom', 'postnom', 'post_nom'],
       'middle_name_i_c': ['middle_name_i_c', 'Post nom', 'Postnom', 'postnom', 'post_nom'],
+      'campaign_role_i_f': ['campaign_role_i_f', 'campaign_role', 'role', 'role_prestataire', 'categorie'],
+      'campaign_role': ['campaign_role_i_f', 'campaign_role', 'role', 'role_prestataire', 'categorie'],
+      'role': ['campaign_role_i_f', 'campaign_role', 'role', 'role_prestataire', 'categorie'],
+      'role_prestataire': ['campaign_role_i_f', 'campaign_role', 'role', 'role_prestataire', 'categorie'],
     };
     
     // Obtenir toutes les variantes possibles pour ce champ
@@ -1183,8 +1234,22 @@ export default function FormDataPage() {
     }
     
     // Pour validation_status et kyc_status - chercher les deux et convertir en label
+    // Prioriser validation_status sur status. Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer VALIDE_PAR_IT
     if (fieldName === 'validation_status' || fieldName === 'kyc_status') {
-      const validationStatus = getValueFromRow('validation_status', row) || getValueFromRow('kyc_status', row) || getValueFromRow('status', row);
+      let validationStatus = getValueFromRow('validation_status', row) || getValueFromRow('kyc_status', row);
+      
+      // Si validation_status n'existe pas, vérifier status
+      if (!validationStatus) {
+        const status = getValueFromRow('status', row);
+        const statusStr = String(status || '').trim().toUpperCase();
+        // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+        if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+          validationStatus = 'VALIDE_PAR_IT';
+        } else {
+          validationStatus = status;
+        }
+      }
+      
       if (validationStatus && validationStatus !== '-' && validationStatus !== null && validationStatus !== '') {
         // Mapping des statuts de validation (noms techniques -> labels)
         const statusLabels: Record<string, string> = {
@@ -1293,6 +1358,202 @@ export default function FormDataPage() {
       return '-';
     }
     
+    // Pour approval_status - formater comme validation_status
+    // Prioriser approval_status sur status
+    if (fieldName === 'approval_status') {
+      let approvalStatus = getValueFromRow('approval_status', row) || getValueFromRow('approvalStatus', row);
+      
+      // Si approval_status n'existe pas, utiliser status
+      if (!approvalStatus) {
+        approvalStatus = getValueFromRow('status', row);
+      }
+      
+      if (approvalStatus && approvalStatus !== '-' && approvalStatus !== null && approvalStatus !== '') {
+        const statusLabels: Record<string, string> = {
+          'APPROUVE_PAR_MCZ': 'Approuvé par MCZ',
+          'APPROUVÉ_PAR_MCZ': 'Approuvé par MCZ',
+          'approuve_par_mcz': 'Approuvé par MCZ',
+          'APPROVED': 'Approuvé',
+          'APPROUVE': 'Approuvé',
+          'approuve': 'Approuvé',
+          'REJETE_PAR_MCZ': 'Rejeté par MCZ',
+          'rejete_par_mcz': 'Rejeté par MCZ',
+          'REJECTED': 'Rejeté',
+          'REJETE': 'Rejeté',
+          'EN_ATTENTE_PAR_MCZ': 'En attente par MCZ',
+          'en_attente_par_mcz': 'En attente par MCZ',
+          'PENDING': 'En attente',
+        };
+        
+        const statusStr = String(approvalStatus).trim();
+        if (statusLabels[statusStr]) {
+          return statusLabels[statusStr];
+        }
+        
+        const statusFieldSchema = schema?.properties?.['approval_status'];
+        if (statusFieldSchema) {
+          const label = getLabelFromValue(approvalStatus, statusFieldSchema);
+          if (label) {
+            return label;
+          }
+        }
+        
+        return statusStr
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+      }
+      return '-';
+    }
+    
+    // Pour approval_date - chercher dans toutes les variantes et formater correctement
+    if (fieldName === 'approval_date' || fieldName === 'approved_at') {
+      let approvalDate = getValueFromRow('approval_date', row);
+      if (!approvalDate || approvalDate === '-' || approvalDate === null || approvalDate === '') {
+        approvalDate = getValueFromRow('approved_at', row);
+      }
+      if (!approvalDate || approvalDate === '-' || approvalDate === null || approvalDate === '') {
+        approvalDate = getValueFromRow('approvalDate', row);
+      }
+      
+      if (approvalDate && approvalDate !== '-' && approvalDate !== null && approvalDate !== '') {
+        try {
+          let date: Date;
+          if (typeof approvalDate === 'string') {
+            date = new Date(approvalDate);
+            if (isNaN(date.getTime())) {
+              const cleaned = approvalDate.replace(/T/, ' ').replace(/Z$/, '').trim();
+              date = new Date(cleaned);
+            }
+          } else if (approvalDate instanceof Date) {
+            date = approvalDate;
+          } else {
+            date = new Date(approvalDate);
+          }
+          
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('fr-FR', { 
+              year: 'numeric', 
+              month: '2-digit', 
+              day: '2-digit'
+            });
+          }
+        } catch (e) {
+          console.warn('Erreur lors du formatage de la date d\'approbation:', e, approvalDate);
+        }
+        return String(approvalDate);
+      }
+      return '-';
+    }
+    
+    // Pour payment_status - formater comme validation_status et approval_status
+    if (fieldName === 'payment_status') {
+      let paymentStatus = getValueFromRow('payment_status', row) || getValueFromRow('paymentStatus', row);
+      
+      // Si payment_status n'existe pas, chercher dans status
+      if (!paymentStatus) {
+        paymentStatus = getValueFromRow('status', row);
+      }
+      
+      if (paymentStatus && paymentStatus !== '-' && paymentStatus !== null && paymentStatus !== '') {
+        const statusLabels: Record<string, string> = {
+          'PAYE': 'Payé',
+          'paye': 'Payé',
+          'PAID': 'Payé',
+          'PAYE_PAR_PARTENAIRE': 'Payé par partenaire',
+          'paye_par_partenaire': 'Payé par partenaire',
+          'EN_ATTENTE': 'En attente',
+          'en_attente': 'En attente',
+          'PENDING': 'En attente',
+          'REJETE': 'Rejeté',
+          'rejete': 'Rejeté',
+          'REJECTED': 'Rejeté',
+        };
+        
+        const statusStr = String(paymentStatus).trim();
+        if (statusLabels[statusStr]) {
+          return statusLabels[statusStr];
+        }
+        
+        const statusFieldSchema = schema?.properties?.['payment_status'];
+        if (statusFieldSchema) {
+          const label = getLabelFromValue(paymentStatus, statusFieldSchema);
+          if (label) {
+            return label;
+          }
+        }
+        
+        return statusStr
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+      }
+      return '-';
+    }
+    
+    // Pour payment_amount - formater le montant payé
+    if (fieldName === 'payment_amount' || fieldName === 'amount_paid' || fieldName === 'montant_paye') {
+      let paymentAmount = getValueFromRow('payment_amount', row) || 
+                          getValueFromRow('amount_paid', row) || 
+                          getValueFromRow('montant_paye', row) ||
+                          getValueFromRow('paymentAmount', row);
+      
+      if (paymentAmount && paymentAmount !== '-' && paymentAmount !== null && paymentAmount !== '') {
+        // Formater comme nombre avec séparateur de milliers
+        const amount = parseFloat(String(paymentAmount));
+        if (!isNaN(amount)) {
+          return new Intl.NumberFormat('fr-FR', {
+            style: 'currency',
+            currency: 'CDF',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          }).format(amount).replace('CDF', '').trim() + ' CDF';
+        }
+        return String(paymentAmount);
+      }
+      return '-';
+    }
+    
+    // Pour payment_date - chercher dans toutes les variantes et formater correctement
+    if (fieldName === 'payment_date' || fieldName === 'paid_at') {
+      let paymentDate = getValueFromRow('payment_date', row);
+      if (!paymentDate || paymentDate === '-' || paymentDate === null || paymentDate === '') {
+        paymentDate = getValueFromRow('paid_at', row);
+      }
+      if (!paymentDate || paymentDate === '-' || paymentDate === null || paymentDate === '') {
+        paymentDate = getValueFromRow('paymentDate', row);
+      }
+      
+      if (paymentDate && paymentDate !== '-' && paymentDate !== null && paymentDate !== '') {
+        try {
+          let date: Date;
+          if (typeof paymentDate === 'string') {
+            date = new Date(paymentDate);
+            if (isNaN(date.getTime())) {
+              const cleaned = paymentDate.replace(/T/, ' ').replace(/Z$/, '').trim();
+              date = new Date(cleaned);
+            }
+          } else if (paymentDate instanceof Date) {
+            date = paymentDate;
+          } else {
+            date = new Date(paymentDate);
+          }
+          
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('fr-FR', { 
+              year: 'numeric', 
+              month: '2-digit', 
+              day: '2-digit'
+            });
+          }
+        } catch (e) {
+          console.warn('Erreur lors du formatage de la date de paiement:', e, paymentDate);
+        }
+        return String(paymentDate);
+      }
+      return '-';
+    }
+    
     // Pour les autres champs, récupérer la valeur
     const value = getValueFromRow(fieldName, row);
     
@@ -1320,36 +1581,47 @@ export default function FormDataPage() {
 
   // Fonction pour obtenir les colonnes importantes selon l'onglet
   const getImportantColumns = useCallback((tab: string): string[] => {
-    const baseColumns = [
-      'id',
-      'provinceId', 'antenneId', 'zoneId', 'aireId',
-      'nom', // Nom complet (nom + postnom + prenom combinés)
-      'gender_i_c',
-      'num_phone',
-    ];
-    
     // Colonnes spécifiques selon l'onglet - UN SEUL champ role (priorité: campaign_role_i_f > campaign_role > role > role_prestataire)
     let roleColumn = 'campaign_role_i_f'; // Priorité au champ campaign_role_i_f
     if (tab === 'validation') {
       return [
-        ...baseColumns,
-        roleColumn, // Un seul champ role
+        'id',
+        'provinceId', 'antenneId', 'zoneId', 'aireId',
+        'nom', // Nom complet (nom + postnom + prenom combinés)
+        'gender_i_c', // SEXE
+        'num_phone', // TELEPHONE
+        roleColumn, // RÔLE PENDANT LA CAMPAGNE
         'validation_status', // Priorité à validation_status (kyc_status sera mappé vers celui-ci)
         'validation_date' // Priorité à validation_date (validated_at sera mappé vers celui-ci)
       ];
     } else if (tab === 'approbation') {
       return [
-        ...baseColumns,
-        roleColumn, // Un seul champ role
-        'approval_status',
-        'approval_date', 'approved_at'
+        'id',
+        'provinceId', 'antenneId', 'zoneId', 'aireId',
+        'nom', // Nom complet (nom + postnom + prenom combinés)
+        'gender_i_c', // SEXE
+        'num_phone', // TELEPHONE
+        roleColumn, // RÔLE PENDANT LA CAMPAGNE
+        'validation_status', // STATUT VALIDATION
+        'validation_date', // DATE VALIDATION
+        'approval_status', // STATUT APPROBATION
+        'approval_date', 'approved_at' // DATE APPROBATION
       ];
     } else if (tab === 'paiement') {
       return [
-        ...baseColumns,
-        roleColumn, // Un seul champ role
-        'payment_status',
-        'payment_date', 'paid_at'
+        'id',
+        'provinceId', 'antenneId', 'zoneId', 'aireId',
+        'nom', // Nom complet (nom + postnom + prenom combinés)
+        'gender_i_c', // SEXE
+        'num_phone', // TELEPHONE
+        roleColumn, // RÔLE PENDANT LA CAMPAGNE
+        'validation_status', // STATUT VALIDATION
+        'validation_date', // DATE VALIDATION
+        'approval_status', // STATUT APPROBATION
+        'approval_date', 'approved_at', // DATE APPROBATION
+        'payment_status', // STATUT PAIEMENT
+        'payment_amount', 'amount_paid', 'montant_paye', // MONTANT PAYE
+        'payment_date', 'paid_at' // DATE DE PAIEMENT
       ];
     }
     
@@ -1418,15 +1690,22 @@ export default function FormDataPage() {
         const colLower = col.toLowerCase();
         // Mapping des colonnes équivalentes pour éviter les doublons - garder UNE SEULE variante
         const equivalentCols: Record<string, string> = {
-          'sexe': 'gender_i_c', // Garder sexe
-          'telephone': 'num_phone', // Garder telephone
-          'phone': 'telephone', // Mapper phone vers telephone
-          'numero_telephone': 'telephone', // Mapper numero_telephone vers telephone
+          'sexe': 'gender_i_c', // Garder gender_i_c
+          'gender_i_c': 'gender_i_c', // Garder gender_i_c
+          'telephone': 'num_phone', // Garder num_phone
+          'phone': 'num_phone', // Mapper phone vers num_phone
+          'numero_telephone': 'num_phone', // Mapper numero_telephone vers num_phone
+          'num_phone': 'num_phone', // Garder num_phone
+          'campaign_role': 'campaign_role_i_f', // Mapper campaign_role vers campaign_role_i_f
+          'role': 'campaign_role_i_f', // Mapper role vers campaign_role_i_f
+          'role_prestataire': 'campaign_role_i_f', // Mapper role_prestataire vers campaign_role_i_f
           'validation_status': 'validation_status', // Garder validation_status
           'kyc_status': 'validation_status', // Mapper kyc_status vers validation_status
           'validation_date': 'validation_date', // Garder validation_date
         };
         const normalizedCol = equivalentCols[colLower] || colLower;
+        // Éviter les doublons d'ID
+        if (colLower === 'id' && seenCols.has('id')) continue;
         if (seenCols.has(normalizedCol)) continue;
         seenCols.add(normalizedCol);
         
@@ -1449,10 +1728,12 @@ export default function FormDataPage() {
         // Vérifier si la colonne existe dans les données (même si pas dans le schéma)
         // Pour les nouveaux onglets, toujours inclure les colonnes importantes même si pas trouvées
         const systemCols = ['id', 'provinceId', 'antenneId', 'zoneId', 'aireId', 'nom', 'nom_complet',
-                           'sexe', 'telephone', 'campaign_role_i_f',
+                           'gender_i_c', 'sexe', 'num_phone', 'telephone', 'phone', 'numero_telephone', 
+                           'campaign_role_i_f', 'campaign_role', 'role', 'role_prestataire',
                            'validation_status', 'kyc_status', 
                            'approval_status', 'payment_status', 'validation_date', 
                            'approval_date', 'approved_at', 
+                           'payment_amount', 'amount_paid', 'montant_paye',
                            'payment_date', 'paid_at'];
         
         if (systemCols.includes(finalCol)) {
@@ -1805,11 +2086,6 @@ export default function FormDataPage() {
                             />
                           </th>
                         )}
-                        <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
-                          <div className="flex flex-col gap-1 sm:gap-2">
-                            <span className="whitespace-nowrap">ID</span>
-                          </div>
-                        </th>
                         {orderedFields.filter(fieldName => visibleColumns.has(fieldName)).map((fieldName, colIndex) => {
                           // Obtenir le label de la colonne
                           let columnLabel = fieldName;
@@ -1823,10 +2099,10 @@ export default function FormDataPage() {
                             columnLabel = 'Zone de santé';
                           } else if (fieldName === 'aireId') {
                             columnLabel = 'Aire de santé';
-                          } else if (fieldName === 'telephone' || fieldName === 'phone' || fieldName === 'numero_telephone') {
-                            columnLabel = 'Téléphone';
-                          } else if (fieldName === 'sexe' || fieldName === 'sex') {
+                          } else if (fieldName === 'gender_i_c' || fieldName === 'sexe' || fieldName === 'sex') {
                             columnLabel = 'Sexe';
+                          } else if (fieldName === 'num_phone' || fieldName === 'telephone' || fieldName === 'phone' || fieldName === 'numero_telephone') {
+                            columnLabel = 'Téléphone';
                           } else if (fieldName === 'campaign_role_i_f') {
                             columnLabel = 'Rôle pendant la campagne';
                           } else if (fieldName === 'role' || fieldName === 'campaign_role' || fieldName === 'role_prestataire') {
@@ -1841,6 +2117,8 @@ export default function FormDataPage() {
                             columnLabel = 'Date validation';
                           } else if (fieldName === 'approval_date' || fieldName === 'approved_at') {
                             columnLabel = 'Date approbation';
+                          } else if (fieldName === 'payment_amount' || fieldName === 'amount_paid' || fieldName === 'montant_paye') {
+                            columnLabel = 'Montant payé';
                           } else if (fieldName === 'payment_date' || fieldName === 'paid_at') {
                             columnLabel = 'Date paiement';
                           } else {
@@ -1922,17 +2200,17 @@ export default function FormDataPage() {
                                 />
                               </td>
                             )}
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 sticky left-0 bg-white z-10 font-mono">
-                              {rowId}
-                            </td>
                             {orderedFields.filter(fieldName => visibleColumns.has(fieldName)).map((fieldName) => {
+                              // Pour la colonne ID, utiliser rowId pour la cohérence
+                              const isIdColumn = fieldName === 'id';
                               const fieldSchema = schema?.properties?.[fieldName];
-                              const cellValue = formatSpecialCell(fieldName, row, fieldSchema);
+                              const cellValue = isIdColumn ? rowId : formatSpecialCell(fieldName, row, fieldSchema);
+                              const isSticky = isIdColumn; // Rendre ID sticky
                               
                               return (
                                 <td 
                                   key={fieldName} 
-                                  className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900"
+                                  className={`px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 ${isSticky ? 'sticky left-0 bg-white z-10 font-mono' : ''}`}
                                   style={{ minWidth: '100px', wordBreak: 'break-word', overflowWrap: 'break-word' }}
                                   title={cellValue}
                                 >

@@ -187,6 +187,98 @@ export default function NationalPage() {
     );
   };
 
+  const formatDate = (dateValue: any): string => {
+    if (!dateValue || dateValue === null || dateValue === undefined || dateValue === '') {
+      return 'N/A';
+    }
+    
+    try {
+      let date: Date;
+      if (typeof dateValue === 'string') {
+        const trimmed = dateValue.trim();
+        if (trimmed === '' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+          return 'N/A';
+        }
+        date = new Date(dateValue);
+        if (isNaN(date.getTime())) {
+          const cleaned = dateValue.replace(/T/, ' ').replace(/Z$/, '').trim();
+          date = new Date(cleaned);
+        }
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
+      } else {
+        date = new Date(dateValue);
+      }
+      
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('fr-FR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+      }
+    } catch (e) {
+      console.warn('Erreur lors du formatage de la date:', e, dateValue);
+    }
+    
+    return 'N/A';
+  };
+
+  // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
+  const getValidationStatus = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    const validationStatus = (prestataire as any).validation_status ||
+                            rawData.validation_status ||
+                            (prestataire as any).validationStatus ||
+                            rawData.validationStatus ||
+                            'ENREGISTRE';
+    return validationStatus;
+  };
+
+  const getValidationDate = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    const validationDate = prestataire.validationDate || 
+                          prestataire.validation_date || 
+                          rawData.validationDate || 
+                          rawData.validation_date ||
+                          rawData.validated_at ||
+                          prestataire.validated_at;
+    return formatDate(validationDate);
+  };
+
+  const getApprovalDate = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    const approvalDate = prestataire.approvalDate || 
+                         prestataire.approval_date || 
+                         rawData.approvalDate || 
+                         rawData.approval_date ||
+                         rawData.approved_at ||
+                         prestataire.approved_at;
+    return formatDate(approvalDate);
+  };
+
+  const getPaymentDate = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    const paymentDate = prestataire.paymentDate || 
+                        prestataire.payment_date || 
+                        rawData.paymentDate || 
+                        rawData.payment_date ||
+                        rawData.paid_at ||
+                        prestataire.paid_at;
+    return formatDate(paymentDate);
+  };
+
+  // Fonction helper pour récupérer le montant payé
+  const getPaymentAmount = (prestataire: Prestataire): number => {
+    const rawData = prestataire.raw_data || {};
+    const paymentAmount = (prestataire as any).paymentAmount ||
+                         (prestataire as any).payment_amount ||
+                         rawData.paymentAmount ||
+                         rawData.payment_amount ||
+                         0;
+    return paymentAmount;
+  };
+
   if (user?.role !== 'NATIONAL' && user?.role !== 'SUPERADMIN') {
     return (
       <div className="text-center py-12">
@@ -391,11 +483,6 @@ export default function NationalPage() {
               label: t('common.id'),
             },
             {
-              key: 'nom',
-              label: t('common.name'),
-              render: (_, prestataire) => prestataire.nom || prestataire.nom_complet || 'N/A',
-            },
-            {
               key: 'provinceId',
               label: t('national.province'),
               render: (_, prestataire) => prestataire.provinceId || 'N/A',
@@ -411,15 +498,68 @@ export default function NationalPage() {
               render: (_, prestataire) => prestataire.aireId || 'N/A',
             },
             {
-              key: 'status',
-              label: t('common.status'),
-              render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
+              key: 'nom',
+              label: t('common.name'),
+              render: (_, prestataire) => {
+                const prenom = prestataire.prenom || prestataire.given_name_i_c || prestataire.Prenom || prestataire.Prénom || '';
+                const nom = prestataire.nom || prestataire.family_name_i_c || prestataire.Nom || '';
+                const postnom = prestataire.postnom || prestataire.middle_name_i_c || prestataire.Postnom || prestataire.post_nom || '';
+                const rawData = prestataire.raw_data || {};
+                const prenomRaw = rawData.prenom || rawData.given_name_i_c || rawData.Prenom || rawData.Prénom || '';
+                const nomRaw = rawData.nom || rawData.family_name_i_c || rawData.Nom || '';
+                const postnomRaw = rawData.postnom || rawData.middle_name_i_c || rawData.Postnom || rawData.post_nom || '';
+                const finalPrenom = prenom || prenomRaw;
+                const finalNom = nom || nomRaw;
+                const finalPostnom = postnom || postnomRaw;
+                const parts = [finalPrenom, finalNom, finalPostnom].filter(p => p && String(p).trim() && p !== 'null' && p !== 'undefined');
+                return parts.length > 0 ? parts.join(' ') : (prestataire.nom_complet || prestataire.fullName || 'N/A');
+              },
+            },
+            {
+              key: 'gender',
+              label: t('common.gender'),
+              render: (_, prestataire) => {
+                const rawData = prestataire.raw_data || {};
+                const gender = (prestataire as any).gender_i_c ||
+                              (prestataire as any).gender ||
+                              (prestataire as any).sexe ||
+                              rawData.gender_i_c ||
+                              rawData.gender ||
+                              rawData.sexe ||
+                              'N/A';
+                return gender;
+              },
+            },
+            {
+              key: 'telephone',
+              label: t('common.phone'),
+              render: (_, prestataire) => {
+                const telephone = prestataire.telephone || prestataire.num_phone || prestataire.confirm_phone || prestataire.phone || '';
+                const rawData = prestataire.raw_data || {};
+                const telephoneRaw = rawData.telephone || rawData.num_phone || rawData.confirm_phone || rawData.phone || '';
+                return telephone || telephoneRaw || 'N/A';
+              },
+            },
+            {
+              key: 'categorie',
+              label: t('common.role'),
+              render: (_, prestataire) => {
+                const categorie = prestataire.categorie || prestataire.campaign_role_i_f || prestataire.campaign_role || prestataire.role || prestataire.role_prestataire || '';
+                const rawData = prestataire.raw_data || {};
+                const categorieRaw = rawData.categorie || rawData.campaign_role_i_f || rawData.campaign_role || rawData.role || rawData.role_prestataire || '';
+                return categorie || categorieRaw || 'N/A';
+              },
+            },
+            {
+              key: 'kycStatus',
+              label: t('partner.kycStatus'),
+              render: (_, prestataire) => getKycStatusBadge(prestataire),
             },
             {
               key: 'validationStatus',
               label: t('partner.validationStatus'),
               render: (_, prestataire) => {
-                const status = prestataire.status || 'ENREGISTRE';
+                const status = getValidationStatus(prestataire);
                 let label = status;
                 let color = 'bg-gray-100 text-gray-800';
                 
@@ -428,15 +568,8 @@ export default function NationalPage() {
                 } else if (status === 'VALIDE_PAR_IT') {
                   label = t('status.validatedByIT');
                   color = 'bg-blue-100 text-blue-800';
-                } else if (status === 'APPROUVE_PAR_MCZ') {
-                  label = t('status.approvedByMCZ');
-                  color = 'bg-green-100 text-green-800';
-                } else if (status === 'REJETE_PAR_MCZ') {
-                  label = t('status.rejectedByMCZ');
-                  color = 'bg-red-100 text-red-800';
-                } else if (status === 'EN_ATTENTE_PAR_MCZ') {
-                  label = t('status.pendingMCZ');
-                  color = 'bg-yellow-100 text-yellow-800';
+                } else {
+                  label = status;
                 }
                 
                 return (
@@ -450,47 +583,64 @@ export default function NationalPage() {
               key: 'validationDate',
               label: t('partner.validationDate'),
               render: (_, prestataire) => {
-                const rawData = prestataire.raw_data || {};
-                const validationDate = prestataire.validationDate || 
-                                      prestataire.validation_date || 
-                                      rawData.validationDate || 
-                                      rawData.validation_date ||
-                                      rawData.validated_at ||
-                                      prestataire.validated_at;
-                
-                if (!validationDate || validationDate === null || validationDate === undefined || validationDate === '') {
-                  return <span className="text-gray-400 text-sm">N/A</span>;
-                }
-                
-                try {
-                  const date = new Date(validationDate);
-                  if (!isNaN(date.getTime())) {
-                    return (
-                      <span className="text-sm text-gray-700">
-                        {date.toLocaleDateString('fr-FR', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                        })}
-                      </span>
-                    );
-                  }
-                } catch (e) {
-                  console.warn('Erreur lors du formatage de la date:', e, validationDate);
-                }
-                
-                return <span className="text-gray-400 text-sm">N/A</span>;
+                const date = getValidationDate(prestataire);
+                return (
+                  <span className={`text-sm ${date !== 'N/A' ? 'text-gray-700' : 'text-gray-400'}`}>
+                    {date}
+                  </span>
+                );
               },
             },
             {
-              key: 'kycStatus',
-              label: t('partner.kycStatus'),
-              render: (_, prestataire) => getKycStatusBadge(prestataire),
+              key: 'approvalStatus',
+              label: t('partner.approvalStatus'),
+              render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
+            },
+            {
+              key: 'approvalDate',
+              label: t('partner.approvalDate'),
+              render: (_, prestataire) => {
+                const date = getApprovalDate(prestataire);
+                return (
+                  <span className={`text-sm ${date !== 'N/A' ? 'text-gray-700' : 'text-gray-400'}`}>
+                    {date}
+                  </span>
+                );
+              },
             },
             {
               key: 'paymentStatus',
               label: t('partner.paymentStatus'),
               render: (_, prestataire) => getPaymentStatusBadge(prestataire),
+            },
+            {
+              key: 'paymentAmount',
+              label: t('common.paidAmount'),
+              render: (_, prestataire) => {
+                const amount = getPaymentAmount(prestataire);
+                if (amount <= 0) return 'N/A';
+                const rawData = prestataire.raw_data || {};
+                const currency = (prestataire as any).paymentCurrency || rawData.paymentCurrency || 'USD';
+                let currencySymbol = '$';
+                if (currency === 'CDF') {
+                  currencySymbol = 'FC';
+                } else if (currency === 'EURO') {
+                  currencySymbol = '€';
+                }
+                return `${amount} ${currencySymbol}`;
+              },
+            },
+            {
+              key: 'paymentDate',
+              label: t('partner.paymentDate'),
+              render: (_, prestataire) => {
+                const date = getPaymentDate(prestataire);
+                return (
+                  <span className={`text-sm ${date !== 'N/A' ? 'text-gray-700' : 'text-gray-400'}`}>
+                    {date}
+                  </span>
+                );
+              },
             },
           ]}
           title={t('national.providers')}
@@ -500,3 +650,4 @@ export default function NationalPage() {
     </div>
   );
 }
+

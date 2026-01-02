@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../lib/api/auth';
 import { getErrorMessage } from '../../utils/error-handler';
+import { useTranslation } from '../../hooks/useTranslation';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuthStore();
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,9 +22,9 @@ function LoginForm() {
     // Vérifier si on arrive depuis une expiration de session
     if (searchParams.get('expired') === 'true') {
       setExpiredMessage(true);
-      setError('Votre session a expiré. Veuillez vous reconnecter.');
+      setError(t('login.sessionExpiredMessage'));
     }
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +37,7 @@ function LoginForm() {
       router.push('/dashboard');
     } catch (err: any) {
       // Utiliser la fonction utilitaire pour obtenir le message d'erreur formaté avec solutions
-      setError(getErrorMessage(err, 'Erreur de connexion. Vérifiez vos identifiants.'));
+      setError(getErrorMessage(err, t('login.connectionError')));
     } finally {
       setLoading(false);
     }
@@ -49,14 +51,14 @@ function LoginForm() {
             DRC Digit Payment
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Connectez-vous à votre compte
+            {t('login.connectToAccount')}
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {expiredMessage && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded">
-              <p className="font-medium">Session expirée</p>
-              <p className="text-sm mt-1">Votre session a expiré pour des raisons de sécurité. Veuillez vous reconnecter.</p>
+              <p className="font-medium">{t('login.sessionExpired')}</p>
+              <p className="text-sm mt-1">{t('login.sessionExpiredMessage')}</p>
             </div>
           )}
           {error && !expiredMessage && (
@@ -67,7 +69,7 @@ function LoginForm() {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="username" className="sr-only">
-                Nom d'utilisateur
+                {t('login.username')}
               </label>
               <input
                 id="username"
@@ -75,14 +77,14 @@ function LoginForm() {
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Nom d'utilisateur"
+                placeholder={t('login.username')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
-                Mot de passe
+                {t('login.password')}
               </label>
               <input
                 id="password"
@@ -90,7 +92,7 @@ function LoginForm() {
                 type="password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Mot de passe"
+                placeholder={t('login.password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -103,7 +105,7 @@ function LoginForm() {
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Connexion...' : 'Se connecter'}
+              {loading ? t('login.connecting') : t('login.loginButton')}
             </button>
           </div>
         </form>
@@ -113,11 +115,12 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-gray-600">Chargement...</p>
+          <p className="text-gray-600">{t('common.loading')}</p>
         </div>
       </div>
     }>

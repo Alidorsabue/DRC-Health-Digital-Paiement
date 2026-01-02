@@ -340,6 +340,71 @@ export default function PartnerPage() {
     );
   };
 
+  // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
+  const getValidationStatus = (prestataire: PrestataireForPartner): string => {
+    const rawData = prestataire.raw_data || {};
+    const validationStatus = (prestataire as any).validation_status ||
+                            rawData.validation_status ||
+                            (prestataire as any).validationStatus ||
+                            rawData.validationStatus ||
+                            'ENREGISTRE';
+    return validationStatus;
+  };
+
+  const getValidationDate = (prestataire: PrestataireForPartner): string => {
+    const rawData = prestataire.raw_data || {};
+    const validationDate = prestataire.validationDate || 
+                          prestataire.validation_date || 
+                          rawData.validationDate || 
+                          rawData.validation_date ||
+                          rawData.validated_at ||
+                          (prestataire as any).validated_at;
+    return formatDate(validationDate);
+  };
+
+  const getApprovalDate = (prestataire: PrestataireForPartner): string => {
+    const rawData = prestataire.raw_data || {};
+    const approvalDate = prestataire.approvalDate || 
+                         prestataire.approval_date || 
+                         rawData.approvalDate || 
+                         rawData.approval_date ||
+                         rawData.approved_at ||
+                         (prestataire as any).approved_at;
+    return formatDate(approvalDate);
+  };
+
+  const getPaymentDate = (prestataire: PrestataireForPartner): string => {
+    const rawData = prestataire.raw_data || {};
+    const paymentDate = prestataire.paymentDate || 
+                        prestataire.payment_date || 
+                        rawData.paymentDate || 
+                        rawData.payment_date ||
+                        rawData.paid_at ||
+                        (prestataire as any).paid_at;
+    return formatDate(paymentDate);
+  };
+
+  // Fonction helper pour récupérer le montant payé
+  const getPaymentAmount = (prestataire: PrestataireForPartner): string => {
+    const paymentStatus = (prestataire.paymentStatus || prestataire.payment_status || '').toLowerCase();
+    const isPaid = paymentStatus === 'paid' || paymentStatus === 'paye' || paymentStatus === 'payé';
+
+    if (!isPaid) {
+      return 'N/A';
+    }
+
+    const rawData = prestataire.raw_data || {};
+    const amount = prestataire.paymentAmount || prestataire.payment_amount || rawData.paymentAmount || rawData.payment_amount || 0;
+    const currency = prestataire.paymentCurrency || prestataire.amountCurrency || rawData.paymentCurrency || 'USD';
+    let currencySymbol = '$';
+    if (currency === 'CDF') {
+      currencySymbol = 'FC';
+    } else if (currency === 'EURO') {
+      currencySymbol = '€';
+    }
+    return amount > 0 ? `${amount} ${currencySymbol}` : 'N/A';
+  };
+
   const handleExport = async (format: 'csv' | 'excel' | 'pdf' | 'image') => {
     setShowExportMenu(false);
     
@@ -1090,6 +1155,24 @@ export default function PartnerPage() {
       sortable: true,
     },
     {
+      key: 'provinceId',
+      label: t('common.province'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => prestataire.provinceId || prestataire.province_id || 'N/A',
+    },
+    {
+      key: 'zoneId',
+      label: t('common.zone'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => prestataire.zoneId || prestataire.zone_id || 'N/A',
+    },
+    {
+      key: 'aireId',
+      label: t('common.area'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => prestataire.aireId || prestataire.aire_id || 'N/A',
+    },
+    {
       key: 'nom',
       label: t('common.name'),
       sortable: true,
@@ -1126,6 +1209,22 @@ export default function PartnerPage() {
         const finalPostnom = postnom;
         const parts = [finalPrenom, finalNom, finalPostnom].filter(p => p && String(p).trim() && p !== 'null' && p !== 'undefined');
         return parts.length > 0 ? parts.join(' ') : 'N/A';
+      },
+    },
+    {
+      key: 'gender',
+      label: t('common.gender'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const rawData = prestataire.raw_data || {};
+        const gender = (prestataire as any).gender_i_c ||
+                      (prestataire as any).gender ||
+                      (prestataire as any).sexe ||
+                      rawData.gender_i_c ||
+                      rawData.gender ||
+                      rawData.sexe ||
+                      'N/A';
+        return gender;
       },
     },
     {
@@ -1172,81 +1271,6 @@ export default function PartnerPage() {
       },
     },
     {
-      key: 'presenceDays',
-      label: 'Nombre de jours',
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const days = prestataire.presenceDays || prestataire.presence_days || prestataire.presence || 0;
-        return days || 'N/A';
-      },
-    },
-    {
-      key: 'amountToPay',
-      label: t('partner.amountToPay'),
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        // Montant calculé (pas le montant payé)
-        const amount = prestataire.amountToPay || prestataire.amount_to_pay || 0;
-        if (amount <= 0) return 'N/A';
-        
-        // Déterminer la devise à afficher
-        const currency = prestataire.amountCurrency || 'USD';
-        let currencySymbol = '$';
-        if (currency === 'CDF') {
-          currencySymbol = 'FC';
-        } else if (currency === 'EURO') {
-          currencySymbol = '€';
-        }
-        
-        return `${amount} ${currencySymbol}`;
-      },
-    },
-    {
-      key: 'validationStatus',
-      label: t('partner.validationStatus'),
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const status = prestataire.status || 'ENREGISTRE';
-        let label = status;
-        let color = 'bg-gray-100 text-gray-800';
-        
-        if (status === 'ENREGISTRE') {
-          label = t('status.registered');
-        } else if (status === 'VALIDE_PAR_IT') {
-          label = t('status.validatedByIT');
-          color = 'bg-blue-100 text-blue-800';
-        } else if (status === 'APPROUVE_PAR_MCZ') {
-          label = t('status.approvedByMCZ');
-          color = 'bg-green-100 text-green-800';
-        } else if (status === 'REJETE_PAR_MCZ') {
-          label = t('status.rejectedByMCZ');
-          color = 'bg-red-100 text-red-800';
-        } else if (status === 'EN_ATTENTE_PAR_MCZ') {
-          label = t('status.pendingMCZ');
-          color = 'bg-yellow-100 text-yellow-800';
-        }
-        
-        return (
-          <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
-            {label}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'validationDate',
-      label: t('partner.validationDate'),
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const rawData = prestataire.raw_data || {};
-        const validationDate = prestataire.validationDate || 
-                              prestataire.validation_date || 
-                              rawData.validationDate || 
-                              rawData.validation_date ||
-                              rawData.validated_at ||
-                              prestataire.validated_at;
-        return formatDate(validationDate);
-      },
-    },
-    {
       key: 'kycStatus',
       label: t('partner.kycStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => {
@@ -1275,47 +1299,89 @@ export default function PartnerPage() {
       },
     },
     {
+      key: 'validationStatus',
+      label: t('partner.validationStatus'),
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const status = getValidationStatus(prestataire);
+        let label = status;
+        let color = 'bg-gray-100 text-gray-800';
+        
+        if (status === 'ENREGISTRE') {
+          label = t('status.registered');
+        } else if (status === 'VALIDE_PAR_IT') {
+          label = t('status.validatedByIT');
+          color = 'bg-blue-100 text-blue-800';
+        } else {
+          label = status;
+        }
+        
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
+            {label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'validationDate',
+      label: t('partner.validationDate'),
+      render: (value: any, prestataire: PrestataireForPartner) => getValidationDate(prestataire),
+    },
+    {
       key: 'approvalStatus',
-      label: 'Statut Approbation',
+      label: t('partner.approvalStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => getStatusBadge(prestataire.approvalStatus || prestataire.status),
     },
     {
       key: 'approvalDate',
-      label: 'Date Approbation',
-      render: (value: any, prestataire: PrestataireForPartner) => formatDate(prestataire.approvalDate || prestataire.approval_date),
+      label: t('partner.approvalDate'),
+      render: (value: any, prestataire: PrestataireForPartner) => getApprovalDate(prestataire),
+    },
+    {
+      key: 'presenceDays',
+      label: t('partner.presenceDays'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const days = prestataire.presenceDays || prestataire.presence_days || prestataire.presence || 0;
+        return days || 'N/A';
+      },
+    },
+    {
+      key: 'amountToPay',
+      label: t('partner.amountToPay'),
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        // Montant calculé (pas le montant payé)
+        const amount = prestataire.amountToPay || prestataire.amount_to_pay || 0;
+        if (amount <= 0) return 'N/A';
+        
+        // Déterminer la devise à afficher
+        const currency = prestataire.amountCurrency || 'USD';
+        let currencySymbol = '$';
+        if (currency === 'CDF') {
+          currencySymbol = 'FC';
+        } else if (currency === 'EURO') {
+          currencySymbol = '€';
+        }
+        
+        return `${amount} ${currencySymbol}`;
+      },
     },
     {
       key: 'paymentStatus',
-      label: 'Statut Paiement',
+      label: t('partner.paymentStatus'),
       render: (value: any, prestataire: PrestataireForPartner) => getPaymentStatusBadge(prestataire.paymentStatus || prestataire.payment_status),
     },
     {
       key: 'paymentAmount',
-      label: 'Montant payé',
+      label: t('common.paidAmount'),
       sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        // Vérifier si le prestataire est payé
-        const paymentStatus = (prestataire.paymentStatus || prestataire.payment_status || '').toLowerCase();
-        const isPaid = paymentStatus === 'paid' || 
-                       paymentStatus === 'paye' || 
-                       paymentStatus === 'payé' ||
-                       paymentStatus === 'PAID' ||
-                       paymentStatus === 'PAYE';
-        
-        // Si pas encore payé, laisser vide
-        if (!isPaid) {
-          return '';
-        }
-        
-        // Montant effectivement payé (après import du rapport de paiement)
-        const amount = prestataire.paymentAmount || prestataire.payment_amount || 0;
-        return amount > 0 ? `${amount} $` : '';
-      },
+      render: (value: any, prestataire: PrestataireForPartner) => getPaymentAmount(prestataire),
     },
     {
       key: 'paymentDate',
-      label: 'Date Paiement',
-      render: (value: any, prestataire: PrestataireForPartner) => formatDate(prestataire.paymentDate || prestataire.payment_date || prestataire.paid_at),
+      label: t('partner.paymentDate'),
+      render: (value: any, prestataire: PrestataireForPartner) => getPaymentDate(prestataire),
     },
   ];
 
