@@ -125,7 +125,8 @@ export default function FormDataPage() {
   }, [form, params.id]);
 
   // Fonction pour trouver le nom de colonne réel dans les données
-  const findColumnName = useCallback((fieldName: string, sampleRow: any): string | null => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const findColumnName = (fieldName: string, sampleRow: any): string | null => {
     if (!sampleRow) return null;
     
     // Mapping des noms de champs communs
@@ -167,10 +168,11 @@ export default function FormDataPage() {
     if (matchingKey) return matchingKey;
     
     return null;
-  }, []);
+  };
 
   // Fonction pour appliquer les filtres aux données
-  const applyFilters = useCallback(() => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const applyFilters = () => {
     if (allData.length === 0) {
       console.log('⚠️ allData est vide, impossible d\'appliquer les filtres');
       return;
@@ -271,7 +273,7 @@ export default function FormDataPage() {
     });
     setData(paginatedData);
     setTotal(filteredData.length);
-  }, [allData, filters, page, limit, user, findColumnName]);
+  };
 
   // Charger les campagnes
   useEffect(() => {
@@ -301,6 +303,7 @@ export default function FormDataPage() {
   }, [activeTab, form, selectedCampaignId]);
 
   // Appliquer les filtres quand ils changent ou quand on change de page ou d'onglet
+  // CORRECTION: Supprimer applyFilters des dépendances pour éviter les re-renders infinis
   useEffect(() => {
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, utiliser directement les données filtrées
@@ -313,7 +316,8 @@ export default function FormDataPage() {
       // Pour DATA, utiliser la logique existante
       applyFilters();
     }
-  }, [allData, page, limit, activeTab, applyFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allData, page, limit, activeTab]);
 
   // Fermer les dropdowns quand on clique en dehors
   useEffect(() => {
@@ -1134,7 +1138,8 @@ export default function FormDataPage() {
   const fields = schema?.properties ? Object.keys(schema.properties) : [];
 
   // Fonction pour récupérer une valeur depuis les données (cherche dans plusieurs variantes)
-  const getValueFromRow = useCallback((fieldName: string, row: any): any => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const getValueFromRow = (fieldName: string, row: any): any => {
     if (!row) return null;
     
     // Mapping des noms techniques vers les libellés et vice versa
@@ -1213,10 +1218,11 @@ export default function FormDataPage() {
     }
     
     return null;
-  }, [findColumnName]);
+  };
 
   // Fonction pour formater les valeurs spéciales pour les nouveaux onglets
-  const formatSpecialCell = useCallback((fieldName: string, row: any, fieldSchema?: any): string => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const formatSpecialCell = (fieldName: string, row: any, fieldSchema?: any): string => {
     // Combiner prenom + nom + postnom pour la colonne "nom" (ordre: Prenom Nom Postnom)
     if (fieldName === 'nom' || fieldName === 'nom_complet') {
       // D'abord essayer nom_complet directement
@@ -1589,10 +1595,11 @@ export default function FormDataPage() {
     // Utiliser la fonction formatCellValue existante pour formater
     const formatted = formatCellValue(value, fieldName, fieldSchema);
     return formatted.display || String(value);
-  }, [getValueFromRow, formatCellValue]);
+  };
 
   // Fonction pour obtenir les colonnes importantes selon l'onglet
-  const getImportantColumns = useCallback((tab: string): string[] => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const getImportantColumns = (tab: string): string[] => {
     // Colonnes spécifiques selon l'onglet - UN SEUL champ role (priorité: campaign_role_i_f > campaign_role > role > role_prestataire)
     let roleColumn = 'campaign_role_i_f'; // Priorité au champ campaign_role_i_f
     if (tab === 'validation') {
@@ -1638,10 +1645,11 @@ export default function FormDataPage() {
     }
     
     return [];
-  }, []);
+  };
 
   // Obtenir les colonnes à afficher selon l'onglet
-  const getColumnsForTab = useCallback((tab: string): string[] => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
+  const getColumnsForTab = (tab: string): string[] => {
     if (tab === 'data') {
       // Pour DATA, utiliser toutes les colonnes comme avant
       const sortedFields = [...fields].sort((a, b) => {
@@ -1769,7 +1777,7 @@ export default function FormDataPage() {
       
       return filteredCols;
     }
-  }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
+  };
 
   // Colonnes à afficher selon l'onglet actif
   // CORRECTION FINALE: Supprimer useMemo pour éviter les problèmes de hooks React #310
