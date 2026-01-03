@@ -39,7 +39,8 @@ export default function ProvincePage() {
     setAlert({ title, message, type });
   };
 
-  const loadData = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadData = async () => {
     if (!user?.provinceId) return;
     
     setLoading(true);
@@ -53,9 +54,10 @@ export default function ProvincePage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.provinceId]);
+  };
 
-  const loadZones = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadZones = async () => {
     const provinceId = user?.provinceId;
     if (!provinceId) {
       console.warn('DEBUG PROVINCE: Pas de provinceId, impossible de charger les zones');
@@ -105,17 +107,19 @@ export default function ProvincePage() {
       });
       setZones([]);
     }
-  }, [user?.provinceId]);
+  };
 
-  const loadCampaigns = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadCampaigns = async () => {
     try {
       const data = await campaignsApi.getAll();
       setCampaigns(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des campagnes:', error);
     }
-  }, []);
+  };
 
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
   const loadAires = async (zoneId: string) => {
     if (!zoneId) {
       setAires([]);
@@ -178,9 +182,11 @@ export default function ProvincePage() {
         provinceId: user?.provinceId,
       });
     }
-  }, [user?.role, user?.provinceId, loadData, loadZones, loadCampaigns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.provinceId]);
 
-  const loadPrestataires = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadPrestataires = async () => {
     const provinceId = user?.provinceId;
     if (!provinceId) {
       console.warn('DEBUG PROVINCE: Pas de provinceId, impossible de charger les prestataires');
@@ -232,7 +238,7 @@ export default function ProvincePage() {
     } finally {
       setLoadingPrestataires(false);
     }
-  }, [user?.provinceId, selectedZoneId, selectedAireId, selectedCampaignId, filterStatus]);
+  };
 
   useEffect(() => {
     if (user?.role === 'DPS' && user?.provinceId) {

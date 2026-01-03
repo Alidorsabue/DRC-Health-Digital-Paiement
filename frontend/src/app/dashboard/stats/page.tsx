@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { statsApi, NationalStats, ZoneStats, AireStats, ProvinceStats } from '../../../lib/api/stats';
 import { campaignsApi } from '../../../lib/api/campaigns';
@@ -20,7 +20,8 @@ export default function StatsPage() {
     setAlert({ title, message, type });
   };
 
-  const loadStats = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadStats = async () => {
     try {
       setLoading(true);
       console.log('Chargement des statistiques nationales...', { campaignId: selectedCampaignId });
@@ -36,9 +37,10 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCampaignId, showAlert]);
+  };
 
-  const loadStatsForMCZ = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadStatsForMCZ = async () => {
     if (!user?.zoneId) {
       console.warn('MCZ sans zoneId, impossible de charger les stats');
       setLoading(false);
@@ -60,9 +62,10 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.zoneId, selectedCampaignId, showAlert]);
+  };
 
-  const loadStatsForDPS = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadStatsForDPS = async () => {
     if (!user?.provinceId) {
       console.warn('DPS sans provinceId, impossible de charger les stats');
       setLoading(false);
@@ -84,7 +87,7 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.provinceId, selectedCampaignId, showAlert]);
+  };
 
   // Charger les campagnes au démarrage
   useEffect(() => {
@@ -152,7 +155,8 @@ export default function StatsPage() {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [user, selectedCampaignId, loadStats, loadStatsForMCZ, loadStatsForDPS]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedCampaignId]);
 
   if (loading) {
     return <div className="text-center py-12">Chargement...</div>;

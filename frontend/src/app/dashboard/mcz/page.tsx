@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { approvalsApi, PrestataireForApproval } from '../../../lib/api/approvals';
 import { campaignsApi } from '../../../lib/api/campaigns';
@@ -55,7 +55,8 @@ export default function MCZPage() {
     setAlertModal({ isOpen: true, title, message, type });
   };
 
-  const loadCampaigns = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadCampaigns = async () => {
     try {
       const data = await campaignsApi.getAll();
       setCampaigns(data);
@@ -70,18 +71,20 @@ export default function MCZPage() {
       console.error('Erreur lors du chargement des campagnes:', error);
       showAlert('Erreur', 'Impossible de charger les campagnes', 'error');
     }
-  }, []);
+  };
 
-  const loadForms = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadForms = async () => {
     try {
       const data = await formsApi.getAll();
       setForms(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des formulaires:', error);
     }
-  }, []);
+  };
 
-  const loadAires = useCallback(async (zoneId: string) => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadAires = async (zoneId: string) => {
     if (!zoneId) {
       setAires([]);
       return;
@@ -124,9 +127,10 @@ export default function MCZPage() {
       console.error('MCZ: Erreur lors du chargement des aires:', error);
       setAires([]);
     }
-  }, []);
+  };
 
-  const loadStats = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadStats = async () => {
     if (!user?.zoneId) return;
     
     setLoadingStats(true);
@@ -141,7 +145,7 @@ export default function MCZPage() {
     } finally {
       setLoadingStats(false);
     }
-  }, [user?.zoneId, selectedCampaignId, selectedFormId]);
+  };
 
   useEffect(() => {
     if (user?.role === 'MCZ' && user?.zoneId) {
@@ -149,13 +153,15 @@ export default function MCZPage() {
       loadForms();
       loadAires(user.zoneId);
     }
-  }, [user?.role, user?.zoneId, loadCampaigns, loadForms, loadAires]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.zoneId]);
 
   useEffect(() => {
     if (user?.role === 'MCZ' && user?.zoneId) {
       loadStats();
     }
-  }, [user?.role, user?.zoneId, selectedCampaignId, selectedFormId, loadStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.zoneId, selectedCampaignId, selectedFormId]);
 
   useEffect(() => {
     if (selectedFormId && user?.role === 'MCZ' && user?.zoneId) {

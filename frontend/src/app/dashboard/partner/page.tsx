@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { partnersApi, PrestataireForPartner, PaymentReportRow } from '../../../lib/api/partners';
 import { campaignsApi } from '../../../lib/api/campaigns';
@@ -63,7 +63,8 @@ export default function PartnerPage() {
     setAlertModal({ isOpen: true, title, message, type });
   };
 
-  const loadCampaigns = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadCampaigns = async () => {
     try {
       const data = await campaignsApi.getAll();
       setCampaigns(data);
@@ -78,27 +79,30 @@ export default function PartnerPage() {
       console.error('Erreur lors du chargement des campagnes:', error);
       showAlert('Erreur', 'Impossible de charger les campagnes', 'error');
     }
-  }, []);
+  };
 
-  const loadForms = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadForms = async () => {
     try {
       const data = await formsApi.getAll();
       setForms(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des formulaires:', error);
     }
-  }, []);
+  };
 
-  const loadProvinces = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadProvinces = async () => {
     try {
       const data = await geographicApi.getProvinces();
       setProvinces(data);
     } catch (error: any) {
       console.error('Erreur lors du chargement des provinces:', error);
     }
-  }, []);
+  };
 
-  const loadZones = useCallback(async (provinceId: string) => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadZones = async (provinceId: string) => {
     if (!provinceId) {
       setZones([]);
       setAires([]);
@@ -131,9 +135,10 @@ export default function PartnerPage() {
       console.error('Erreur lors du chargement des zones:', error);
       setZones([]);
     }
-  }, [selectedZoneId]);
+  };
 
-  const loadAires = useCallback(async (zoneId: string) => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadAires = async (zoneId: string) => {
     if (!zoneId) {
       setAires([]);
       return;
@@ -161,9 +166,10 @@ export default function PartnerPage() {
       console.error('Erreur lors du chargement des aires:', error);
       setAires([]);
     }
-  }, []);
+  };
 
-  const loadPrestataires = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const loadPrestataires = async () => {
     setLoading(true);
     try {
       // Charger les prestataires même sans filtres (le backend gère les cas sans formId/campaignId)
@@ -262,25 +268,29 @@ export default function PartnerPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCampaignId, selectedFormId, selectedCategory, selectedProvinceId, selectedZoneId, selectedAireId]);
+  };
 
   useEffect(() => {
     loadCampaigns();
     loadForms();
     loadProvinces();
-  }, [loadCampaigns, loadForms, loadProvinces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     loadZones(selectedProvinceId);
-  }, [selectedProvinceId, loadZones]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProvinceId]);
 
   useEffect(() => {
     loadAires(selectedZoneId);
-  }, [selectedZoneId, loadAires]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedZoneId]);
 
   useEffect(() => {
     loadPrestataires();
-  }, [loadPrestataires]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCampaignId, selectedFormId, selectedCategory, selectedProvinceId, selectedZoneId, selectedAireId]);
 
   const formatDate = (dateString: string | undefined | null): string => {
     if (!dateString) return 'N/A';
@@ -466,7 +476,8 @@ export default function PartnerPage() {
   };
 
   // Fonction pour normaliser un texte (enlever accents, espaces, mettre en minuscule)
-  const normalizeText = useCallback((text: string): string => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const normalizeText = (text: string): string => {
     if (!text) return '';
     return text
       .toLowerCase()
@@ -474,10 +485,11 @@ export default function PartnerPage() {
       .replace(/[\u0300-\u036f]/g, '') // Enlever les accents
       .replace(/\s+/g, ' ') // Normaliser les espaces
       .trim();
-  }, []);
+  };
 
   // Fonction pour extraire le rôle d'un prestataire (chercher dans tous les champs possibles)
-  const extractRole = useCallback((p: PrestataireForPartner, debug: boolean = false): string => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  const extractRole = (p: PrestataireForPartner, debug: boolean = false): string => {
     // Chercher dans l'ordre de priorité (comme le backend)
     const role = 
       p.categorie ||
@@ -508,7 +520,7 @@ export default function PartnerPage() {
     }
     
     return normalizeText(role);
-  }, [normalizeText]);
+  };
 
   const handleCalculateAmount = async () => {
     setCalculating(true);
