@@ -12,18 +12,23 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log('⚫ [DashboardLayout] RENDER - Début du composant');
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  console.log('⚫ [DashboardLayout] RENDER - Hooks de base initialisés', { isAuthenticated, userId: user?.id });
 
   useEffect(() => {
+    console.log('⚫ [DashboardLayout] useEffect[setMounted] - Déclenché');
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    console.log('⚫ [DashboardLayout] useEffect[authCheck] - Déclenché', { mounted, isAuthenticated, hasUser: !!user });
     if (mounted && (!isAuthenticated || !user)) {
+      console.log('⚫ [DashboardLayout] useEffect[authCheck] - Redirection vers login');
       router.push('/login');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

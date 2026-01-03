@@ -13,9 +13,11 @@ import ConfirmModal from '../../../../../components/Modal/ConfirmModal';
 import { exportData, createPublicJSONLink, ExportColumn, ExportRow } from '../../../../../utils/export';
 
 export default function FormDataPage() {
+  console.log('🔵 [FormDataPage] RENDER - Début du composant');
   const params = useParams();
   const router = useRouter();
   const { user } = useAuthStore();
+  console.log('🔵 [FormDataPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'summary' | 'data' | 'validation' | 'approbation' | 'paiement'>('summary');
@@ -77,7 +79,9 @@ export default function FormDataPage() {
   };
 
   useEffect(() => {
+    console.log('🔵 [FormDataPage] useEffect[loadForm] - Déclenché', { role: user?.role, formId: params.id });
     if (user?.role === 'SUPERADMIN' && params.id) {
+      console.log('🔵 [FormDataPage] useEffect[loadForm] - Chargement du formulaire');
       loadForm();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,10 +89,17 @@ export default function FormDataPage() {
 
   // Charger les colonnes visibles depuis localStorage ou initialiser avec toutes les colonnes
   useEffect(() => {
-    if (!form) return;
+    console.log('🔵 [FormDataPage] useEffect[visibleColumns] - Déclenché', { hasForm: !!form, formId: form?.id });
+    if (!form) {
+      console.log('🔵 [FormDataPage] useEffect[visibleColumns] - Pas de formulaire, sortie');
+      return;
+    }
     
     const publishedVersion = form.versions?.find((v) => v.isPublished);
-    if (!publishedVersion) return;
+    if (!publishedVersion) {
+      console.log('🔵 [FormDataPage] useEffect[visibleColumns] - Pas de version publiée, sortie');
+      return;
+    }
     
     const schema = publishedVersion.schema;
     const fields = schema?.properties ? Object.keys(schema.properties) : [];
@@ -279,29 +290,40 @@ export default function FormDataPage() {
 
   // Charger les campagnes
   useEffect(() => {
+    console.log('🔵 [FormDataPage] useEffect[loadCampaigns] - Déclenché');
     const loadCampaigns = async () => {
       try {
         const campaignsData = await campaignsApi.getAll();
+        console.log('🔵 [FormDataPage] useEffect[loadCampaigns] - Campagnes chargées:', campaignsData.length);
         setCampaigns(campaignsData);
       } catch (error) {
-        console.error('Erreur lors du chargement des campagnes:', error);
+        console.error('🔵 [FormDataPage] useEffect[loadCampaigns] - Erreur:', error);
       }
     };
     loadCampaigns();
   }, []);
 
   useEffect(() => {
-    if (!form) return;
+    console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Déclenché', { activeTab, hasForm: !!form, formId: form?.id, selectedCampaignId });
+    if (!form) {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Pas de formulaire, sortie');
+      return;
+    }
     
     if (activeTab === 'summary') {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Chargement des statistiques');
       loadStatistics();
     } else if (activeTab === 'data') {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Chargement des données');
       loadData();
     } else if (activeTab === 'validation') {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Chargement des données de validation');
       loadValidationData();
     } else if (activeTab === 'approbation') {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Chargement des données d\'approbation');
       loadApprobationData();
     } else if (activeTab === 'paiement') {
+      console.log('🔵 [FormDataPage] useEffect[loadDataForTab] - Chargement des données de paiement');
       loadPaiementData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -310,6 +332,7 @@ export default function FormDataPage() {
   // Appliquer les filtres quand ils changent ou quand on change de page ou d'onglet
   // SIMPLIFIÉ: Toujours exécuter la même logique pour éviter les problèmes de hooks
   useEffect(() => {
+    console.log('🔵 [FormDataPage] useEffect[applyFilters] - Déclenché', { activeTab, allDataLength: allData.length, page, limit });
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, utiliser directement les données filtrées
       const startIndex = (page - 1) * limit;
@@ -375,17 +398,24 @@ export default function FormDataPage() {
 
   // Fermer les dropdowns quand on clique en dehors
   useEffect(() => {
-    if (openDropdowns.size === 0) return;
+    console.log('🔵 [FormDataPage] useEffect[clickOutside] - Déclenché', { openDropdownsSize: openDropdowns.size });
     
+    // TOUJOURS retourner une fonction de nettoyage pour éviter les problèmes de hooks React #310
     const handleClickOutside = () => {
-      setOpenDropdowns(new Set());
+      if (openDropdowns.size > 0) {
+        console.log('🔵 [FormDataPage] useEffect[clickOutside] - Fermeture des dropdowns');
+        setOpenDropdowns(new Set());
+      }
     };
     
+    // Toujours ajouter l'event listener, même si openDropdowns est vide
     document.addEventListener('click', handleClickOutside);
+    
     return () => {
+      console.log('🔵 [FormDataPage] useEffect[clickOutside] - Cleanup');
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [openDropdowns.size]);
+  }, [openDropdowns]);
 
   const loadForm = async () => {
     try {

@@ -20,7 +20,9 @@ interface GeographicOption {
 }
 
 export default function MCZPage() {
+  console.log('🔴 [MCZPage] RENDER - Début du composant');
   const { user } = useAuthStore();
+  console.log('🔴 [MCZPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadingStats, setLoadingStats] = useState(false);

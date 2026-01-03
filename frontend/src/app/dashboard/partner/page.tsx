@@ -20,8 +20,10 @@ interface GeographicOption {
 }
 
 export default function PartnerPage() {
+  console.log('🟣 [PartnerPage] RENDER - Début du composant');
   const { user } = useAuthStore();
   const { t } = useTranslation();
+  console.log('🟣 [PartnerPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const [loading, setLoading] = useState(true);
   const [prestataires, setPrestataires] = useState<PrestataireForPartner[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);

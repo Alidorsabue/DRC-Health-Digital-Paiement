@@ -20,7 +20,9 @@ interface GeographicOption {
 }
 
 export default function ProvincePage() {
+  console.log('🟠 [ProvincePage] RENDER - Début du composant');
   const { user } = useAuthStore();
+  console.log('🟠 [ProvincePage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadingPrestataires, setLoadingPrestataires] = useState(false);

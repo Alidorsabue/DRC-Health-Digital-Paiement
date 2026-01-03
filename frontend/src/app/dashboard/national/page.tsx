@@ -16,8 +16,10 @@ interface GeographicOption {
 }
 
 export default function NationalPage() {
+  console.log('🟢 [NationalPage] RENDER - Début du composant');
   const { user } = useAuthStore();
   const { t } = useTranslation();
+  console.log('🟢 [NationalPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<NationalStats | null>(null);
   const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
@@ -30,7 +32,9 @@ export default function NationalPage() {
   const [filterStatus, setFilterStatus] = useState<string>('');
 
   useEffect(() => {
+    console.log('🟢 [NationalPage] useEffect[initial] - Déclenché', { role: user?.role });
     if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+      console.log('🟢 [NationalPage] useEffect[initial] - Chargement des données');
       loadData();
       loadProvinces();
       loadCampaigns();

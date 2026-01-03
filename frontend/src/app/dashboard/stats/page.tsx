@@ -9,7 +9,9 @@ import { getErrorMessage } from '../../../utils/error-handler';
 import AlertModal from '../../../components/Modal/AlertModal';
 
 export default function StatsPage() {
+  console.log('🟡 [StatsPage] RENDER - Début du composant');
   const { user } = useAuthStore();
+  console.log('🟡 [StatsPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const [stats, setStats] = useState<NationalStats | ZoneStats | AireStats | ProvinceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -91,6 +93,7 @@ export default function StatsPage() {
 
   // Charger les campagnes au démarrage
   useEffect(() => {
+    console.log('🟡 [StatsPage] useEffect[fetchCampaigns] - Déclenché', { role: user?.role });
     const fetchCampaigns = async () => {
       try {
         const campaignsData = await campaignsApi.getAll();
@@ -118,6 +121,7 @@ export default function StatsPage() {
   }, [user]);
 
   useEffect(() => {
+    console.log('🟡 [StatsPage] useEffect[loadStats] - Déclenché', { role: user?.role, selectedCampaignId });
     let timeoutId: NodeJS.Timeout | null = null;
     let isMounted = true;
 

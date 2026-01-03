@@ -19,8 +19,10 @@ interface GeographicOption {
 }
 
 export default function DashboardPage() {
+  console.log('⚪ [DashboardPage] RENDER - Début du composant');
   const { user } = useAuthStore();
   const { t } = useTranslation();
+  console.log('⚪ [DashboardPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
   const [stats, setStats] = useState<NationalStats | ProvinceStats | ZoneStats | AireStats | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
