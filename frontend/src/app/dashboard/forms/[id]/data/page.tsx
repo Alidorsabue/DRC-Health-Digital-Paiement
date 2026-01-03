@@ -1771,25 +1771,14 @@ export default function FormDataPage() {
     }
   }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
 
-  // Colonnes à afficher selon l'onglet actif (mémorisé pour éviter les re-renders)
-  // Utiliser publishedVersionId (valeur primitive stable) au lieu de publishedVersion
-  const orderedFields = useMemo(() => {
-    if (!form || !publishedVersion) return [];
-    return getColumnsForTab(activeTab);
-  }, [activeTab, getColumnsForTab, formId, publishedVersionId]);
+  // Colonnes à afficher selon l'onglet actif
+  // CORRECTION FINALE: Supprimer useMemo pour éviter les problèmes de hooks React #310
+  // Calculer directement car fields et schema sont déjà calculés de manière synchrone
+  const orderedFields = (!form || !publishedVersion) ? [] : getColumnsForTab(activeTab);
 
   // Initialiser les colonnes visibles pour les nouveaux onglets
-  // SIMPLIFIÉ: utiliser useMemo pour éviter les problèmes de hooks
-  const shouldUpdateColumns = useMemo(() => {
-    return (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') && orderedFields.length > 0;
-  }, [activeTab, orderedFields.length]);
-  
-  useEffect(() => {
-    if (shouldUpdateColumns) {
-      setVisibleColumns(new Set(orderedFields));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldUpdateColumns]);
+  // SUPPRIMÉ: Ce useEffect causait l'erreur React #310
+  // Les colonnes visibles seront gérées par le useEffect existant qui charge depuis localStorage
 
   // Vérifications conditionnelles APRÈS tous les hooks
   if (loading) {
