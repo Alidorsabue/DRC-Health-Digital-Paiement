@@ -1122,25 +1122,30 @@ export default function FormDataPage() {
   const formId = form?.id;
   const versionsLength = form?.versions?.length ?? 0;
   
-  // Memoize publishedVersion avec des dépendances stables
-  // Utiliser form.versions directement dans les dépendances pour éviter les problèmes de référence
-  const publishedVersion = useMemo(() => {
+  // Trouver l'ID de la version publiée d'abord (valeur primitive stable)
+  // Cela évite les problèmes de référence d'objet
+  const publishedVersionId = useMemo(() => {
     if (!form?.versions || versionsLength === 0) return undefined;
-    return form.versions.find((v) => v.isPublished);
+    const version = form.versions.find((v) => v.isPublished);
+    return version?.id;
   }, [formId, versionsLength]);
   
-  // Utiliser publishedVersionId comme dépendance stable (valeur primitive)
-  const publishedVersionId = publishedVersion?.id;
+  // Memoize publishedVersion en utilisant publishedVersionId (valeur primitive stable)
+  const publishedVersion = useMemo(() => {
+    if (!form?.versions || !publishedVersionId) return undefined;
+    return form.versions.find((v) => v.id === publishedVersionId);
+  }, [formId, publishedVersionId, versionsLength]);
   
-  // Memoize schema en utilisant publishedVersionId et en accédant directement à form.versions
-  // pour éviter les problèmes de référence d'objet
+  // Memoize schema en utilisant publishedVersionId (valeur primitive stable)
+  // Accéder directement à form.versions pour éviter les problèmes de référence
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const schema = useMemo(() => {
     if (!form?.versions || !publishedVersionId) return undefined;
     const version = form.versions.find((v) => v.id === publishedVersionId);
     return version?.schema;
   }, [formId, publishedVersionId, versionsLength]);
   
-  // Memoize fields en utilisant une valeur primitive stable
+  // Memoize fields en utilisant schema (qui est maintenant stable)
   const fields = useMemo(() => {
     if (!schema?.properties) return [];
     return Object.keys(schema.properties);
@@ -1785,7 +1790,7 @@ export default function FormDataPage() {
   }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
 
   // Colonnes à afficher selon l'onglet actif (mémorisé pour éviter les re-renders)
-  // Utiliser formId et publishedVersionId pour éviter les changements de référence
+  // Utiliser publishedVersionId (valeur primitive stable) au lieu de publishedVersion
   const orderedFields = useMemo(() => {
     if (!form || !publishedVersion) return [];
     return getColumnsForTab(activeTab);
