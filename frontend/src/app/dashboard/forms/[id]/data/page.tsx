@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
@@ -1120,21 +1120,10 @@ export default function FormDataPage() {
     setShowColumnModal(false);
   };
 
-  // Obtenir publishedVersion et schema - SIMPLIFIÉ pour éviter les problèmes de hooks
-  // Utiliser une approche plus simple et directe
-  const formId = form?.id;
-  const versionsLength = form?.versions?.length ?? 0;
-  
-  // Calculer publishedVersionId de manière synchrone (pas de hook)
-  const publishedVersionId = form?.versions?.find((v) => v.isPublished)?.id;
-  
-  // Calculer publishedVersion de manière synchrone (pas de hook)
-  const publishedVersion = form?.versions?.find((v) => v.id === publishedVersionId);
-  
-  // Calculer schema de manière synchrone (pas de hook)
-  const schema = publishedVersion?.schema;
-  
-  // Calculer fields de manière synchrone (pas de hook)
+  // Obtenir publishedVersion et schema - AVANT les fonctions pour qu'elles puissent les utiliser
+  // Toujours calculer même si form est null pour éviter les problèmes de hooks
+  const publishedVersion = form?.versions?.find((v) => v.isPublished) || null;
+  const schema = publishedVersion?.schema || null;
   const fields = schema?.properties ? Object.keys(schema.properties) : [];
 
   // Fonction pour récupérer une valeur depuis les données (cherche dans plusieurs variantes)
@@ -1779,16 +1768,18 @@ export default function FormDataPage() {
     }
   };
 
-  // Colonnes à afficher selon l'onglet actif
-  // CORRECTION FINALE: Supprimer useMemo pour éviter les problèmes de hooks React #310
-  // Calculer directement car fields et schema sont déjà calculés de manière synchrone
-  const orderedFields = (!form || !publishedVersion) ? [] : getColumnsForTab(activeTab);
+  // Colonnes à afficher selon l'onglet actif - AVANT les vérifications conditionnelles
+  let orderedFields: string[] = [];
+  if (form && publishedVersion && schema) {
+    try {
+      orderedFields = getColumnsForTab(activeTab);
+    } catch (error) {
+      console.error('Erreur lors du calcul des colonnes:', error);
+      orderedFields = [];
+    }
+  }
 
-  // Initialiser les colonnes visibles pour les nouveaux onglets
-  // SUPPRIMÉ: Ce useEffect causait l'erreur React #310
-  // Les colonnes visibles seront gérées par le useEffect existant qui charge depuis localStorage
-
-  // Vérifications conditionnelles APRÈS tous les hooks
+  // Vérifications conditionnelles APRÈS tous les hooks et calculs
   if (loading) {
     return <div className="text-center py-12">Chargement...</div>;
   }
