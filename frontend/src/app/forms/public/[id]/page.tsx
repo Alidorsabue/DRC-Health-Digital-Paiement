@@ -155,6 +155,13 @@ export default function PublicFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // PROTECTION CONTRE LES DOUBLES SOUMISSIONS
+    // Vérifier si une soumission est déjà en cours
+    if (submitting) {
+      console.warn('⚠️ Tentative de double soumission bloquée');
+      return;
+    }
+    
     // Valider les champs requis
     const missingFields = fields.filter(
       (field) => field.required && !formData[field.name]
@@ -170,10 +177,16 @@ export default function PublicFormPage() {
     }
 
     try {
+      // Marquer immédiatement comme en cours de soumission pour éviter les doubles clics
       setSubmitting(true);
+      
+      console.log('📤 Soumission du formulaire...', { formId: params.id, dataKeys: Object.keys(formData) });
+      
       const result = await formsApi.submitPublic(params.id as string, {
         data: formData,
       });
+      
+      console.log('✅ Formulaire soumis avec succès:', result);
       
       showAlert(
         'Succès',
@@ -187,9 +200,40 @@ export default function PublicFormPage() {
         router.push('/');
       }, 2000);
     } catch (error: any) {
-      console.error('Erreur lors de la soumission:', error);
-      showAlert('Erreur', error.message || 'Erreur lors de la soumission du formulaire', 'error');
+      console.error('❌ Erreur lors de la soumission:', error);
+      
+      // Vérifier si l'erreur indique un doublon (soumission déjà existante)
+      const errorMessage = error.message || 'Erreur lors de la soumission du formulaire';
+      const isDuplicateError = errorMessage.includes('Une soumission existe déjà') ||
+                              errorMessage.includes('doublon') ||
+                              errorMessage.includes('déjà') ||
+                              error.status === 400 && errorMessage.includes('existe');
+      
+      // Vérifier si l'erreur indique que la soumission a quand même réussi
+      // (par exemple, erreur de réseau mais données déjà enregistrées)
+      const isNetworkError = error.code === 'ECONNABORTED' || 
+                            error.message?.includes('timeout') ||
+                            error.message?.includes('network') ||
+                            (error.response?.status >= 500 && !isDuplicateError);
+      
+      if (isDuplicateError) {
+        // Erreur de doublon - message spécifique
+        showAlert(
+          'Soumission déjà enregistrée', 
+          errorMessage + '\n\nSi vous pensez qu\'il s\'agit d\'une erreur, veuillez contacter le support.',
+          'warning'
+        );
+      } else if (isNetworkError) {
+        showAlert(
+          'Attention', 
+          'Une erreur réseau s\'est produite. Votre formulaire a peut-être été soumis. Veuillez vérifier ou réessayer.',
+          'warning'
+        );
+      } else {
+        showAlert('Erreur', errorMessage, 'error');
+      }
     } finally {
+      // Toujours réinitialiser le flag de soumission
       setSubmitting(false);
     }
   };
@@ -401,7 +445,16 @@ export default function PublicFormPage() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-6">
+        <form 
+          onSubmit={handleSubmit} 
+          className="bg-white rounded-lg shadow p-6 space-y-6"
+          onKeyDown={(e) => {
+            // Empêcher la soumission multiple via Enter si déjà en cours
+            if (e.key === 'Enter' && submitting) {
+              e.preventDefault();
+            }
+          }}
+        >
           {/* Champs sans groupe */}
           {ungroupedFields.length > 0 && (
             <div className="space-y-4">

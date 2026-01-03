@@ -71,7 +71,7 @@ export default function MCZPage() {
       });
     } catch (error: any) {
       console.error('Erreur lors du chargement des campagnes:', error);
-      showAlert('Erreur', 'Impossible de charger les campagnes', 'error');
+      showAlert(t('common.error'), t('errors.errorLoadingCampaigns'), 'error');
     }
   };
 
@@ -169,10 +169,10 @@ export default function MCZPage() {
     if (selectedFormId && user?.role === 'MCZ' && user?.zoneId) {
       loadPrestataires();
     } else if (user?.role === 'MCZ' && !user?.zoneId) {
-      showAlert('Configuration', 'Votre zone de santé n\'est pas configurée. Contactez un administrateur.', 'warning');
+      showAlert(t('common.warning'), t('errors.healthZoneNotConfigured'), 'warning');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFormId, filterStatus, selectedAireId, user?.role, user?.zoneId]);
+  }, [selectedFormId, filterStatus, selectedAireId, selectedCampaignId, user?.role, user?.zoneId]);
 
   useEffect(() => {
     if (selectedCampaignId && campaigns.length > 0) {
@@ -206,10 +206,12 @@ export default function MCZPage() {
       
       // Le backend filtre automatiquement pour MCZ : seuls les prestataires validés par IT sont retournés
       // Le filtrage par statut (Validés par IT, Approuvés, Rejetés) se fait ensuite côté frontend
+      // Passer le campaignId pour filtrer par campagne (vide si "Toutes les campagnes")
       const data = await approvalsApi.getPrestatairesForApproval(
         selectedFormId,
         user.zoneId,
         undefined, // Le backend gère automatiquement le filtrage pour MCZ
+        selectedCampaignId || undefined, // Passer le campaignId sélectionné (ou undefined si "Toutes les campagnes")
       );
       
       console.log('Prestataires reçus du backend:', data.length, data);
@@ -340,8 +342,8 @@ export default function MCZPage() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des prestataires:', error);
       // Utiliser la fonction utilitaire pour obtenir le message d'erreur formaté avec solutions
-      const errorMsg = getErrorMessage(error, 'Erreur inconnue');
-      showAlert('Erreur', `Impossible de charger les prestataires:\n\n${errorMsg}`, 'error');
+      const errorMsg = getErrorMessage(error, t('errors.errorUnknown'));
+      showAlert(t('common.error'), `${t('errors.errorLoadingProviders')}:\n\n${errorMsg}`, 'error');
       setPrestataires([]);
     } finally {
       setLoading(false);
@@ -351,23 +353,23 @@ export default function MCZPage() {
   const handleApprove = async (prestataireId: string) => {
     try {
       await approvalsApi.approve(prestataireId, undefined, selectedFormId);
-      showAlert('Succès', 'Prestataire approuvé avec succès', 'success');
+      showAlert(t('common.success'), t('success.providerApproved'), 'success');
       loadPrestataires();
       setSelectedPrestataires(new Set());
     } catch (error: any) {
       console.error('Erreur lors de l\'approbation:', error);
-      showAlert('Erreur', error.response?.data?.message || 'Impossible d\'approuver le prestataire', 'error');
+      showAlert(t('common.error'), error.response?.data?.message || t('errors.errorApprovingProvider'), 'error');
     }
   };
 
   const handleReject = async (prestataireId: string, commentaire: string) => {
     if (!commentaire.trim()) {
-      showAlert('Erreur', 'Un commentaire est obligatoire pour le rejet', 'warning');
+      showAlert(t('common.error'), t('errors.commentRequired'), 'warning');
       return;
     }
     try {
       await approvalsApi.reject(prestataireId, commentaire, selectedFormId);
-      showAlert('Succès', 'Prestataire rejeté avec succès', 'success');
+      showAlert(t('common.success'), t('success.providerRejected'), 'success');
       loadPrestataires();
       setRejectComment('');
       setRejectingId(null);
@@ -375,17 +377,17 @@ export default function MCZPage() {
       setSelectedPrestataires(new Set());
     } catch (error: any) {
       console.error('Erreur lors du rejet:', error);
-      showAlert('Erreur', error.response?.data?.message || 'Impossible de rejeter le prestataire', 'error');
+      showAlert(t('common.error'), error.response?.data?.message || t('errors.errorRejectingProvider'), 'error');
     }
   };
 
   const handleBatchApprove = async () => {
     if (selectedPrestataires.size === 0) {
-      showAlert('Attention', 'Veuillez sélectionner au moins un prestataire', 'warning');
+      showAlert(t('common.warning'), t('errors.selectAtLeastOneProvider'), 'warning');
       return;
     }
     if (!selectedFormId) {
-      showAlert('Erreur', 'Veuillez sélectionner un formulaire', 'warning');
+      showAlert(t('common.error'), t('errors.selectForm'), 'warning');
       return;
     }
     try {
@@ -394,7 +396,7 @@ export default function MCZPage() {
         batchComment || undefined,
         selectedFormId,
       );
-      showAlert('Succès', `${selectedPrestataires.size} prestataire(s) approuvé(s) avec succès`, 'success');
+      showAlert(t('common.success'), `${selectedPrestataires.size} ${t('success.providersApprovedBatch')}`, 'success');
       loadPrestataires();
       setSelectedPrestataires(new Set());
       setBatchComment('');
@@ -406,15 +408,15 @@ export default function MCZPage() {
 
   const handleBatchReject = async () => {
     if (selectedPrestataires.size === 0) {
-      showAlert('Attention', 'Veuillez sélectionner au moins un prestataire', 'warning');
+      showAlert(t('common.warning'), t('errors.selectAtLeastOneProvider'), 'warning');
       return;
     }
     if (!batchComment.trim()) {
-      showAlert('Erreur', 'Un commentaire est obligatoire pour le rejet', 'warning');
+      showAlert(t('common.error'), t('errors.commentRequired'), 'warning');
       return;
     }
     if (!selectedFormId) {
-      showAlert('Erreur', 'Veuillez sélectionner un formulaire', 'warning');
+      showAlert(t('common.error'), t('errors.selectForm'), 'warning');
       return;
     }
     try {
@@ -617,11 +619,34 @@ export default function MCZPage() {
   const getValidationStatus = (prestataire: PrestataireForApproval): string => {
     const rawData = prestataire.raw_data || {};
     // Chercher validation_status dans raw_data ou directement sur l'objet
-    const validationStatus = (prestataire as any).validation_status ||
-                            rawData.validation_status ||
-                            (prestataire as any).validationStatus ||
-                            rawData.validationStatus ||
-                            'ENREGISTRE';
+    let validationStatus = (prestataire as any).validation_status ||
+                          rawData.validation_status ||
+                          (prestataire as any).validationStatus ||
+                          rawData.validationStatus;
+    
+    // Si validation_status n'existe pas, vérifier s'il y a une date de validation (indique que validé par IT)
+    if (!validationStatus || validationStatus === 'ENREGISTRE' || validationStatus === '') {
+      const validationDate = (prestataire as any).validation_date ||
+                            (prestataire as any).validationDate ||
+                            (prestataire as any).validated_at ||
+                            rawData.validation_date ||
+                            rawData.validationDate ||
+                            rawData.validated_at;
+      
+      // Si une date de validation existe, le prestataire a été validé par IT
+      if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+        validationStatus = 'VALIDE_PAR_IT';
+      } else {
+        // Sinon, vérifier si status = APPROUVE_PAR_MCZ (signifie qu'il a d'abord été validé par IT)
+        const status = prestataire.status || rawData.status;
+        const statusStr = String(status || '').trim().toUpperCase();
+        if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+          validationStatus = 'VALIDE_PAR_IT';
+        } else if (!validationStatus) {
+          validationStatus = 'ENREGISTRE';
+        }
+      }
+    }
     
     return validationStatus;
   };

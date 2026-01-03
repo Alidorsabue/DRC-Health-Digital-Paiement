@@ -38,6 +38,9 @@ export class Campaign {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ default: 'USD', nullable: true })
+  currency: string;
+
   @ManyToOne(() => Form, { nullable: true })
   @JoinColumn({ name: 'enregistrement_form_id' })
   enregistrementForm: Form;

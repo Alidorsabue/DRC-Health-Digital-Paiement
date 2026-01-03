@@ -7,6 +7,7 @@ class Campaign {
   final bool isActive;
   final DateTime? startDate;
   final DateTime? endDate;
+  final String? currency;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,6 +20,7 @@ class Campaign {
     required this.isActive,
     this.startDate,
     this.endDate,
+    this.currency,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -33,6 +35,7 @@ class Campaign {
       isActive: json['isActive'] ?? false,
       startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
       endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
+      currency: json['currency'] ?? 'USD',
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
     );
@@ -48,6 +51,7 @@ class Campaign {
       'isActive': isActive,
       'startDate': startDate?.toIso8601String(),
       'endDate': endDate?.toIso8601String(),
+      'currency': currency ?? 'USD',
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };

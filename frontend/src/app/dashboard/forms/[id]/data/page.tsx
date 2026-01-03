@@ -1327,18 +1327,36 @@ export default function FormDataPage() {
     
     // Pour validation_status et kyc_status - chercher les deux et convertir en label
     // Prioriser validation_status sur status. Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer VALIDE_PAR_IT
+    // Si dans l'onglet validation et qu'il y a une date de validation, considérer VALIDE_PAR_IT
     if (fieldName === 'validation_status' || fieldName === 'kyc_status') {
       let validationStatus = getValueFromRow('validation_status', row) || getValueFromRow('kyc_status', row);
       
-      // Si validation_status n'existe pas, vérifier status
-      if (!validationStatus) {
-        const status = getValueFromRow('status', row);
-        const statusStr = String(status || '').trim().toUpperCase();
-        // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
-        if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+      // Si validation_status n'existe pas, vérifier s'il y a une date de validation (indique que validé par IT)
+      if (!validationStatus || validationStatus === '-' || validationStatus === null || validationStatus === '') {
+        const validationDate = getValueFromRow('validation_date', row) || 
+                               getValueFromRow('validated_at', row) || 
+                               getValueFromRow('validationDate', row) ||
+                               row.createdAt; // Si c'est une validation, createdAt peut être la date de validation
+        
+        // Si une date de validation existe, le prestataire a été validé par IT
+        if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
           validationStatus = 'VALIDE_PAR_IT';
         } else {
-          validationStatus = status;
+          // Si nous sommes dans l'onglet validation, et que le prestataire est dans la liste filtrée,
+          // cela signifie qu'il a été validé par IT (même si validation_status n'est pas défini)
+          if (activeTab === 'validation') {
+            validationStatus = 'VALIDE_PAR_IT';
+          } else {
+            // Sinon, vérifier status
+            const status = getValueFromRow('status', row);
+            const statusStr = String(status || '').trim().toUpperCase();
+            // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+            if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+              validationStatus = 'VALIDE_PAR_IT';
+            } else {
+              validationStatus = status;
+            }
+          }
         }
       }
       
@@ -1369,9 +1387,15 @@ export default function FormDataPage() {
         };
         
         // Chercher d'abord dans le mapping manuel
-        const statusStr = String(validationStatus).trim();
+        const statusStr = String(validationStatus).trim().toUpperCase();
         if (statusLabels[statusStr]) {
           return statusLabels[statusStr];
+        }
+        
+        // Chercher aussi avec la casse originale
+        const statusStrOriginal = String(validationStatus).trim();
+        if (statusLabels[statusStrOriginal]) {
+          return statusLabels[statusStrOriginal];
         }
         
         // Chercher le schéma du champ validation_status pour obtenir les options
@@ -1384,7 +1408,7 @@ export default function FormDataPage() {
         }
         
         // Si pas de label trouvé, formater la valeur (remplacer les underscores par des espaces et capitaliser)
-        return statusStr
+        return statusStrOriginal
           .split('_')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');

@@ -105,8 +105,20 @@ export const formsApi = {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erreur lors de la soumission');
+      let errorMessage = 'Erreur lors de la soumission';
+      try {
+        const error = await response.json();
+        errorMessage = error.message || errorMessage;
+      } catch (e) {
+        // Si la réponse n'est pas du JSON, utiliser le message par défaut
+        errorMessage = `Erreur serveur (${response.status}): ${response.statusText}`;
+      }
+      
+      // Créer une erreur avec plus de détails
+      const error: any = new Error(errorMessage);
+      error.status = response.status;
+      error.response = response;
+      throw error;
     }
     return response.json();
   },

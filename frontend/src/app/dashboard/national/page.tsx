@@ -231,11 +231,35 @@ export default function NationalPage() {
   // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
   const getValidationStatus = (prestataire: Prestataire): string => {
     const rawData = prestataire.raw_data || {};
-    const validationStatus = (prestataire as any).validation_status ||
-                            rawData.validation_status ||
-                            (prestataire as any).validationStatus ||
-                            rawData.validationStatus ||
-                            'ENREGISTRE';
+    let validationStatus = (prestataire as any).validation_status ||
+                          rawData.validation_status ||
+                          (prestataire as any).validationStatus ||
+                          rawData.validationStatus;
+    
+    // Si validation_status n'existe pas, vérifier s'il y a une date de validation (indique que validé par IT)
+    if (!validationStatus || validationStatus === 'ENREGISTRE' || validationStatus === '') {
+      const validationDate = (prestataire as any).validation_date ||
+                            (prestataire as any).validationDate ||
+                            (prestataire as any).validated_at ||
+                            rawData.validation_date ||
+                            rawData.validationDate ||
+                            rawData.validated_at;
+      
+      // Si une date de validation existe, le prestataire a été validé par IT
+      if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+        validationStatus = 'VALIDE_PAR_IT';
+      } else {
+        // Sinon, vérifier si status = APPROUVE_PAR_MCZ (signifie qu'il a d'abord été validé par IT)
+        const status = prestataire.status || rawData.status;
+        const statusStr = String(status || '').trim().toUpperCase();
+        if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+          validationStatus = 'VALIDE_PAR_IT';
+        } else if (!validationStatus) {
+          validationStatus = 'ENREGISTRE';
+        }
+      }
+    }
+    
     return validationStatus;
   };
 
@@ -259,6 +283,33 @@ export default function NationalPage() {
                          rawData.approved_at ||
                          prestataire.approved_at;
     return formatDate(approvalDate);
+  };
+
+  // Fonction helper pour récupérer le statut d'approbation
+  // IMPORTANT: Utiliser approval_status (ou approvalStatus) et non status pour le statut d'approbation
+  // Si le prestataire est validé par IT mais pas encore approuvé par MCZ, retourner "EN_ATTENTE"
+  const getApprovalStatus = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    // Récupérer approval_status depuis les colonnes directes (pas depuis status)
+    const approvalStatus = (prestataire as any).approval_status ||
+                          (prestataire as any).approvalStatus ||
+                          rawData.approval_status ||
+                          rawData.approvalStatus;
+    
+    // Si un statut d'approbation existe, le retourner
+    if (approvalStatus && approvalStatus !== null && approvalStatus !== '') {
+      return approvalStatus;
+    }
+    
+    // Si pas de statut d'approbation, vérifier si le prestataire est validé par IT
+    const validationStatus = getValidationStatus(prestataire);
+    // Si validé par IT mais pas encore approuvé, afficher "En attente"
+    if (validationStatus === 'VALIDE_PAR_IT') {
+      return 'EN_ATTENTE_PAR_MCZ';
+    }
+    
+    // Sinon, retourner "ENREGISTRE"
+    return 'ENREGISTRE';
   };
 
   const getPaymentDate = (prestataire: Prestataire): string => {
@@ -286,7 +337,7 @@ export default function NationalPage() {
   if (user?.role !== 'NATIONAL' && user?.role !== 'SUPERADMIN') {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Accès non autorisé</p>
+        <p className="text-gray-500">{t('errors.unauthorizedAccess')}</p>
       </div>
     );
   }
@@ -294,7 +345,7 @@ export default function NationalPage() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Chargement...</p>
+        <p className="text-gray-500">{t('common.loading')}</p>
       </div>
     );
   }
@@ -598,7 +649,10 @@ export default function NationalPage() {
             {
               key: 'approvalStatus',
               label: t('partner.approvalStatus'),
-              render: (_, prestataire) => getStatusBadge(prestataire.status || 'ENREGISTRE'),
+              render: (_, prestataire) => {
+                const approvalStatus = getApprovalStatus(prestataire);
+                return getStatusBadge(approvalStatus);
+              },
             },
             {
               key: 'approvalDate',

@@ -95,12 +95,14 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
       }
 
       // Récupérer les prestataires depuis la table du formulaire
-      // Utiliser getPrestatairesByForm pour récupérer TOUS les prestataires (y compris validés)
-      // au lieu de getPrestatairesPendingValidation qui ne retourne que ceux en attente
+      // Utiliser getPrestatairesByForm avec includeValidations=true pour récupérer TOUS les prestataires
+      // y compris les validations pour différentes campagnes
       List<Map<String, dynamic>> data;
       if (formId != null) {
-        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000);
+        // IMPORTANT: includeValidations=true pour récupérer toutes les validations pour toutes les campagnes
+        final result = await _apiService.getPrestatairesByForm(formId, limit: 1000, includeValidations: true);
         data = List<Map<String, dynamic>>.from(result['data'] ?? []);
+        print('DEBUG: Récupéré ${data.length} prestataires avec validations (includeValidations=true)');
       } else {
         // Si pas de formId, utiliser getPrestatairesPendingValidation comme fallback
         data = await _apiService.getPrestatairesPendingValidation();
@@ -108,9 +110,37 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
       
       // Créer les prestataires et récupérer les informations de validation depuis le JSON original
       final prestataires = <Prestataire>[];
+      final prestataireIdsSet = <String>{}; // Pour éviter les doublons
+      final validationSequences = <String, int>{}; // Map pour stocker les séquences de validation par prestataire ID
+      
       for (var json in data) {
         final prestataire = Prestataire.fromJson(json);
+        
+        // Utiliser prestataireId si disponible (ID réel du prestataire), sinon utiliser id
+        final prestataireRealId = prestataire.prestataireId ?? prestataire.id;
+        
+        // Éviter les doublons : ne garder qu'un seul enregistrement par prestataire
+        // Prioriser l'enregistrement original (validation_sequence IS NULL) ou la validation la plus récente
+        if (prestataireIdsSet.contains(prestataireRealId)) {
+          // Vérifier si cet enregistrement est plus récent ou a plus d'informations
+          final existingIndex = prestataires.indexWhere((p) => (p.prestataireId ?? p.id) == prestataireRealId);
+          if (existingIndex >= 0) {
+            final existingSeq = json['validation_sequence'] as int? ?? 0;
+            final currentSeq = validationSequences[prestataireRealId] ?? 0;
+            
+            // Si le nouveau a un validation_sequence plus élevé, remplacer l'existant
+            if (existingSeq > currentSeq) {
+              prestataires[existingIndex] = prestataire;
+              validationSequences[prestataireRealId] = existingSeq;
+            }
+          }
+          continue;
+        }
+        
+        prestataireIdsSet.add(prestataireRealId);
         prestataires.add(prestataire);
+        // Stocker la séquence de validation pour ce prestataire
+        validationSequences[prestataireRealId] = json['validation_sequence'] as int? ?? 0;
         
         // Récupérer les informations de validation directement depuis le JSON original
         // Le backend retourne ces champs comme colonnes directes (pas dans raw_data)
@@ -166,18 +196,57 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
         }
       }
 
-      // Charger l'historique des validations pour chaque prestataire validé
+      // Charger l'historique des validations pour TOUS les prestataires
+      // Cela permet d'afficher toutes les validations, même pour différentes campagnes
       for (var prestataire in prestataires) {
-        if (prestataire.status == 'VALIDE_PAR_IT') {
-          try {
-            // Utiliser prestataireId si disponible (ID réel du prestataire), sinon utiliser id
-            final prestataireRealId = prestataire.prestataireId ?? prestataire.id;
-            final validations = await _apiService.getPrestataireValidations(prestataireRealId);
-            _prestataireValidations[prestataire.id] = validations;
-          } catch (e) {
-            // Ignorer les erreurs de chargement de l'historique
-            _prestataireValidations[prestataire.id] = [];
+        try {
+          // Utiliser prestataireId si disponible (ID réel du prestataire), sinon utiliser id
+          final prestataireRealId = prestataire.prestataireId ?? prestataire.id;
+          final validations = await _apiService.getPrestataireValidations(prestataireRealId);
+          _prestataireValidations[prestataire.id] = validations;
+          print('DEBUG: Chargé ${validations.length} validations pour prestataire ${prestataireRealId}');
+          
+          // Récupérer les informations de validation depuis l'historique pour toutes les campagnes
+          // Mettre à jour _validationDates et _presenceDaysControllers avec les informations de toutes les validations
+          for (var validation in validations) {
+            // Vérifier si c'est une validation (avec parent_submission_id)
+            if (validation['parent_submission_id'] != null && 
+                validation['parent_submission_id'].toString().isNotEmpty) {
+              final validationCampaignId = validation['campaign_id']?.toString() ?? validation['campaignId']?.toString();
+              final validationDateStr = validation['validation_date'] ?? validation['validationDate'];
+              final presenceDays = validation['presence_days'] ?? validation['presenceDays'];
+              
+              // Si c'est la validation la plus récente ou si on n'a pas encore de date pour cette campagne
+              if (validationDateStr != null) {
+                try {
+                  final validationDate = DateTime.parse(validationDateStr.toString());
+                  // Utiliser la clé prestataireId_campaignId pour stocker les informations par campagne
+                  final key = '${prestataire.id}_${validationCampaignId ?? 'default'}';
+                  if (!_validationDates.containsKey(key) || 
+                      _validationDates[key] == null ||
+                      validationDate.isAfter(_validationDates[key]!)) {
+                    _validationDates[key] = validationDate;
+                  }
+                } catch (e) {
+                  print('DEBUG: Erreur parsing date de validation: $e');
+                }
+              }
+              
+              // Stocker les jours de présence par campagne
+              if (presenceDays != null) {
+                final key = '${prestataire.id}_${validationCampaignId ?? 'default'}';
+                if (!_presenceDaysControllers.containsKey(key)) {
+                  _presenceDaysControllers[key] = TextEditingController(
+                    text: presenceDays.toString(),
+                  );
+                }
+              }
+            }
           }
+        } catch (e) {
+          // Ignorer les erreurs de chargement de l'historique
+          _prestataireValidations[prestataire.id] = [];
+          print('DEBUG: Erreur lors du chargement des validations pour ${prestataire.id}: $e');
         }
       }
 
@@ -452,11 +521,13 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
     final fullName = '${prestataire.prenom} ${prestataire.nom}${prestataire.postnom != null ? " ${prestataire.postnom}" : ""}';
     
     // Afficher les informations de validation si elles existent (même si le prestataire n'est pas actuellement validé)
-    // Cela permet à l'IT de voir s'il a déjà validé ce prestataire
+    // Cela permet à l'IT de voir s'il a déjà validé ce prestataire pour n'importe quelle campagne
+    final validations = _prestataireValidations[prestataire.id] ?? [];
     final hasValidationInfo = isValidated || 
                              prestataire.presenceDays != null || 
                              _validationDates.containsKey(prestataire.id) ||
-                             prestataire.campaignId != null;
+                             prestataire.campaignId != null ||
+                             validations.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -530,8 +601,87 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
       v['parent_submission_id'].toString().isNotEmpty
     ).toList();
 
+    // Si pas de validations dans l'historique, chercher dans toutes les validations (y compris l'enregistrement original)
+    // pour trouver les informations de validation pour toutes les campagnes
     if (validationRecords.isEmpty) {
-      // Afficher les informations de validation depuis le prestataire
+      // Chercher dans toutes les validations (y compris l'enregistrement original si validé)
+      final allValidations = validations.where((v) => 
+        (v['status']?.toString().toUpperCase() == 'VALIDE_PAR_IT' ||
+         v['validation_status']?.toString().toUpperCase() == 'VALIDE_PAR_IT') &&
+        (v['validation_date'] != null || v['validationDate'] != null)
+      ).toList();
+      
+      if (allValidations.isNotEmpty) {
+        // Afficher toutes les validations trouvées
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isValidated) ...[
+              Text(
+                'Statut: Validé',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.green.shade400,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+            ],
+            ...allValidations.map((validation) {
+              final validationDateStr = validation['validation_date'] ?? validation['validationDate'];
+              final campaignId = validation['campaign_id']?.toString() ?? validation['campaignId']?.toString();
+              final presenceDays = validation['presence_days'] ?? validation['presenceDays'];
+              
+              DateTime? validationDate;
+              if (validationDateStr != null) {
+                try {
+                  validationDate = DateTime.parse(validationDateStr.toString());
+                } catch (e) {
+                  // Ignorer
+                }
+              }
+              
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (validationDate != null) ...[
+                    Text(
+                      'Date de validation: ${_formatDate(validationDate)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  if (campaignId != null && campaignId.isNotEmpty) ...[
+                    Text(
+                      'Campagne: ${_getCampaignName(campaignId)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  if (presenceDays != null) ...[
+                    Text(
+                      'Jours de présence: $presenceDays',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                ],
+              );
+            }).toList(),
+          ],
+        );
+      }
+      
+      // Fallback: Afficher les informations de validation depuis le prestataire
       // Récupérer les valeurs depuis les controllers et maps
       final presenceDays = prestataire.presenceDays ?? 
                           (_presenceDaysControllers[prestataire.id]?.text.isNotEmpty == true

@@ -153,8 +153,9 @@ export class ApprovalsService {
    * @param aireId - ID de l'aire (optionnel, pour IT)
    * @param status - Statut d'approbation (optionnel)
    * @param userRole - Rôle de l'utilisateur (pour filtrer automatiquement selon le rôle)
+   * @param campaignId - ID de la campagne (optionnel, pour filtrer par campagne)
    */
-  async findByZoneOrAire(formId: string, zoneId?: string, aireId?: string, status?: PrestataireStatus, userRole?: string): Promise<any[]> {
+  async findByZoneOrAire(formId: string, zoneId?: string, aireId?: string, status?: PrestataireStatus, userRole?: string, campaignId?: string): Promise<any[]> {
     try {
       // Récupérer depuis la table du formulaire
       // IMPORTANT: Ne PAS filtrer par validationSequence pour inclure TOUS les prestataires
@@ -173,6 +174,15 @@ export class ApprovalsService {
       // Filtrer par aireId si fourni (pour IT)
       if (aireId) {
         filters.aireId = aireId;
+      }
+      
+      // Filtrer par campaignId si fourni
+      // Si campaignId n'est pas fourni, on retournera toutes les validations pour toutes les campagnes
+      if (campaignId) {
+        filters.campaignId = campaignId;
+        console.log(`[ApprovalsService.findByZoneOrAire] Filtrage par campagne: ${campaignId}`);
+      } else {
+        console.log(`[ApprovalsService.findByZoneOrAire] Aucun filtre de campagne - retourner toutes les validations pour toutes les campagnes`);
       }
       
       // Pour MCZ: filtrer automatiquement pour ne voir que les prestataires validés par IT
@@ -198,36 +208,106 @@ export class ApprovalsService {
       
       console.log(`[ApprovalsService.findByZoneOrAire] ${allData.length} enregistrements récupérés (sans filtre validationSequence)`);
 
-      // Dédupliquer: pour chaque prestataire (id), garder soit l'original (validation_sequence IS NULL)
-      // soit la dernière validation par IT (validation_sequence le plus élevé)
-      const prestatairesMap = new Map<string, any>();
+      // Dédupliquer selon le contexte :
+      // - Si campaignId est fourni : dédupliquer par prestataire (un prestataire = une entrée pour cette campagne)
+      // - Si campaignId n'est pas fourni : garder toutes les validations pour différentes campagnes (dédupliquer par prestataire+campagne)
+      let data: any[];
       
-      for (const record of allData) {
-        const prestataireId = record.id || record.submission_id || record.prestataire_id;
-        if (!prestataireId) continue;
+      if (campaignId) {
+        // Filtre par campagne spécifique : dédupliquer normalement par prestataire
+        const prestatairesMap = new Map<string, any>();
         
-        const existing = prestatairesMap.get(prestataireId);
-        const currentSeq = record.validation_sequence ?? 0; // NULL = 0 pour la comparaison
-        const existingSeq = existing?.validation_sequence ?? 0;
-        
-        if (!existing) {
-          // Premier enregistrement pour ce prestataire
-          prestatairesMap.set(prestataireId, record);
-        } else if (currentSeq > existingSeq) {
-          // Le nouveau a un validation_sequence plus élevé, le garder
-          prestatairesMap.set(prestataireId, record);
-        } else if (currentSeq === existingSeq && currentSeq === 0) {
-          // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT
-          const currentStatus = (record.status || '').toUpperCase();
-          const existingStatus = (existing.status || '').toUpperCase();
-          if (currentStatus === 'VALIDE_PAR_IT' && existingStatus !== 'VALIDE_PAR_IT') {
+        for (const record of allData) {
+          // Pour les validations (validation_sequence > 0), utiliser prestataire_id
+          // Pour l'enregistrement original (validation_sequence IS NULL), utiliser id
+          const isValidation = record.validation_sequence != null && record.validation_sequence > 0;
+          const prestataireId = isValidation 
+            ? (record.prestataire_id || record.id) 
+            : (record.id || record.submission_id || record.prestataire_id);
+          
+          if (!prestataireId) continue;
+          
+          const existing = prestatairesMap.get(prestataireId);
+          const currentSeq = record.validation_sequence ?? 0;
+          const existingSeq = existing?.validation_sequence ?? 0;
+          
+          if (!existing) {
             prestatairesMap.set(prestataireId, record);
+          } else if (currentSeq > existingSeq) {
+            prestatairesMap.set(prestataireId, record);
+          } else if (currentSeq === existingSeq && currentSeq === 0) {
+            const currentStatus = (record.status || '').toUpperCase();
+            const existingStatus = (existing.status || '').toUpperCase();
+            if ((currentStatus === 'VALIDE_PAR_IT' || currentStatus === 'APPROUVE_PAR_MCZ') && 
+                existingStatus !== 'VALIDE_PAR_IT' && existingStatus !== 'APPROUVE_PAR_MCZ') {
+              prestatairesMap.set(prestataireId, record);
+            }
           }
         }
+        
+        data = Array.from(prestatairesMap.values());
+        console.log(`[ApprovalsService.findByZoneOrAire] ${data.length} prestataires uniques après déduplication pour campagne ${campaignId} (sur ${allData.length} enregistrements)`);
+      } else {
+        // Pas de filtre de campagne : garder toutes les validations pour différentes campagnes
+        // Dédupliquer par prestataire+campagne pour éviter les doublons dans la même campagne
+        // IMPORTANT: Utiliser prestataire_id pour les validations (qui pointent vers le prestataire original)
+        // et id pour l'enregistrement original
+        const prestatairesCampaignsMap = new Map<string, any>();
+        
+        for (const record of allData) {
+          // Pour les validations (validation_sequence > 0), utiliser prestataire_id
+          // Pour l'enregistrement original (validation_sequence IS NULL), utiliser id
+          const isValidation = record.validation_sequence != null && record.validation_sequence > 0;
+          const prestataireId = isValidation 
+            ? (record.prestataire_id || record.id) 
+            : (record.id || record.submission_id || record.prestataire_id);
+          
+          const recordCampaignId = record.campaign_id || record.campaignId || 'NO_CAMPAIGN';
+          if (!prestataireId) continue;
+          
+          // Clé unique : prestataireId + campaignId
+          const key = `${prestataireId}_${recordCampaignId}`;
+          const existing = prestatairesCampaignsMap.get(key);
+          const currentSeq = record.validation_sequence ?? 0;
+          const existingSeq = existing?.validation_sequence ?? 0;
+          
+          if (!existing) {
+            prestatairesCampaignsMap.set(key, record);
+          } else if (currentSeq > existingSeq) {
+            // Le nouveau a un validation_sequence plus élevé, le garder
+            prestatairesCampaignsMap.set(key, record);
+          } else if (currentSeq === existingSeq && currentSeq === 0) {
+            // Les deux sont originaux (NULL), priorité au statut VALIDE_PAR_IT ou APPROUVE_PAR_MCZ
+            const currentStatus = (record.status || '').toUpperCase();
+            const existingStatus = (existing.status || '').toUpperCase();
+            if ((currentStatus === 'VALIDE_PAR_IT' || currentStatus === 'APPROUVE_PAR_MCZ') && 
+                existingStatus !== 'VALIDE_PAR_IT' && existingStatus !== 'APPROUVE_PAR_MCZ') {
+              prestatairesCampaignsMap.set(key, record);
+            }
+          }
+        }
+        
+        data = Array.from(prestatairesCampaignsMap.values());
+        console.log(`[ApprovalsService.findByZoneOrAire] ${data.length} validations uniques après déduplication (prestataire+campagne) sur ${allData.length} enregistrements`);
+        
+        // Log de la répartition par campagne
+        const campaignCount = data.reduce((acc: any, p: any) => {
+          const campId = p.campaign_id || p.campaignId || 'NO_CAMPAIGN';
+          acc[campId] = (acc[campId] || 0) + 1;
+          return acc;
+        }, {});
+        console.log(`[ApprovalsService.findByZoneOrAire] Répartition par campagne:`, campaignCount);
+        
+        // Log de la répartition par statut d'approbation
+        const approvalStatusCount = data.reduce((acc: any, p: any) => {
+          const status = p.status || 'UNKNOWN';
+          const approvalStatus = p.approval_status || 'null';
+          const key = `${status}_${approvalStatus}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        console.log(`[ApprovalsService.findByZoneOrAire] Répartition par statut d'approbation:`, approvalStatusCount);
       }
-      
-      let data = Array.from(prestatairesMap.values());
-      console.log(`[ApprovalsService.findByZoneOrAire] ${data.length} prestataires uniques après déduplication (sur ${allData.length} enregistrements)`);
       
       // Log de la répartition par statut AVANT filtrage MCZ
       const statusCountBefore = data.reduce((acc: any, p: any) => {

@@ -21,6 +21,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
   final ApiService _apiService = ApiService();
   String _selectedPaymentStatus = 'Tous';
   String? _formId;
+  String _currency = 'USD'; // Devise par défaut : USD
 
   @override
   void initState() {
@@ -49,9 +50,15 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
               activeCampaign = campaigns.first;
             }
           }
-          if (activeCampaign != null && activeCampaign.enregistrementFormId != null) {
-            formId = activeCampaign.enregistrementFormId;
-            _formId = formId;
+          if (activeCampaign != null) {
+            if (activeCampaign.enregistrementFormId != null) {
+              formId = activeCampaign.enregistrementFormId;
+              _formId = formId;
+            }
+            // Récupérer la devise depuis la campagne (USD par défaut)
+            setState(() {
+              _currency = activeCampaign?.currency ?? 'USD';
+            });
           }
         } catch (e) {
           print('Erreur lors de la récupération de la campagne: $e');
@@ -260,7 +267,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
       
       // Ajouter le montant trouvé (ou 0 si pas trouvé)
       final amountToAdd = paymentAmount ?? 0.0;
-      print('DEBUG PAYMENT: Ajout montant ${p.id}: $amountToAdd CDF (total: ${sum + amountToAdd})');
+      print('DEBUG PAYMENT: Ajout montant ${p.id}: $amountToAdd $_currency (total: ${sum + amountToAdd})');
       return sum + amountToAdd;
     });
   }
@@ -344,7 +351,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
                           ),
                         ),
                         Text(
-                          '${_totalAmount.toStringAsFixed(0)} CDF',
+                          '${_totalAmount.toStringAsFixed(0)} $_currency',
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -824,8 +831,8 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
               _buildDetailRow(
                 'Montant payé',
                 (paymentAmount != null && paymentAmount! > 0)
-                    ? '${paymentAmount!.toStringAsFixed(0)} CDF'
-                    : '0 CDF',
+                    ? '${paymentAmount!.toStringAsFixed(0)} $_currency'
+                    : '0 $_currency',
               ),
             ],
           ),
@@ -875,7 +882,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
       final csvContent = StringBuffer();
       
       // En-têtes CSV
-      csvContent.writeln('ID;Nom complet;Numéro téléphone;Statut paiement;Montant (CDF);Date paiement');
+      csvContent.writeln('ID;Nom complet;Numéro téléphone;Statut paiement;Montant ($_currency);Date paiement');
       
       // Ajouter les données de chaque prestataire
       for (var prestataire in _filteredPrestataires) {

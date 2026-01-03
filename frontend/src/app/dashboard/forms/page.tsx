@@ -9,9 +9,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AlertModal from '../../../components/Modal/AlertModal';
 import ConfirmModal from '../../../components/Modal/ConfirmModal';
 import { getErrorMessage } from '../../../utils/error-handler';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 function FormsPageContent() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
       const [forms, setForms] = useState<Form[]>([]);
@@ -216,7 +218,7 @@ function FormsPageContent() {
       // Rediriger vers le Forms Builder
       router.push(`/dashboard/forms/${newForm.id}/builder`);
     } catch (error: any) {
-      showAlert('Erreur', error.response?.data?.message || 'Erreur lors de la création', 'error');
+      showAlert(t('common.error'), error.response?.data?.message || t('errors.errorCreating'), 'error');
     }
   };
 
@@ -239,7 +241,7 @@ function FormsPageContent() {
   const handleXlsFormImport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!xlsFormFile) {
-      showAlert('Erreur', 'Veuillez sélectionner un fichier', 'error');
+      showAlert(t('common.error'), t('errors.selectFile'), 'error');
       return;
     }
 
@@ -257,8 +259,8 @@ function FormsPageContent() {
       router.push(`/dashboard/forms/${result.form.id}/builder`);
     } catch (error: any) {
       showAlert(
-        'Erreur',
-        error.response?.data?.message || 'Erreur lors de l\'import du fichier XlsForm',
+        t('common.error'),
+        error.response?.data?.message || t('errors.errorImporting'),
         'error'
       );
     } finally {
@@ -268,16 +270,16 @@ function FormsPageContent() {
 
   const handleDeleteForm = (form: Form) => {
     showConfirm(
-      'Supprimer le formulaire',
-      `Êtes-vous sûr de vouloir supprimer le formulaire "${form.name}" ? Cette action est irréversible et supprimera également toutes les versions associées.`,
+      t('forms.deleteFormTitle'),
+      t('forms.confirmDeleteFormMessageWithName').replace('{name}', form.name),
       async () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
         try {
           await formsApi.delete(form.id);
-          showAlert('Succès', 'Formulaire supprimé avec succès', 'success');
+          showAlert(t('common.success'), t('success.formDeleted'), 'success');
           loadForms(); // Recharger la liste
         } catch (error: any) {
-          showAlert('Erreur', error.response?.data?.message || 'Erreur lors de la suppression', 'error');
+          showAlert(t('common.error'), error.response?.data?.message || t('errors.errorDeleting'), 'error');
         }
       },
       'danger'
@@ -287,13 +289,13 @@ function FormsPageContent() {
   if (user?.role !== 'SUPERADMIN') {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Accès non autorisé</p>
+        <p className="text-gray-500">{t('errors.unauthorizedAccess')}</p>
       </div>
     );
   }
 
   if (loading) {
-    return <div className="text-center py-12">Chargement...</div>;
+    return <div className="text-center py-12">{t('common.loading')}</div>;
   }
 
   // Filtrer les formulaires selon l'onglet actif
@@ -512,19 +514,19 @@ function FormsPageContent() {
                             className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1"
                           >
                             <span>👁️</span>
-                            <span>Visualiser</span>
+                            <span>{t('forms.view')}</span>
                           </Link>
                           <button
                             onClick={() => {
                               const publicUrl = `${window.location.origin}/forms/public/${form.id}`;
                               navigator.clipboard.writeText(publicUrl);
-                              showAlert('Succès', `Lien copié dans le presse-papiers:\n${publicUrl}`, 'success');
+                              showAlert(t('common.success'), `${t('success.linkCopied')}:\n${publicUrl}`, 'success');
                             }}
                             className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center gap-1"
-                            title="Copier le lien public"
+                            title={t('forms.copyLinkTitle')}
                           >
                             <span>🔗</span>
-                            <span>Copier le lien</span>
+                            <span>{t('forms.copyLink')}</span>
                           </button>
                         </>
                       )}
@@ -532,10 +534,10 @@ function FormsPageContent() {
                     <button
                       onClick={() => handleDeleteForm(form)}
                       className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
-                      title="Supprimer le formulaire"
+                      title={t('forms.deleteFormTitle')}
                     >
                       <span>🗑️</span>
-                      <span>Supprimer</span>
+                      <span>{t('forms.deleteForm')}</span>
                     </button>
                   </div>
                 </div>
@@ -564,12 +566,10 @@ function FormsPageContent() {
                   >
                     <div className="text-3xl mb-2">🔧</div>
                     <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                      Forms Builder
+                      {t('forms.formsBuilder')}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      Créez votre formulaire visuellement avec notre constructeur
-                      intuitif. Ajoutez des champs, configurez les validations et
-                      les dépendances.
+                      {t('forms.formsBuilderDescription')}
                     </p>
                   </button>
                   <button
@@ -578,11 +578,10 @@ function FormsPageContent() {
                   >
                     <div className="text-3xl mb-2">📊</div>
                     <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                      XlsForm
+                      {t('forms.xlsForm')}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      Importez un formulaire depuis un fichier Excel au format
-                      XlsForm (compatible Kobo/ODK).
+                      {t('forms.xlsFormDescription')}
                     </p>
                   </button>
                 </div>
@@ -592,7 +591,7 @@ function FormsPageContent() {
                     onClick={() => setShowMethodSelection(false)}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -675,7 +674,7 @@ function FormsPageContent() {
                     onClick={() => setShowCreateModal(false)}
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                 </div>
               </form>
@@ -749,7 +748,7 @@ function FormsPageContent() {
                       <input
                         type="text"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
-                        placeholder="Le titre sera extrait du fichier si non renseigné"
+                        placeholder={t('forms.titleExtractedFromFile')}
                         value={xlsFormTitle}
                         onChange={(e) => setXlsFormTitle(e.target.value)}
                       />
@@ -801,7 +800,7 @@ function FormsPageContent() {
                     disabled={importing}
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                 </div>
               </form>

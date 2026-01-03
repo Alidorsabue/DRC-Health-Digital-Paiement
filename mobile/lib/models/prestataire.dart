@@ -168,13 +168,27 @@ class Prestataire {
 
     // Extraire telephone depuis les données du formulaire (num_phone, confirm_phone)
     String? telephone = json['telephone']?.toString();
-    if (telephone == null || telephone.isEmpty || telephone == 'N/A') {
+    if (telephone == null || telephone.isEmpty || telephone == 'N/A' || telephone == 'null') {
       // Chercher dans les colonnes directes du formulaire
       telephone = json['num_phone']?.toString() ?? 
-                  json['confirm_phone']?.toString();
+                  json['confirm_phone']?.toString() ??
+                  json['phone']?.toString() ??
+                  json['Phone']?.toString();
+      
+      // Si toujours vide, chercher dans enregistrementData
+      if ((telephone == null || telephone.isEmpty || telephone == 'N/A' || telephone == 'null') && 
+          json['enregistrementData'] != null && json['enregistrementData'] is Map) {
+        final data = json['enregistrementData'] as Map<String, dynamic>;
+        telephone = data['num_phone']?.toString() ?? 
+                    data['confirm_phone']?.toString() ?? 
+                    data['telephone']?.toString() ?? 
+                    data['Telephone']?.toString() ?? 
+                    data['phone']?.toString() ?? 
+                    data['Phone']?.toString();
+      }
       
       // Si toujours vide, chercher dans raw_data
-      if ((telephone == null || telephone.isEmpty || telephone == 'N/A') && 
+      if ((telephone == null || telephone.isEmpty || telephone == 'N/A' || telephone == 'null') && 
           json['raw_data'] != null && json['raw_data'] is Map) {
         final data = json['raw_data'] as Map<String, dynamic>;
         telephone = data['num_phone']?.toString() ?? 
@@ -184,6 +198,16 @@ class Prestataire {
                     data['phone']?.toString() ?? 
                     data['Phone']?.toString();
       }
+    }
+    
+    // Nettoyer le téléphone (enlever les espaces, etc.)
+    if (telephone != null && telephone.isNotEmpty && telephone != 'N/A' && telephone != 'null') {
+      telephone = telephone.trim();
+      if (telephone.isEmpty) {
+        telephone = null;
+      }
+    } else {
+      telephone = null;
     }
 
     // Construire enregistrementData avec toutes les données du formulaire

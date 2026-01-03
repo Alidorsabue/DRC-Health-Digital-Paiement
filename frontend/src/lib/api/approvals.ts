@@ -37,10 +37,12 @@ export const approvalsApi = {
     formId: string,
     zoneId?: string,
     status?: string,
+    campaignId?: string,
   ): Promise<PrestataireForApproval[]> => {
     const params = new URLSearchParams({ formId });
     if (zoneId) params.append('zoneId', zoneId);
     if (status) params.append('status', status);
+    if (campaignId) params.append('campaignId', campaignId);
     
     const response = await api.get<PrestataireForApproval[]>(
       `/approbations?${params.toString()}`,

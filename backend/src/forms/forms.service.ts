@@ -500,6 +500,27 @@ export class FormsService {
           }
         });
         
+        // Extraire le téléphone depuis les colonnes directes ou raw_data et l'ajouter au niveau racine
+        // pour faciliter l'accès depuis le frontend/mobile
+        if (!record.telephone && !record.num_phone && !record.confirm_phone) {
+          // Chercher dans raw_data
+          if (record.raw_data && typeof record.raw_data === 'object') {
+            const rawData = record.raw_data;
+            record.telephone = rawData.num_phone || rawData.confirm_phone || rawData.telephone || 
+                              rawData.phone || rawData.Phone || rawData.Telephone || null;
+          }
+        } else {
+          record.telephone = record.telephone || record.num_phone || record.confirm_phone || null;
+        }
+        
+        // Extraire le téléphone depuis les colonnes directes ou raw_data
+        let telephone = record.telephone || record.num_phone || record.confirm_phone || null;
+        if (!telephone && record.raw_data && typeof record.raw_data === 'object') {
+          const rawData = record.raw_data;
+          telephone = rawData.num_phone || rawData.confirm_phone || rawData.telephone || 
+                      rawData.phone || rawData.Phone || rawData.Telephone || null;
+        }
+        
         // Utiliser record.id (ID du prestataire dans la table form_*) comme ID principal
         return {
           id: record.id, // record.id est l'ID du prestataire au format ID-YYMM-HHmm-XXX
@@ -522,6 +543,7 @@ export class FormsService {
           paymentAmount: record.payment_amount,
           paymentDate: record.payment_date,
           payment_date: record.payment_date,
+          telephone: telephone, // Ajouter le téléphone au niveau racine pour faciliter l'accès
           ...formData, // Toutes les données du formulaire
           createdAt: record.created_at,
           updatedAt: record.updated_at,

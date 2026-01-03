@@ -49,6 +49,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (fullName == null || fullName.isEmpty) return 'IT';
     final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) {
+      // Prendre la première lettre du prénom (premier mot) et la première lettre du nom (deuxième mot)
+      // Exemple: "Héritier WATA" -> "HW"
       return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
     } else if (parts.length == 1) {
       return parts[0][0].toUpperCase();
@@ -88,108 +90,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      // Nom complet
+                      const SizedBox(height: 16),
+                      // Nom complet (Prénom + Nom)
                       if (user?.fullName != null && user!.fullName!.isNotEmpty) ...[
                         Text(
                           user!.fullName!,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 8),
                       ],
-                      // Rôle
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          user?.role ?? 'N/A',
-                          style: TextStyle(
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Informations géographiques pour IT
-                      if (user?.role == 'IT') ...[
-                        // Zone de santé
-                        if (user?.zoneId != null && user!.zoneId!.isNotEmpty) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.location_city,
-                                size: 18,
+                      // Zone de santé (pour IT)
+                      if (user?.role == 'IT' && user?.zoneId != null && user!.zoneId!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          user!.zoneId!,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Colors.grey.shade700,
                               ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Zone de Santé',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Colors.grey.shade600,
-                                            fontSize: 11,
-                                          ),
-                                    ),
-                                    Text(
-                                      user!.zoneId!,
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey.shade800,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        // Aire de santé
-                        if (user?.aireId != null && user!.aireId!.isNotEmpty) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                size: 18,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      // Aire de santé (pour IT)
+                      if (user?.role == 'IT' && user?.aireId != null && user!.aireId!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          user!.aireId!,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Colors.grey.shade700,
                               ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Aire de Santé',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Colors.grey.shade600,
-                                            fontSize: 11,
-                                          ),
-                                    ),
-                                    Text(
-                                      user!.aireId!,
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey.shade800,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ],
                   ),

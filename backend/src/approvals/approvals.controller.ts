@@ -32,18 +32,20 @@ export class ApprovalsController {
   @ApiQuery({ name: 'zoneId', required: false, description: 'ID de la zone (pour MCZ)' })
   @ApiQuery({ name: 'aireId', required: false, description: 'ID de l\'aire (pour IT)' })
   @ApiQuery({ name: 'status', required: false, enum: PrestataireStatus })
+  @ApiQuery({ name: 'campaignId', required: false, description: 'ID de la campagne (optionnel, pour filtrer par campagne)' })
   findAll(
     @Query('formId') formId: string,
     @Query('zoneId') zoneId?: string,
     @Query('aireId') aireId?: string,
     @Query('status') status?: PrestataireStatus,
+    @Query('campaignId') campaignId?: string,
     @CurrentUser() user?: any,
   ) {
     // Pour MCZ, utiliser zoneId
     // Pour IT, utiliser aireId
     const targetZoneId = zoneId || (user?.role === 'MCZ' ? user?.zoneId : undefined);
     const targetAireId = aireId || (user?.role === 'IT' ? user?.aireId : undefined);
-    return this.approvalsService.findByZoneOrAire(formId, targetZoneId, targetAireId, status, user?.role);
+    return this.approvalsService.findByZoneOrAire(formId, targetZoneId, targetAireId, status, user?.role, campaignId);
   }
 
   @Post('prestataires/:prestataireId/approve')

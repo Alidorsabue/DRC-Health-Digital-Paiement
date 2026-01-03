@@ -355,11 +355,35 @@ export default function PartnerPage() {
   // Fonction helper pour récupérer validation_status (pas status qui contient l'approbation)
   const getValidationStatus = (prestataire: PrestataireForPartner): string => {
     const rawData = prestataire.raw_data || {};
-    const validationStatus = (prestataire as any).validation_status ||
-                            rawData.validation_status ||
-                            (prestataire as any).validationStatus ||
-                            rawData.validationStatus ||
-                            'ENREGISTRE';
+    let validationStatus = (prestataire as any).validation_status ||
+                          rawData.validation_status ||
+                          (prestataire as any).validationStatus ||
+                          rawData.validationStatus;
+    
+    // Si validation_status n'existe pas, vérifier s'il y a une date de validation (indique que validé par IT)
+    if (!validationStatus || validationStatus === 'ENREGISTRE' || validationStatus === '') {
+      const validationDate = (prestataire as any).validation_date ||
+                            (prestataire as any).validationDate ||
+                            (prestataire as any).validated_at ||
+                            rawData.validation_date ||
+                            rawData.validationDate ||
+                            rawData.validated_at;
+      
+      // Si une date de validation existe, le prestataire a été validé par IT
+      if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+        validationStatus = 'VALIDE_PAR_IT';
+      } else {
+        // Sinon, vérifier si status = APPROUVE_PAR_MCZ (signifie qu'il a d'abord été validé par IT)
+        const status = (prestataire as any).status || rawData.status;
+        const statusStr = String(status || '').trim().toUpperCase();
+        if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+          validationStatus = 'VALIDE_PAR_IT';
+        } else if (!validationStatus) {
+          validationStatus = 'ENREGISTRE';
+        }
+      }
+    }
+    
     return validationStatus;
   };
 

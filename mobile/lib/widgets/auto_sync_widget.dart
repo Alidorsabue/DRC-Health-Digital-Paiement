@@ -26,6 +26,7 @@ class _AutoSyncWidgetState extends State<AutoSyncWidget> with WidgetsBindingObse
   Timer? _periodicSyncTimer;
   DateTime? _lastSyncTime;
   bool _isSyncing = false;
+  bool _isSyncingSubmissions = false;
 
   @override
   void initState() {
@@ -35,10 +36,25 @@ class _AutoSyncWidgetState extends State<AutoSyncWidget> with WidgetsBindingObse
     // Synchroniser immédiatement au démarrage
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _performAutoSync(silent: true);
+      _syncPendingSubmissionsOnReconnect();
     });
 
     // Démarrer le timer de synchronisation périodique (toutes les 5 minutes)
     _startPeriodicSync();
+    
+    // Configurer le callback de reconnexion dans SyncProvider
+    _setupReconnectListener();
+  }
+
+  void _setupReconnectListener() {
+    // Attendre que le contexte soit disponible
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+      syncProvider.onReconnected = () {
+        // Synchroniser automatiquement les soumissions en attente lors de la reconnexion
+        _syncPendingSubmissionsOnReconnect();
+      };
+    });
   }
 
   @override
@@ -55,6 +71,7 @@ class _AutoSyncWidgetState extends State<AutoSyncWidget> with WidgetsBindingObse
     // Synchroniser quand l'application revient au premier plan
     if (state == AppLifecycleState.resumed) {
       _performAutoSync(silent: true);
+      _syncPendingSubmissionsOnReconnect(silent: true);
     }
   }
 
@@ -62,7 +79,10 @@ class _AutoSyncWidgetState extends State<AutoSyncWidget> with WidgetsBindingObse
     // Synchroniser toutes les 5 minutes
     _periodicSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => _performAutoSync(silent: true),
+      (_) {
+        _performAutoSync(silent: true);
+        _syncPendingSubmissionsOnReconnect(silent: true);
+      },
     );
   }
 
@@ -141,6 +161,73 @@ class _AutoSyncWidgetState extends State<AutoSyncWidget> with WidgetsBindingObse
       }
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  /// Synchronise automatiquement les soumissions en attente (prestataires) lors de la reconnexion
+  Future<void> _syncPendingSubmissionsOnReconnect({bool silent = true}) async {
+    // Éviter les synchronisations simultanées des soumissions
+    if (_isSyncingSubmissions) return;
+    
+    // Vérifier que l'utilisateur est authentifié
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated) {
+      return;
+    }
+
+    // Vérifier la connexion
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (!await syncProvider.syncService.isConnected()) {
+      return;
+    }
+
+    _isSyncingSubmissions = true;
+
+    try {
+      // Synchroniser les soumissions en attente (prestataires enregistrés)
+      await syncProvider.syncPendingSubmissions();
+      final syncResult = syncProvider.lastSyncResult;
+      
+      if (syncResult != null && syncResult.success && syncResult.syncedSubmissions > 0) {
+        // Afficher un message de succès même en mode silencieux pour informer l'utilisateur
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${syncResult.syncedSubmissions} prestataire(s) synchronisé(s) automatiquement',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else if (syncResult != null && syncResult.failedSubmissions > 0) {
+        // Afficher un avertissement si certaines soumissions ont échoué
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${syncResult.failedSubmissions} prestataire(s) n\'ont pas pu être synchronisés. Veuillez réessayer.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Ne pas afficher d'erreur en mode silencieux pour éviter de perturber l'utilisateur
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la synchronisation automatique: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      _isSyncingSubmissions = false;
     }
   }
 

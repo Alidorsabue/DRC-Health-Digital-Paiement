@@ -182,6 +182,56 @@
     "sessionExpired": "Session expirée",
     "sessionExpiredMessage": "Votre session a expiré pour des raisons de sécurité. Veuillez vous reconnecter.",
     "connectionError": "Erreur de connexion. Vérifiez vos identifiants."
+  },
+  "errors": {
+    "unauthorizedAccess": "Accès non autorisé",
+    "errorLoadingCampaigns": "Impossible de charger les campagnes",
+    "errorLoadingProviders": "Impossible de charger les prestataires",
+    "errorLoadingForms": "Impossible de charger les formulaires",
+    "errorApprovingProvider": "Impossible d'approuver le prestataire",
+    "errorRejectingProvider": "Impossible de rejeter le prestataire",
+    "errorDeletingProvider": "Impossible de supprimer le prestataire",
+    "errorDeletingProviders": "Impossible de supprimer les prestataires",
+    "errorCreating": "Erreur lors de la création",
+    "errorDeleting": "Erreur lors de la suppression",
+    "errorImporting": "Erreur lors de l'import du fichier XlsForm",
+    "errorUnknown": "Erreur inconnue",
+    "selectFile": "Veuillez sélectionner un fichier",
+    "commentRequired": "Un commentaire est obligatoire pour le rejet",
+    "selectAtLeastOneProvider": "Veuillez sélectionner au moins un prestataire",
+    "selectForm": "Veuillez sélectionner un formulaire",
+    "healthZoneNotConfigured": "Votre zone de santé n'est pas configurée. Contactez un administrateur."
+  },
+  "success": {
+    "providerApproved": "Prestataire approuvé avec succès",
+    "providerRejected": "Prestataire rejeté avec succès",
+    "providersApprovedBatch": "prestataire(s) approuvé(s) avec succès",
+    "providerDeleted": "Prestataire supprimé avec succès",
+    "providersDeletedBatch": "prestataire(s) supprimé(s) avec succès",
+    "formDeleted": "Formulaire supprimé avec succès",
+    "linkCopied": "Lien copié dans le presse-papiers"
+  },
+  "forms": {
+    "title": "Formulaires",
+    "createForm": "Créer un formulaire",
+    "copyLink": "Copier le lien",
+    "copyLinkTitle": "Copier le lien public",
+    "deleteForm": "Supprimer",
+    "deleteFormTitle": "Supprimer le formulaire",
+    "view": "Visualiser",
+    "confirmDeleteForm": "Confirmer la suppression",
+    "confirmDeleteFormMessage": "Êtes-vous sûr de vouloir supprimer ce formulaire ? Cette action est irréversible.",
+    "confirmDeleteProvider": "Confirmer la suppression",
+    "confirmDeleteProviderMessage": "Êtes-vous sûr de vouloir supprimer ce prestataire ? Cette action est irréversible.",
+    "confirmDeleteProvidersBatch": "Confirmer la suppression multiple",
+    "confirmDeleteProvidersBatchMessage": "Êtes-vous sûr de vouloir supprimer {count} prestataire(s) ? Cette action est irréversible.",
+    "chooseCreationMethod": "Choisir une méthode de création",
+    "formsBuilder": "Forms Builder",
+    "formsBuilderDescription": "Créez votre formulaire visuellement avec notre constructeur intuitif. Ajoutez des champs, configurez les validations et les dépendances.",
+    "xlsForm": "XlsForm",
+    "xlsFormDescription": "Importez un formulaire depuis un fichier Excel au format XlsForm (compatible Kobo/ODK).",
+    "titleExtractedFromFile": "Le titre sera extrait du fichier si non renseigné",
+    "filterColumns": "Filtrer les colonnes à afficher"
   }
 }
 

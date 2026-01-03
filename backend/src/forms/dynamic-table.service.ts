@@ -472,16 +472,61 @@ export class DynamicTableService {
       existingColumns.map((col: any) => col.column_name.toLowerCase()),
     );
 
+    // PROTECTION CONTRE LES DOUBLES SOUMISSIONS
+    // Vérifier les doublons basés sur le numéro de téléphone et la carte d'électeur
+    // IMPORTANT: La vérification doit être limitée à la même campagne pour permettre
+    // les validations du même prestataire pour différentes campagnes
+    
+    // Essayer d'extraire campaignId des données soumises si non fourni
+    let finalCampaignId = campaignId;
+    if (!finalCampaignId) {
+      // Chercher campaignId dans les données soumises
+      const campaignIdFromData = data.campaign_id || data.campaignId || data.campaign_id_i_c;
+      if (campaignIdFromData) {
+        finalCampaignId = String(campaignIdFromData);
+        console.log(`[insertSubmission] campaignId extrait des données soumises: ${finalCampaignId}`);
+      }
+    }
+    
+    // Si toujours pas de campaignId, récupérer la campagne active (pour l'insertion)
+    // Mais ne pas l'utiliser pour la vérification de doublon si elle n'était pas dans les données
+    let campaignIdForDuplicateCheck = finalCampaignId;
+    if (!finalCampaignId && existingColumnNames.has('campaign_id')) {
+      try {
+        const campaigns = await this.campaignsService.findAll();
+        const activeCampaign = campaigns.find(c => c.isActive && c.enregistrementFormId === formId);
+        if (activeCampaign) {
+          finalCampaignId = activeCampaign.id;
+          console.log(`[insertSubmission] Campagne active trouvée pour insertion: ${activeCampaign.name} (${finalCampaignId})`);
+          // Utiliser cette campagne pour la vérification de doublon seulement si elle était déjà dans les données
+          // Sinon, permettre les validations pour différentes campagnes
+        } else {
+          const campaignWithForm = campaigns.find(c => c.enregistrementFormId === formId);
+          if (campaignWithForm) {
+            finalCampaignId = campaignWithForm.id;
+            console.log(`[insertSubmission] Campagne trouvée pour insertion: ${campaignWithForm.name} (${finalCampaignId})`);
+          }
+        }
+      } catch (error) {
+        // Ignorer l'erreur, on continuera sans vérification de campagne
+      }
+    }
+    
+    // Utiliser le campaignId extrait des données pour la vérification de doublon
+    // Si campaignId n'était pas dans les données, ne pas faire de vérification (permet multi-campagnes)
+    await this.checkDuplicateSubmission(tableName, data, campaignIdForDuplicateCheck, existingColumnNames);
+
     // Préparer les colonnes et valeurs (seulement les colonnes qui existent)
     const columns: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
-    // Colonne id (clé primaire) - générer au nouveau format ID-YYMM-HHmm-XXX
+    // Colonne id (clé primaire) - utiliser le submissionId fourni, sinon générer un nouveau
     if (existingColumnNames.has('id')) {
-      const newId = await generateSubmissionId(this.dataSource, formId);
+      // Utiliser le submissionId fourni en paramètre (déjà généré dans le controller)
+      // Ne pas générer un nouvel ID ici pour éviter les conflits
       columns.push('id');
-      values.push(newId);
+      values.push(submissionId);
       paramIndex++;
     }
 
@@ -507,25 +552,25 @@ export class DynamicTableService {
       paramIndex++;
     }
     // campaign_id est maintenant requis pour la clé primaire composite
-    // Si campaignId n'est pas fourni, récupérer la campagne active
+    // Utiliser le finalCampaignId calculé précédemment (soit fourni, soit extrait des données, soit campagne active)
     if (existingColumnNames.has('campaign_id')) {
       columns.push('campaign_id');
-      let finalCampaignId = campaignId;
       
+      // Utiliser le finalCampaignId calculé précédemment
+      // Si toujours pas de campaignId, essayer de récupérer la campagne active (pour l'insertion uniquement)
       if (!finalCampaignId) {
-        // Récupérer la campagne active qui utilise ce formulaire
         try {
           const campaigns = await this.campaignsService.findAll();
           const activeCampaign = campaigns.find(c => c.isActive && c.enregistrementFormId === formId);
           if (activeCampaign) {
             finalCampaignId = activeCampaign.id;
-            console.log(`[insertSubmission] Campagne active trouvée: ${activeCampaign.name} (${finalCampaignId})`);
+            console.log(`[insertSubmission] Campagne active trouvée pour insertion: ${activeCampaign.name} (${finalCampaignId})`);
           } else {
             // Si aucune campagne active, utiliser la première campagne qui utilise ce formulaire
             const campaignWithForm = campaigns.find(c => c.enregistrementFormId === formId);
             if (campaignWithForm) {
               finalCampaignId = campaignWithForm.id;
-              console.log(`[insertSubmission] Campagne trouvée (non active): ${campaignWithForm.name} (${finalCampaignId})`);
+              console.log(`[insertSubmission] Campagne trouvée pour insertion: ${campaignWithForm.name} (${finalCampaignId})`);
             } else {
               throw new Error(`Aucune campagne trouvée pour le formulaire ${formId}. Veuillez spécifier campaignId ou créer une campagne active.`);
             }
@@ -630,6 +675,189 @@ export class DynamicTableService {
         // Autre type d'erreur, propager
         throw error;
       }
+    }
+  }
+
+  /**
+   * Vérifie s'il existe déjà une soumission avec le même numéro de téléphone ou la même carte d'électeur
+   * dans la même campagne
+   */
+  private async checkDuplicateSubmission(
+    tableName: string,
+    data: Record<string, any>,
+    campaignId: string | undefined,
+    existingColumnNames: Set<unknown>,
+  ): Promise<void> {
+    // Identifier les champs de téléphone et de carte d'électeur
+    const phoneFieldNames = [
+      'telephone', 'num_phone', 'confirm_phone', 'phone', 
+      'numero_telephone', 'tel', 'mobile', 'cellphone'
+    ];
+    const voterCardFieldNames = [
+      'carte_electeur', 'carte_electorale', 'voter_card', 'card_number',
+      'numero_carte_electeur', 'numero_carte_electorale', 'electeur_card'
+    ];
+
+    // Trouver les valeurs de téléphone et de carte d'électeur dans les données
+    let phoneValue: string | null = null;
+    let voterCardValue: string | null = null;
+
+    // Chercher le téléphone dans les données (colonne directe ou raw_data)
+    for (const fieldName of phoneFieldNames) {
+      const lowerFieldName = fieldName.toLowerCase();
+      if (data[fieldName] || data[lowerFieldName]) {
+        const value = data[fieldName] || data[lowerFieldName];
+        if (value && typeof value === 'string' && value.trim()) {
+          phoneValue = value.trim();
+          break;
+        }
+      }
+    }
+
+    // Chercher la carte d'électeur dans les données
+    for (const fieldName of voterCardFieldNames) {
+      const lowerFieldName = fieldName.toLowerCase();
+      if (data[fieldName] || data[lowerFieldName]) {
+        const value = data[fieldName] || data[lowerFieldName];
+        if (value && typeof value === 'string' && value.trim()) {
+          voterCardValue = value.trim();
+          break;
+        }
+      }
+    }
+
+    // Si aucun identifiant unique n'est fourni, on ne peut pas vérifier les doublons
+    if (!phoneValue && !voterCardValue) {
+      console.log('[checkDuplicateSubmission] Aucun identifiant unique (téléphone ou carte d\'électeur) trouvé, vérification de doublon ignorée');
+      return;
+    }
+
+    // Construire la requête de vérification
+    const conditions: string[] = [];
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+
+    // Vérifier par téléphone si fourni
+    if (phoneValue) {
+      // Normaliser le numéro de téléphone (supprimer espaces, caractères spéciaux sauf +)
+      const normalizedPhone = phoneValue.replace(/\s+/g, '').replace(/[^\d+]/g, '');
+      
+      // Chercher dans les colonnes directes et dans raw_data
+      const phoneConditions: string[] = [];
+      
+      // Vérifier dans les colonnes directes
+      for (const fieldName of phoneFieldNames) {
+        const lowerFieldName = fieldName.toLowerCase();
+        if (existingColumnNames.has(lowerFieldName)) {
+          phoneConditions.push(`"${fieldName}" = $${paramIndex} OR "${fieldName}" = $${paramIndex + 1}`);
+        }
+      }
+      
+      // Vérifier dans raw_data
+      phoneConditions.push(`raw_data->>'telephone' = $${paramIndex}::text`);
+      phoneConditions.push(`raw_data->>'telephone' = $${paramIndex + 1}::text`);
+      phoneConditions.push(`raw_data->>'num_phone' = $${paramIndex}::text`);
+      phoneConditions.push(`raw_data->>'num_phone' = $${paramIndex + 1}::text`);
+      phoneConditions.push(`raw_data->>'confirm_phone' = $${paramIndex}::text`);
+      phoneConditions.push(`raw_data->>'confirm_phone' = $${paramIndex + 1}::text`);
+      
+      if (phoneConditions.length > 0) {
+        conditions.push(`(${phoneConditions.join(' OR ')})`);
+        queryParams.push(phoneValue, normalizedPhone);
+        paramIndex += 2;
+      }
+    }
+
+    // Vérifier par carte d'électeur si fourni
+    if (voterCardValue) {
+      const voterConditions: string[] = [];
+      
+      // Vérifier dans les colonnes directes
+      for (const fieldName of voterCardFieldNames) {
+        const lowerFieldName = fieldName.toLowerCase();
+        if (existingColumnNames.has(lowerFieldName)) {
+          voterConditions.push(`"${fieldName}" = $${paramIndex}`);
+        }
+      }
+      
+      // Vérifier dans raw_data
+      voterConditions.push(`raw_data->>'carte_electeur' = $${paramIndex}::text`);
+      voterConditions.push(`raw_data->>'carte_electorale' = $${paramIndex}::text`);
+      voterConditions.push(`raw_data->>'voter_card' = $${paramIndex}::text`);
+      voterConditions.push(`raw_data->>'card_number' = $${paramIndex}::text`);
+      
+      if (voterConditions.length > 0) {
+        if (conditions.length > 0) {
+          conditions.push('OR');
+        }
+        conditions.push(`(${voterConditions.join(' OR ')})`);
+        queryParams.push(voterCardValue);
+        paramIndex++;
+      }
+    }
+
+    // IMPORTANT: La vérification de doublon doit TOUJOURS être limitée à la même campagne
+    // Si campaignId n'est pas fourni, on ne peut pas vérifier les doublons de manière fiable
+    // car le même prestataire peut avoir des validations pour différentes campagnes
+    if (!campaignId || !existingColumnNames.has('campaign_id')) {
+      console.log('[checkDuplicateSubmission] Aucun campaignId fourni ou colonne campaign_id absente, vérification de doublon ignorée pour permettre les validations multi-campagnes');
+      return; // Permettre les validations pour différentes campagnes
+    }
+
+    // Ajouter la condition de campagne - OBLIGATOIRE pour éviter de bloquer les validations multi-campagnes
+    conditions.push(`AND campaign_id = $${paramIndex}`);
+    queryParams.push(campaignId);
+    paramIndex++;
+
+    if (conditions.length === 0) {
+      return; // Aucune condition à vérifier
+    }
+
+    // Exécuter la requête de vérification
+    const checkQuery = `
+      SELECT id, campaign_id, 
+             COALESCE(telephone, raw_data->>'telephone', raw_data->>'num_phone', raw_data->>'confirm_phone') as phone,
+             COALESCE(carte_electeur, raw_data->>'carte_electeur', raw_data->>'carte_electorale', raw_data->>'voter_card') as voter_card
+      FROM "${tableName}"
+      WHERE ${conditions.join(' ')}
+      LIMIT 1
+    `;
+
+    try {
+      const existingRecords = await this.dataSource.query(checkQuery, queryParams);
+      
+      if (existingRecords.length > 0) {
+        const existingRecord = existingRecords[0];
+        const duplicateFields: string[] = [];
+        
+        if (phoneValue && existingRecord.phone) {
+          duplicateFields.push(`numéro de téléphone: ${existingRecord.phone}`);
+        }
+        if (voterCardValue && existingRecord.voter_card) {
+          duplicateFields.push(`carte d'électeur: ${existingRecord.voter_card}`);
+        }
+        
+        // Message d'erreur spécifique indiquant que c'est un doublon pour la même campagne
+        const errorMessage = `Une soumission existe déjà avec ${duplicateFields.join(' et ')} pour la campagne ${campaignId}. Un même prestataire peut avoir des validations pour différentes campagnes, mais pas plusieurs validations pour la même campagne.`;
+        
+        console.warn(`[checkDuplicateSubmission] Doublon détecté pour la même campagne:`, {
+          phone: phoneValue,
+          voterCard: voterCardValue,
+          campaignId,
+          existingId: existingRecord.id,
+          existingCampaignId: existingRecord.campaign_id,
+        });
+        
+        throw new Error(errorMessage);
+      }
+    } catch (error: any) {
+      // Si l'erreur est déjà notre message d'erreur personnalisé, la propager
+      if (error.message && error.message.includes('Une soumission existe déjà')) {
+        throw error;
+      }
+      // Sinon, logger l'erreur mais ne pas bloquer l'insertion (pour éviter les faux positifs)
+      console.error('[checkDuplicateSubmission] Erreur lors de la vérification de doublon:', error);
+      // Ne pas bloquer l'insertion en cas d'erreur de vérification
     }
   }
 
@@ -1516,6 +1744,7 @@ export class DynamicTableService {
 
   /**
    * Récupère toutes les validations d'un prestataire (y compris l'enregistrement original)
+   * Inclut toutes les validations pour toutes les campagnes
    */
   async getPrestataireValidations(
     formId: string,
@@ -1529,12 +1758,22 @@ export class DynamicTableService {
 
     // Utiliser id (qui est l'ID du prestataire) pour l'enregistrement original
     // et prestataire_id pour les validations (qui ont parent_submission_id)
-    return this.dataSource.query(
+    // Cette requête récupère TOUTES les validations pour TOUTES les campagnes
+    const validations = await this.dataSource.query(
       `SELECT * FROM "${tableName}" 
        WHERE id = $1 OR prestataire_id = $1
        ORDER BY validation_sequence ASC NULLS FIRST, created_at ASC`,
       [prestataireId],
     );
+
+    console.log(`[getPrestataireValidations] Récupéré ${validations.length} validations pour prestataire ${prestataireId} dans formId ${formId}`);
+    if (validations.length > 0) {
+      const campaignIds = validations.map((v: any) => v.campaign_id || v.campaignId).filter((id: any) => id);
+      const uniqueCampaigns = [...new Set(campaignIds)];
+      console.log(`[getPrestataireValidations] Campagnes trouvées: ${uniqueCampaigns.join(', ')}`);
+    }
+
+    return validations;
   }
 
   /**
