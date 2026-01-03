@@ -1116,40 +1116,22 @@ export default function FormDataPage() {
     setShowColumnModal(false);
   };
 
-  // Obtenir publishedVersion et schema - utiliser useMemo pour stabiliser les références
-  // Important: ces hooks doivent être appelés dans le même ordre à chaque render
-  // Extraire formId et versionsLength comme valeurs primitives stables
+  // Obtenir publishedVersion et schema - SIMPLIFIÉ pour éviter les problèmes de hooks
+  // Utiliser une approche plus simple et directe
   const formId = form?.id;
   const versionsLength = form?.versions?.length ?? 0;
   
-  // Trouver l'ID de la version publiée d'abord (valeur primitive stable)
-  // Cela évite les problèmes de référence d'objet
-  const publishedVersionId = useMemo(() => {
-    if (!form?.versions || versionsLength === 0) return undefined;
-    const version = form.versions.find((v) => v.isPublished);
-    return version?.id;
-  }, [formId, versionsLength]);
+  // Calculer publishedVersionId de manière synchrone (pas de hook)
+  const publishedVersionId = form?.versions?.find((v) => v.isPublished)?.id;
   
-  // Memoize publishedVersion en utilisant publishedVersionId (valeur primitive stable)
-  const publishedVersion = useMemo(() => {
-    if (!form?.versions || !publishedVersionId) return undefined;
-    return form.versions.find((v) => v.id === publishedVersionId);
-  }, [formId, publishedVersionId, versionsLength]);
+  // Calculer publishedVersion de manière synchrone (pas de hook)
+  const publishedVersion = form?.versions?.find((v) => v.id === publishedVersionId);
   
-  // Memoize schema en utilisant publishedVersionId (valeur primitive stable)
-  // Accéder directement à form.versions pour éviter les problèmes de référence
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const schema = useMemo(() => {
-    if (!form?.versions || !publishedVersionId) return undefined;
-    const version = form.versions.find((v) => v.id === publishedVersionId);
-    return version?.schema;
-  }, [formId, publishedVersionId, versionsLength]);
+  // Calculer schema de manière synchrone (pas de hook)
+  const schema = publishedVersion?.schema;
   
-  // Memoize fields en utilisant schema (qui est maintenant stable)
-  const fields = useMemo(() => {
-    if (!schema?.properties) return [];
-    return Object.keys(schema.properties);
-  }, [schema]);
+  // Calculer fields de manière synchrone (pas de hook)
+  const fields = schema?.properties ? Object.keys(schema.properties) : [];
 
   // Fonction pour récupérer une valeur depuis les données (cherche dans plusieurs variantes)
   const getValueFromRow = useCallback((fieldName: string, row: any): any => {
@@ -1797,15 +1779,17 @@ export default function FormDataPage() {
   }, [activeTab, getColumnsForTab, formId, publishedVersionId]);
 
   // Initialiser les colonnes visibles pour les nouveaux onglets
+  // SIMPLIFIÉ: utiliser useMemo pour éviter les problèmes de hooks
+  const shouldUpdateColumns = useMemo(() => {
+    return (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') && orderedFields.length > 0;
+  }, [activeTab, orderedFields.length]);
+  
   useEffect(() => {
-    if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
-      // Pour les nouveaux onglets, afficher toutes les colonnes importantes
-      // Utiliser une copie pour éviter les problèmes de référence
-      if (orderedFields.length > 0) {
-        setVisibleColumns(new Set(orderedFields));
-      }
+    if (shouldUpdateColumns) {
+      setVisibleColumns(new Set(orderedFields));
     }
-  }, [activeTab, orderedFields]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldUpdateColumns]);
 
   // Vérifications conditionnelles APRÈS tous les hooks
   if (loading) {
