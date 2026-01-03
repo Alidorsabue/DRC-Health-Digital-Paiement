@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { formsApi } from '../../../lib/api/forms';
 import { Form, CreateFormDto } from '../../../types';
@@ -70,7 +70,9 @@ function FormsPageContent() {
     setConfirmModal({ isOpen: true, title, message, type, onConfirm });
   };
 
-  const loadForms = useCallback(async () => {
+  // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
+  // Utiliser directement la fonction sans mémorisation pour éviter les boucles infinies
+  const loadForms = async () => {
     try {
       setLoading(true);
       console.log('DEBUG FORMS: Début du chargement des formulaires...');
@@ -125,27 +127,65 @@ function FormsPageContent() {
       setLoading(false);
       console.log('DEBUG FORMS: Chargement terminé');
     }
-  }, [user?.role, mounted, showAlert]);
+  };
+
+  // Utiliser un ref pour éviter les appels multiples
+  const hasLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
+  const lastUserRoleRef = useRef<string | undefined>(undefined);
+  const lastMountedRef = useRef<boolean>(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    console.log('DEBUG FORMS: useEffect [user, mounted] déclenché', {
-      userRole: user?.role,
+    const currentUserRole = user?.role;
+    const shouldLoad = currentUserRole === 'SUPERADMIN' && mounted;
+    const userRoleChanged = lastUserRoleRef.current !== currentUserRole;
+    const mountedChanged = lastMountedRef.current !== mounted;
+    
+    console.log('DEBUG FORMS: useEffect [user?.role, mounted] déclenché', {
+      userRole: currentUserRole,
       mounted,
-      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
+      shouldLoad,
+      hasLoaded: hasLoadedRef.current,
+      isLoading: isLoadingRef.current,
+      userRoleChanged,
+      mountedChanged,
     });
-    if (user?.role === 'SUPERADMIN' && mounted) {
-      loadForms();
+
+    // Ne charger que si :
+    // 1. Les conditions sont remplies (SUPERADMIN et mounted)
+    // 2. ET on n'est pas déjà en train de charger
+    // 3. ET (on n'a jamais chargé OU le rôle a changé OU mounted est devenu true)
+    const shouldTriggerLoad = shouldLoad && 
+                              !isLoadingRef.current && 
+                              (!hasLoadedRef.current || userRoleChanged || (mountedChanged && mounted));
+
+    if (shouldTriggerLoad) {
+      console.log('DEBUG FORMS: Chargement des formulaires...');
+      isLoadingRef.current = true;
+      hasLoadedRef.current = true;
+      lastUserRoleRef.current = currentUserRole;
+      lastMountedRef.current = mounted;
+      
+      loadForms().finally(() => {
+        isLoadingRef.current = false;
+      });
     } else {
-      console.warn('DEBUG FORMS: Conditions non remplies pour charger les formulaires:', {
-        isSuperAdmin: user?.role === 'SUPERADMIN',
+      console.warn('DEBUG FORMS: Conditions non remplies ou déjà chargé:', {
+        isSuperAdmin: currentUserRole === 'SUPERADMIN',
         isMounted: mounted,
+        hasLoaded: hasLoadedRef.current,
+        isLoading: isLoadingRef.current,
+        userRoleChanged,
+        mountedChanged,
+        shouldTriggerLoad,
       });
     }
-  }, [user, mounted, loadForms]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, mounted]); // Ne pas inclure forms.length pour éviter les boucles
 
   // Mettre à jour l'onglet actif selon les paramètres de l'URL
   useEffect(() => {
@@ -157,17 +197,14 @@ function FormsPageContent() {
 
   // Recharger les formulaires quand on change d'onglet ou quand on arrive sur la page avec un paramètre tab
   useEffect(() => {
-    console.log('DEBUG FORMS: useEffect [activeTab, user, mounted] déclenché', {
+    console.log('DEBUG FORMS: useEffect [activeTab] déclenché', {
       activeTab,
       userRole: user?.role,
       mounted,
-      shouldLoad: user?.role === 'SUPERADMIN' && mounted,
     });
-    if (user?.role === 'SUPERADMIN' && mounted) {
-      // Ne pas recharger si on change juste d'onglet, les données sont déjà chargées
-      // loadForms();
-    }
-  }, [activeTab, user, mounted]);
+    // Ne pas recharger si on change juste d'onglet, les données sont déjà chargées
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]); // Ne pas inclure user et mounted pour éviter les re-renders inutiles
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
