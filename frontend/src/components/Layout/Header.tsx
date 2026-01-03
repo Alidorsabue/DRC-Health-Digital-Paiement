@@ -19,17 +19,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const languageMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isMenuOpen && !isLanguageMenuOpen) return;
-    
+    // TOUJOURS retourner une fonction de nettoyage pour éviter les problèmes de hooks React #310
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      // Vérifier les conditions à l'intérieur du handler, pas dans le useEffect
+      if (isMenuOpen && menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
-      if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
+      if (isLanguageMenuOpen && languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
         setIsLanguageMenuOpen(false);
       }
     };
 
+    // Toujours ajouter l'event listener, même si les menus sont fermés
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);

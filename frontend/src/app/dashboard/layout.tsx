@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   console.log('⚫ [DashboardLayout] RENDER - Hooks de base initialisés', { isAuthenticated, userId: user?.id });
 
+  // TOUS les useEffect DOIVENT être appelés AVANT les retours conditionnels
   useEffect(() => {
     console.log('⚫ [DashboardLayout] useEffect[setMounted] - Déclenché');
     setMounted(true);
@@ -34,6 +35,24 @@ export default function DashboardLayout({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user?.id, mounted]);
 
+  // Fermer le menu mobile lors du changement de taille d'écran
+  // IMPORTANT: Ce useEffect DOIT être appelé AVANT les retours conditionnels
+  useEffect(() => {
+    console.log('⚫ [DashboardLayout] useEffect[resize] - Déclenché');
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      console.log('⚫ [DashboardLayout] useEffect[resize] - Cleanup');
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Retours conditionnels APRÈS tous les hooks
   if (!mounted) {
     return (
       <div className="h-screen flex overflow-hidden bg-gray-100">
@@ -73,18 +92,6 @@ export default function DashboardLayout({
   const closeSidebar = () => {
     setIsSidebarOpen(false);
   };
-
-  // Fermer le menu mobile lors du changement de taille d'écran
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setIsSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
