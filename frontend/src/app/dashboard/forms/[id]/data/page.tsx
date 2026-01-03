@@ -80,49 +80,51 @@ export default function FormDataPage() {
     if (user?.role === 'SUPERADMIN' && params.id) {
       loadForm();
     }
-  }, [params.id, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, user?.role]);
 
   // Charger les colonnes visibles depuis localStorage ou initialiser avec toutes les colonnes
   useEffect(() => {
-    if (form) {
-      const publishedVersion = form.versions?.find((v) => v.isPublished);
-      if (publishedVersion) {
-        const schema = publishedVersion.schema;
-        const fields = schema?.properties ? Object.keys(schema.properties) : [];
-        
-        // Charger depuis localStorage
-        const savedColumns = localStorage.getItem(`form_${params.id}_visible_columns`);
-        if (savedColumns) {
-          try {
-            const saved = JSON.parse(savedColumns);
-            setVisibleColumns(new Set(saved));
-          } catch (e) {
-            // Si erreur, initialiser avec toutes les colonnes sauf celles sensibles
-            const defaultVisible = fields.filter(field => {
-              const fieldLower = field.toLowerCase();
-              // Exclure les colonnes sensibles par défaut
-              return !fieldLower.includes('consentement') && 
-                     !fieldLower.includes('consent') &&
-                     !fieldLower.includes('password') &&
-                     !fieldLower.includes('token');
-            });
-            setVisibleColumns(new Set(defaultVisible));
-          }
-        } else {
-          // Initialiser avec toutes les colonnes sauf celles sensibles
-          const defaultVisible = fields.filter(field => {
-            const fieldLower = field.toLowerCase();
-            // Exclure les colonnes sensibles par défaut
-            return !fieldLower.includes('consentement') && 
-                   !fieldLower.includes('consent') &&
-                   !fieldLower.includes('password') &&
-                   !fieldLower.includes('token');
-          });
-          setVisibleColumns(new Set(defaultVisible));
-        }
+    if (!form) return;
+    
+    const publishedVersion = form.versions?.find((v) => v.isPublished);
+    if (!publishedVersion) return;
+    
+    const schema = publishedVersion.schema;
+    const fields = schema?.properties ? Object.keys(schema.properties) : [];
+    
+    // Charger depuis localStorage
+    const savedColumns = localStorage.getItem(`form_${params.id}_visible_columns`);
+    if (savedColumns) {
+      try {
+        const saved = JSON.parse(savedColumns);
+        setVisibleColumns(new Set(saved));
+      } catch (e) {
+        // Si erreur, initialiser avec toutes les colonnes sauf celles sensibles
+        const defaultVisible = fields.filter(field => {
+          const fieldLower = field.toLowerCase();
+          // Exclure les colonnes sensibles par défaut
+          return !fieldLower.includes('consentement') && 
+                 !fieldLower.includes('consent') &&
+                 !fieldLower.includes('password') &&
+                 !fieldLower.includes('token');
+        });
+        setVisibleColumns(new Set(defaultVisible));
       }
+    } else {
+      // Initialiser avec toutes les colonnes sauf celles sensibles
+      const defaultVisible = fields.filter(field => {
+        const fieldLower = field.toLowerCase();
+        // Exclure les colonnes sensibles par défaut
+        return !fieldLower.includes('consentement') && 
+               !fieldLower.includes('consent') &&
+               !fieldLower.includes('password') &&
+               !fieldLower.includes('token');
+      });
+      setVisibleColumns(new Set(defaultVisible));
     }
-  }, [form, params.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.id, params.id]);
 
   // Fonction pour trouver le nom de colonne réel dans les données
   // SUPPRIMÉ useCallback pour éviter les problèmes de hooks
@@ -289,21 +291,24 @@ export default function FormDataPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'summary' && form) {
+    if (!form) return;
+    
+    if (activeTab === 'summary') {
       loadStatistics();
-    } else if (activeTab === 'data' && form) {
+    } else if (activeTab === 'data') {
       loadData();
-    } else if (activeTab === 'validation' && form) {
+    } else if (activeTab === 'validation') {
       loadValidationData();
-    } else if (activeTab === 'approbation' && form) {
+    } else if (activeTab === 'approbation') {
       loadApprobationData();
-    } else if (activeTab === 'paiement' && form) {
+    } else if (activeTab === 'paiement') {
       loadPaiementData();
     }
-  }, [activeTab, form, selectedCampaignId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, form?.id, selectedCampaignId]);
 
   // Appliquer les filtres quand ils changent ou quand on change de page ou d'onglet
-  // CORRECTION: Supprimer applyFilters des dépendances pour éviter les re-renders infinis
+  // SIMPLIFIÉ: Toujours exécuter la même logique pour éviter les problèmes de hooks
   useEffect(() => {
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, utiliser directement les données filtrées
@@ -313,24 +318,74 @@ export default function FormDataPage() {
       setData(paginatedData);
       setTotal(allData.length);
     } else if (activeTab === 'data') {
-      // Pour DATA, utiliser la logique existante
-      applyFilters();
+      // Pour DATA, appliquer les filtres directement ici pour éviter les problèmes de hooks
+      if (allData.length === 0) {
+        setData([]);
+        setTotal(0);
+      } else {
+        let filteredData = [...allData];
+        
+        // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
+        if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+          filteredData = filteredData.filter((row: any) => {
+            const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
+            if (realAireColumn) {
+              const rowAireId = row[realAireColumn];
+              return rowAireId === user.aireId;
+            }
+            return false;
+          });
+        }
+        
+        const sampleRow = filteredData[0] || allData[0];
+        
+        // Appliquer chaque filtre
+        Object.entries(filters).forEach(([field, filterValue]) => {
+          if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0) || filterValue === '') {
+            return;
+          }
+          
+          const realColumnName = findColumnName(field, sampleRow) || field;
+          filteredData = filteredData.filter((row) => {
+            const rowValue = row[realColumnName];
+            
+            if (Array.isArray(filterValue)) {
+              if (filterValue.length === 0) return true;
+              const rowValueStr = rowValue !== undefined && rowValue !== null ? String(rowValue).trim() : '';
+              return filterValue.some(fv => String(fv).trim() === rowValueStr);
+            } else {
+              const searchValue = String(filterValue).toLowerCase().trim();
+              const cellValue = rowValue !== undefined && rowValue !== null ? String(rowValue).toLowerCase().trim() : '';
+              return cellValue.includes(searchValue);
+            }
+          });
+        });
+        
+        // Appliquer la pagination
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+        
+        setData(paginatedData);
+        setTotal(filteredData.length);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allData, page, limit, activeTab]);
+  }, [allData, page, limit, activeTab, filters, user?.role, user?.scope, user?.aireId]);
 
   // Fermer les dropdowns quand on clique en dehors
   useEffect(() => {
+    if (openDropdowns.size === 0) return;
+    
     const handleClickOutside = () => {
       setOpenDropdowns(new Set());
     };
-    if (openDropdowns.size > 0) {
-      document.addEventListener('click', handleClickOutside);
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }
-  }, [openDropdowns]);
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [openDropdowns.size]);
 
   const loadForm = async () => {
     try {
@@ -1769,14 +1824,20 @@ export default function FormDataPage() {
   };
 
   // Colonnes à afficher selon l'onglet actif - AVANT les vérifications conditionnelles
+  // Toujours initialiser comme tableau vide pour éviter les problèmes de hooks
   let orderedFields: string[] = [];
-  if (form && publishedVersion && schema) {
-    try {
+  try {
+    if (form && publishedVersion && schema) {
       orderedFields = getColumnsForTab(activeTab);
-    } catch (error) {
-      console.error('Erreur lors du calcul des colonnes:', error);
-      orderedFields = [];
     }
+  } catch (error) {
+    console.error('Erreur lors du calcul des colonnes:', error);
+    orderedFields = [];
+  }
+  
+  // S'assurer que orderedFields est toujours un tableau
+  if (!Array.isArray(orderedFields)) {
+    orderedFields = [];
   }
 
   // Vérifications conditionnelles APRÈS tous les hooks et calculs

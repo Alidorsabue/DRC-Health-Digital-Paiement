@@ -169,7 +169,8 @@ export default function MCZPage() {
     } else if (user?.role === 'MCZ' && !user?.zoneId) {
       showAlert('Configuration', 'Votre zone de santé n\'est pas configurée. Contactez un administrateur.', 'warning');
     }
-  }, [selectedFormId, filterStatus, selectedAireId, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFormId, filterStatus, selectedAireId, user?.role, user?.zoneId]);
 
   useEffect(() => {
     if (selectedCampaignId && campaigns.length > 0) {

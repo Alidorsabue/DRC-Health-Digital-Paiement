@@ -26,7 +26,8 @@ export default function DashboardLayout({
     if (mounted && (!isAuthenticated || !user)) {
       router.push('/login');
     }
-  }, [isAuthenticated, user, router, mounted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id, mounted]);
 
   if (!mounted) {
     return (

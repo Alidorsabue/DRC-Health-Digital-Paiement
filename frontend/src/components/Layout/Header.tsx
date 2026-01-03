@@ -19,6 +19,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const languageMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isMenuOpen && !isLanguageMenuOpen) return;
+    
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
@@ -28,10 +30,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
       }
     };
 
-    if (isMenuOpen || isLanguageMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
