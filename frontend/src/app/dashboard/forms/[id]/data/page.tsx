@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
@@ -76,6 +76,54 @@ export default function FormDataPage() {
     setAlertModal({ isOpen: true, title, message, type });
   };
 
+  useEffect(() => {
+    if (user?.role === 'SUPERADMIN' && params.id) {
+      loadForm();
+    }
+  }, [params.id, user]);
+
+  // Charger les colonnes visibles depuis localStorage ou initialiser avec toutes les colonnes
+  useEffect(() => {
+    if (form) {
+      const publishedVersion = form.versions?.find((v) => v.isPublished);
+      if (publishedVersion) {
+        const schema = publishedVersion.schema;
+        const fields = schema?.properties ? Object.keys(schema.properties) : [];
+        
+        // Charger depuis localStorage
+        const savedColumns = localStorage.getItem(`form_${params.id}_visible_columns`);
+        if (savedColumns) {
+          try {
+            const saved = JSON.parse(savedColumns);
+            setVisibleColumns(new Set(saved));
+          } catch (e) {
+            // Si erreur, initialiser avec toutes les colonnes sauf celles sensibles
+            const defaultVisible = fields.filter(field => {
+              const fieldLower = field.toLowerCase();
+              // Exclure les colonnes sensibles par défaut
+              return !fieldLower.includes('consentement') && 
+                     !fieldLower.includes('consent') &&
+                     !fieldLower.includes('password') &&
+                     !fieldLower.includes('token');
+            });
+            setVisibleColumns(new Set(defaultVisible));
+          }
+        } else {
+          // Initialiser avec toutes les colonnes sauf celles sensibles
+          const defaultVisible = fields.filter(field => {
+            const fieldLower = field.toLowerCase();
+            // Exclure les colonnes sensibles par défaut
+            return !fieldLower.includes('consentement') && 
+                   !fieldLower.includes('consent') &&
+                   !fieldLower.includes('password') &&
+                   !fieldLower.includes('token');
+          });
+          setVisibleColumns(new Set(defaultVisible));
+        }
+      }
+    }
+  }, [form, params.id]);
+
   // Fonction pour trouver le nom de colonne réel dans les données
   const findColumnName = useCallback((fieldName: string, sampleRow: any): string | null => {
     if (!sampleRow) return null;
@@ -120,268 +168,6 @@ export default function FormDataPage() {
     
     return null;
   }, []);
-
-  const loadForm = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await formsApi.getById(params.id as string);
-      setForm(data);
-    } catch (error) {
-      console.error('Erreur lors du chargement:', error);
-      showAlert('Erreur', 'Impossible de charger le formulaire', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id, showAlert]);
-
-  const loadStatistics = useCallback(async () => {
-    try {
-      const stats = await formsApi.getStatistics(params.id as string);
-      setStatistics(stats);
-    } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error);
-      showAlert('Erreur', 'Impossible de charger les statistiques', 'error');
-    }
-  }, [params.id, showAlert]);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoadingData(true);
-      // Charger seulement les prestataires uniques (sans les doublons de validation)
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, false);
-      setAllData(result.data);
-      // Debug: afficher la structure des données
-      if (process.env.NODE_ENV === 'development' && result.data.length > 0) {
-        console.log('Données chargées (prestataires uniques):', result.data.length, 'lignes');
-        console.log('Exemple de ligne:', result.data[0]);
-        console.log('Clés disponibles:', Object.keys(result.data[0] || {}));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
-      showAlert('Erreur', 'Impossible de charger les données', 'error');
-    } finally {
-      setLoadingData(false);
-    }
-  }, [params.id, showAlert]);
-
-  const loadValidationData = useCallback(async () => {
-    try {
-      setLoadingData(true);
-      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
-      // Filtrer les prestataires validés : validation_status = VALIDE_PAR_IT
-      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
-      let validated = result.data.filter((row: any) => {
-        // Prioriser validation_status sur status
-        let validationStatus = row.validation_status || 
-                               (row.raw_data && row.raw_data.validation_status);
-        
-        // Si validation_status n'existe pas, vérifier status
-        if (!validationStatus) {
-          const status = row.status || (row.raw_data && row.raw_data.status);
-          const statusStr = String(status || '').trim().toUpperCase();
-          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
-          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
-            validationStatus = 'VALIDE_PAR_IT';
-          } else {
-            // Sinon, utiliser kyc_status ou status tel quel
-            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
-          }
-        }
-        
-        const statusStr = String(validationStatus || '').trim().toUpperCase();
-        return statusStr === 'VALIDE_PAR_IT' || statusStr === 'VALIDÉ_PAR_IT';
-      });
-      // Filtrer par campagne si sélectionnée
-      if (selectedCampaignId) {
-        validated = validated.filter((row: any) => {
-          const campaignId = row.campaign_id || row.campaignId;
-          return campaignId === selectedCampaignId;
-        });
-      }
-      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
-        validated = validated.filter((row: any) => {
-          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
-          if (realAireColumn) {
-            return row[realAireColumn] === user.aireId;
-          }
-          return false;
-        });
-      }
-      setValidationData(validated);
-      setAllData(validated); // Utiliser allData pour le filtrage
-    } catch (error) {
-      console.error('Erreur lors du chargement des données de validation:', error);
-      showAlert('Erreur', 'Impossible de charger les données de validation', 'error');
-    } finally {
-      setLoadingData(false);
-    }
-  }, [params.id, selectedCampaignId, user, findColumnName, showAlert]);
-
-  const loadApprobationData = useCallback(async () => {
-    try {
-      setLoadingData(true);
-      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
-      // Filtrer les prestataires : validation_status = VALIDE_PAR_IT ET approval_status = APPROUVE_PAR_MCZ
-      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
-      let approved = result.data.filter((row: any) => {
-        // Vérifier validation_status = VALIDE_PAR_IT (prioriser validation_status sur status)
-        let validationStatus = row.validation_status || 
-                               (row.raw_data && row.raw_data.validation_status);
-        
-        // Si validation_status n'existe pas, vérifier status
-        if (!validationStatus) {
-          const status = row.status || (row.raw_data && row.raw_data.status);
-          const statusStr = String(status || '').trim().toUpperCase();
-          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
-          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
-            validationStatus = 'VALIDE_PAR_IT';
-          } else {
-            // Sinon, utiliser kyc_status ou status tel quel
-            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
-          }
-        }
-        
-        const validationStatusStr = String(validationStatus || '').trim().toUpperCase();
-        const isValidated = validationStatusStr === 'VALIDE_PAR_IT' || validationStatusStr === 'VALIDÉ_PAR_IT';
-        
-        // Vérifier approval_status = APPROUVE_PAR_MCZ (prioriser approval_status sur status)
-        let approvalStatus = row.approval_status || 
-                             row.approvalStatus ||
-                             (row.raw_data && row.raw_data.approval_status);
-        
-        // Si approval_status n'existe pas, utiliser status
-        if (!approvalStatus) {
-          approvalStatus = row.status || (row.raw_data && row.raw_data.status);
-        }
-        
-        const approvalStatusStr = String(approvalStatus || '').trim().toUpperCase();
-        const isApproved = approvalStatusStr === 'APPROUVE_PAR_MCZ' || 
-                          approvalStatusStr === 'APPROUVÉ_PAR_MCZ' ||
-                          approvalStatusStr === 'APPROVED';
-        
-        return isValidated && isApproved;
-      });
-      // Filtrer par campagne si sélectionnée
-      if (selectedCampaignId) {
-        approved = approved.filter((row: any) => {
-          const campaignId = row.campaign_id || row.campaignId;
-          return campaignId === selectedCampaignId;
-        });
-      }
-      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
-        approved = approved.filter((row: any) => {
-          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
-          if (realAireColumn) {
-            return row[realAireColumn] === user.aireId;
-          }
-          return false;
-        });
-      }
-      setApprobationData(approved);
-      setAllData(approved); // Utiliser allData pour le filtrage
-    } catch (error) {
-      console.error('Erreur lors du chargement des données d\'approbation:', error);
-      showAlert('Erreur', 'Impossible de charger les données d\'approbation', 'error');
-    } finally {
-      setLoadingData(false);
-    }
-  }, [params.id, selectedCampaignId, user, findColumnName, showAlert]);
-
-  const loadPaiementData = useCallback(async () => {
-    try {
-      setLoadingData(true);
-      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
-      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
-      // Filtrer les prestataires payés (payment_status = 'PAID' ou 'PAYE' ou paid_at non null)
-      let paid = result.data.filter((row: any) => {
-        const paymentStatus = row.payment_status || row.paymentStatus;
-        const paidAt = row.paid_at || row.payment_date || row.paidAt;
-        return (paymentStatus && 
-                paymentStatus !== '' && 
-                paymentStatus !== null &&
-                (paymentStatus === 'PAID' || 
-                 paymentStatus === 'PAYE' ||
-                 paymentStatus === 'paye' ||
-                 paymentStatus === 'paye_par_partenaire')) || paidAt;
-      });
-      // Filtrer par campagne si sélectionnée
-      if (selectedCampaignId) {
-        paid = paid.filter((row: any) => {
-          const campaignId = row.campaign_id || row.campaignId;
-          return campaignId === selectedCampaignId;
-        });
-      }
-      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
-      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
-        paid = paid.filter((row: any) => {
-          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
-          if (realAireColumn) {
-            return row[realAireColumn] === user.aireId;
-          }
-          return false;
-        });
-      }
-      setPaiementData(paid);
-      setAllData(paid); // Utiliser allData pour le filtrage
-    } catch (error) {
-      console.error('Erreur lors du chargement des données de paiement:', error);
-      showAlert('Erreur', 'Impossible de charger les données de paiement', 'error');
-    } finally {
-      setLoadingData(false);
-    }
-  }, [params.id, selectedCampaignId, user, findColumnName, showAlert]);
-
-  useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
-      loadForm();
-    }
-  }, [params.id, user, loadForm]);
-
-  // Charger les colonnes visibles depuis localStorage ou initialiser avec toutes les colonnes
-  useEffect(() => {
-    if (form) {
-      const publishedVersion = form.versions?.find((v) => v.isPublished);
-      if (publishedVersion) {
-        const schema = publishedVersion.schema;
-        const fields = schema?.properties ? Object.keys(schema.properties) : [];
-        
-        // Charger depuis localStorage
-        const savedColumns = localStorage.getItem(`form_${params.id}_visible_columns`);
-        if (savedColumns) {
-          try {
-            const saved = JSON.parse(savedColumns);
-            setVisibleColumns(new Set(saved));
-          } catch (e) {
-            // Si erreur, initialiser avec toutes les colonnes sauf celles sensibles
-            const defaultVisible = fields.filter(field => {
-              const fieldLower = field.toLowerCase();
-              // Exclure les colonnes sensibles par défaut
-              return !fieldLower.includes('consentement') && 
-                     !fieldLower.includes('consent') &&
-                     !fieldLower.includes('password') &&
-                     !fieldLower.includes('token');
-            });
-            setVisibleColumns(new Set(defaultVisible));
-          }
-        } else {
-          // Initialiser avec toutes les colonnes sauf celles sensibles
-          const defaultVisible = fields.filter(field => {
-            const fieldLower = field.toLowerCase();
-            // Exclure les colonnes sensibles par défaut
-            return !fieldLower.includes('consentement') && 
-                   !fieldLower.includes('consent') &&
-                   !fieldLower.includes('password') &&
-                   !fieldLower.includes('token');
-          });
-          setVisibleColumns(new Set(defaultVisible));
-        }
-      }
-    }
-  }, [form, params.id]);
 
   // Fonction pour appliquer les filtres aux données
   const applyFilters = useCallback(() => {
@@ -512,7 +298,7 @@ export default function FormDataPage() {
     } else if (activeTab === 'paiement' && form) {
       loadPaiementData();
     }
-  }, [activeTab, form, selectedCampaignId, loadStatistics, loadData, loadValidationData, loadApprobationData, loadPaiementData]);
+  }, [activeTab, form, selectedCampaignId]);
 
   // Appliquer les filtres quand ils changent ou quand on change de page ou d'onglet
   useEffect(() => {
@@ -531,17 +317,230 @@ export default function FormDataPage() {
 
   // Fermer les dropdowns quand on clique en dehors
   useEffect(() => {
-    if (openDropdowns.size === 0) return;
-    
     const handleClickOutside = () => {
       setOpenDropdowns(new Set());
     };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
+    if (openDropdowns.size > 0) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
   }, [openDropdowns]);
+
+  const loadForm = async () => {
+    try {
+      setLoading(true);
+      const data = await formsApi.getById(params.id as string);
+      setForm(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement:', error);
+      showAlert('Erreur', 'Impossible de charger le formulaire', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStatistics = async () => {
+    try {
+      const stats = await formsApi.getStatistics(params.id as string);
+      setStatistics(stats);
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques:', error);
+      showAlert('Erreur', 'Impossible de charger les statistiques', 'error');
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setLoadingData(true);
+      // Charger seulement les prestataires uniques (sans les doublons de validation)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, false);
+      setAllData(result.data);
+      // Debug: afficher la structure des données
+      if (process.env.NODE_ENV === 'development' && result.data.length > 0) {
+        console.log('Données chargées (prestataires uniques):', result.data.length, 'lignes');
+        console.log('Exemple de ligne:', result.data[0]);
+        console.log('Clés disponibles:', Object.keys(result.data[0] || {}));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+      showAlert('Erreur', 'Impossible de charger les données', 'error');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const loadValidationData = async () => {
+    try {
+      setLoadingData(true);
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
+      // Filtrer les prestataires validés : validation_status = VALIDE_PAR_IT
+      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
+      let validated = result.data.filter((row: any) => {
+        // Prioriser validation_status sur status
+        let validationStatus = row.validation_status || 
+                               (row.raw_data && row.raw_data.validation_status);
+        
+        // Si validation_status n'existe pas, vérifier status
+        if (!validationStatus) {
+          const status = row.status || (row.raw_data && row.raw_data.status);
+          const statusStr = String(status || '').trim().toUpperCase();
+          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+            validationStatus = 'VALIDE_PAR_IT';
+          } else {
+            // Sinon, utiliser kyc_status ou status tel quel
+            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
+          }
+        }
+        
+        const statusStr = String(validationStatus || '').trim().toUpperCase();
+        return statusStr === 'VALIDE_PAR_IT' || statusStr === 'VALIDÉ_PAR_IT';
+      });
+      // Filtrer par campagne si sélectionnée
+      if (selectedCampaignId) {
+        validated = validated.filter((row: any) => {
+          const campaignId = row.campaign_id || row.campaignId;
+          return campaignId === selectedCampaignId;
+        });
+      }
+      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
+      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+        validated = validated.filter((row: any) => {
+          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
+          if (realAireColumn) {
+            return row[realAireColumn] === user.aireId;
+          }
+          return false;
+        });
+      }
+      setValidationData(validated);
+      setAllData(validated); // Utiliser allData pour le filtrage
+    } catch (error) {
+      console.error('Erreur lors du chargement des données de validation:', error);
+      showAlert('Erreur', 'Impossible de charger les données de validation', 'error');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const loadApprobationData = async () => {
+    try {
+      setLoadingData(true);
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
+      // Filtrer les prestataires : validation_status = VALIDE_PAR_IT ET approval_status = APPROUVE_PAR_MCZ
+      // Si status = APPROUVE_PAR_MCZ et validation_status n'existe pas, considérer que validation_status = VALIDE_PAR_IT
+      let approved = result.data.filter((row: any) => {
+        // Vérifier validation_status = VALIDE_PAR_IT (prioriser validation_status sur status)
+        let validationStatus = row.validation_status || 
+                               (row.raw_data && row.raw_data.validation_status);
+        
+        // Si validation_status n'existe pas, vérifier status
+        if (!validationStatus) {
+          const status = row.status || (row.raw_data && row.raw_data.status);
+          const statusStr = String(status || '').trim().toUpperCase();
+          // Si status = APPROUVE_PAR_MCZ, cela signifie que validation_status était VALIDE_PAR_IT
+          if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+            validationStatus = 'VALIDE_PAR_IT';
+          } else {
+            // Sinon, utiliser kyc_status ou status tel quel
+            validationStatus = row.kyc_status || status || (row.raw_data && (row.raw_data.kyc_status || row.raw_data.status));
+          }
+        }
+        
+        const validationStatusStr = String(validationStatus || '').trim().toUpperCase();
+        const isValidated = validationStatusStr === 'VALIDE_PAR_IT' || validationStatusStr === 'VALIDÉ_PAR_IT';
+        
+        // Vérifier approval_status = APPROUVE_PAR_MCZ (prioriser approval_status sur status)
+        let approvalStatus = row.approval_status || 
+                             row.approvalStatus ||
+                             (row.raw_data && row.raw_data.approval_status);
+        
+        // Si approval_status n'existe pas, utiliser status
+        if (!approvalStatus) {
+          approvalStatus = row.status || (row.raw_data && row.raw_data.status);
+        }
+        
+        const approvalStatusStr = String(approvalStatus || '').trim().toUpperCase();
+        const isApproved = approvalStatusStr === 'APPROUVE_PAR_MCZ' || 
+                          approvalStatusStr === 'APPROUVÉ_PAR_MCZ' ||
+                          approvalStatusStr === 'APPROVED';
+        
+        return isValidated && isApproved;
+      });
+      // Filtrer par campagne si sélectionnée
+      if (selectedCampaignId) {
+        approved = approved.filter((row: any) => {
+          const campaignId = row.campaign_id || row.campaignId;
+          return campaignId === selectedCampaignId;
+        });
+      }
+      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
+      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+        approved = approved.filter((row: any) => {
+          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
+          if (realAireColumn) {
+            return row[realAireColumn] === user.aireId;
+          }
+          return false;
+        });
+      }
+      setApprobationData(approved);
+      setAllData(approved); // Utiliser allData pour le filtrage
+    } catch (error) {
+      console.error('Erreur lors du chargement des données d\'approbation:', error);
+      showAlert('Erreur', 'Impossible de charger les données d\'approbation', 'error');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const loadPaiementData = async () => {
+    try {
+      setLoadingData(true);
+      // Charger toutes les données incluant les validations multiples (pour différentes campagnes)
+      const result = await formsApi.getPrestatairesData(params.id as string, 1, 10000, true);
+      // Filtrer les prestataires payés (payment_status = 'PAID' ou 'PAYE' ou paid_at non null)
+      let paid = result.data.filter((row: any) => {
+        const paymentStatus = row.payment_status || row.paymentStatus;
+        const paidAt = row.paid_at || row.payment_date || row.paidAt;
+        return (paymentStatus && 
+                paymentStatus !== '' && 
+                paymentStatus !== null &&
+                (paymentStatus === 'PAID' || 
+                 paymentStatus === 'PAYE' ||
+                 paymentStatus === 'paye' ||
+                 paymentStatus === 'paye_par_partenaire')) || paidAt;
+      });
+      // Filtrer par campagne si sélectionnée
+      if (selectedCampaignId) {
+        paid = paid.filter((row: any) => {
+          const campaignId = row.campaign_id || row.campaignId;
+          return campaignId === selectedCampaignId;
+        });
+      }
+      // Pour les utilisateurs IT avec scope AIRE, filtrer par aire de santé
+      if (user && user.role === 'IT' && user.scope === 'AIRE' && user.aireId) {
+        paid = paid.filter((row: any) => {
+          const realAireColumn = findColumnName('aire', row) || findColumnName('aireId', row);
+          if (realAireColumn) {
+            return row[realAireColumn] === user.aireId;
+          }
+          return false;
+        });
+      }
+      setPaiementData(paid);
+      setAllData(paid); // Utiliser allData pour le filtrage
+    } catch (error) {
+      console.error('Erreur lors du chargement des données de paiement:', error);
+      showAlert('Erreur', 'Impossible de charger les données de paiement', 'error');
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters((prev) => {
@@ -823,8 +822,8 @@ export default function FormDataPage() {
     return getUniqueValuesWithLabels(fieldName).map(item => item.value);
   };
 
-  // Fonction pour convertir une valeur technique en libellé (mémorisée pour éviter les changements de référence)
-  const getLabelFromValue = useCallback((value: any, fieldSchema?: any): string | null => {
+  // Fonction pour convertir une valeur technique en libellé
+  const getLabelFromValue = (value: any, fieldSchema?: any): string | null => {
     if (!fieldSchema || value === undefined || value === null) {
       return null;
     }
@@ -842,10 +841,10 @@ export default function FormDataPage() {
     });
 
     return option?.label || null;
-  }, []);
+  };
 
-  // Fonction pour formater l'affichage des valeurs dans le tableau (mémorisée pour éviter les changements de référence)
-  const formatCellValue = useCallback((value: any, fieldName: string, fieldSchema?: any): { display: string; isImage: boolean; fullValue: string } => {
+  // Fonction pour formater l'affichage des valeurs dans le tableau
+  const formatCellValue = (value: any, fieldName: string, fieldSchema?: any): { display: string; isImage: boolean; fullValue: string } => {
     if (value === undefined || value === null) {
       return { display: '-', isImage: false, fullValue: '' };
     }
@@ -902,7 +901,7 @@ export default function FormDataPage() {
       isImage: isImageField,
       fullValue: fullValue,
     };
-  }, [getLabelFromValue]);
+  };
 
   const handleExport = async (format: 'csv' | 'excel' | 'json') => {
     try {
@@ -1119,44 +1118,29 @@ export default function FormDataPage() {
 
   // Obtenir publishedVersion et schema - utiliser useMemo pour stabiliser les références
   // Important: ces hooks doivent être appelés dans le même ordre à chaque render
-  // Utiliser formId pour éviter les changements de référence de l'objet form
+  // Extraire formId et versionsLength comme valeurs primitives stables
   const formId = form?.id;
-  
-  // Créer une chaîne stable basée sur les IDs des versions pour éviter les changements de référence
-  // Utiliser uniquement formId et versionsLength comme dépendances stables
   const versionsLength = form?.versions?.length ?? 0;
-  const versionsIdsString = useMemo(() => {
-    if (!form?.versions || !formId || versionsLength === 0) return '';
-    // Accéder à form?.versions via closure (pas dans les dépendances pour éviter les boucles)
-    const ids = form.versions.map((v) => v.id).sort();
-    return ids.join(',');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formId, versionsLength]);
   
-  const publishedVersionIds = useMemo(() => {
-    if (!form?.versions || !formId || versionsLength === 0) return '';
-    // Accéder à form?.versions via closure
-    return form.versions
-      .filter((v) => v.isPublished)
-      .map((v) => v.id)
-      .sort()
-      .join(',');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formId, versionsIdsString, versionsLength]);
-  
+  // Memoize publishedVersion avec des dépendances stables
+  // Utiliser form.versions directement dans les dépendances pour éviter les problèmes de référence
   const publishedVersion = useMemo(() => {
     if (!form?.versions || versionsLength === 0) return undefined;
-    // Accéder à form?.versions via closure
     return form.versions.find((v) => v.isPublished);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formId, publishedVersionIds, versionsLength]);
+  }, [formId, versionsLength]);
   
-  // Utiliser publishedVersionId comme dépendance pour éviter les changements de référence d'objet
+  // Utiliser publishedVersionId comme dépendance stable (valeur primitive)
   const publishedVersionId = publishedVersion?.id;
-  const schema = useMemo(() => {
-    return publishedVersion?.schema;
-  }, [publishedVersionId]);
   
+  // Memoize schema en utilisant publishedVersionId et en accédant directement à form.versions
+  // pour éviter les problèmes de référence d'objet
+  const schema = useMemo(() => {
+    if (!form?.versions || !publishedVersionId) return undefined;
+    const version = form.versions.find((v) => v.id === publishedVersionId);
+    return version?.schema;
+  }, [formId, publishedVersionId, versionsLength]);
+  
+  // Memoize fields en utilisant une valeur primitive stable
   const fields = useMemo(() => {
     if (!schema?.properties) return [];
     return Object.keys(schema.properties);
@@ -1618,7 +1602,7 @@ export default function FormDataPage() {
     // Utiliser la fonction formatCellValue existante pour formater
     const formatted = formatCellValue(value, fieldName, fieldSchema);
     return formatted.display || String(value);
-  }, [getValueFromRow, formatCellValue, schema]);
+  }, [getValueFromRow, formatCellValue]);
 
   // Fonction pour obtenir les colonnes importantes selon l'onglet
   const getImportantColumns = useCallback((tab: string): string[] => {
@@ -1669,9 +1653,6 @@ export default function FormDataPage() {
     return [];
   }, []);
 
-  // Stabiliser allData.length pour éviter les changements de référence
-  const allDataLength = allData.length;
-  
   // Obtenir les colonnes à afficher selon l'onglet
   const getColumnsForTab = useCallback((tab: string): string[] => {
     if (tab === 'data') {
@@ -1786,10 +1767,9 @@ export default function FormDataPage() {
           continue;
         }
         
-        if (allDataLength > 0) {
-          // Utiliser getValueFromRow pour vérifier si la colonne existe
-          // Note: allData est accessible via closure, mais on utilise allDataLength pour la dépendance
+        if (allData.length > 0) {
           const firstRow = allData[0];
+          // Utiliser getValueFromRow pour vérifier si la colonne existe
           const value = getValueFromRow(finalCol, firstRow);
           if (value !== null) {
             filteredCols.push(finalCol);
@@ -1802,29 +1782,22 @@ export default function FormDataPage() {
       
       return filteredCols;
     }
-  }, [fields, schema, allDataLength, getImportantColumns, getValueFromRow]);
+  }, [fields, schema, allData, getImportantColumns, getValueFromRow]);
 
   // Colonnes à afficher selon l'onglet actif (mémorisé pour éviter les re-renders)
   // Utiliser formId et publishedVersionId pour éviter les changements de référence
-  // Stabiliser orderedFields en utilisant une chaîne JSON pour la comparaison
   const orderedFields = useMemo(() => {
     if (!form || !publishedVersion) return [];
     return getColumnsForTab(activeTab);
   }, [activeTab, getColumnsForTab, formId, publishedVersionId]);
-  
+
   // Initialiser les colonnes visibles pour les nouveaux onglets
-  // Utiliser useRef pour stocker la dernière valeur et éviter les boucles infinies
-  const prevOrderedFieldsRef = useRef<string>('');
   useEffect(() => {
     if (activeTab === 'validation' || activeTab === 'approbation' || activeTab === 'paiement') {
       // Pour les nouveaux onglets, afficher toutes les colonnes importantes
+      // Utiliser une copie pour éviter les problèmes de référence
       if (orderedFields.length > 0) {
-        const newFieldsString = [...orderedFields].sort().join(',');
-        // Ne mettre à jour que si les colonnes ont vraiment changé
-        if (prevOrderedFieldsRef.current !== newFieldsString) {
-          prevOrderedFieldsRef.current = newFieldsString;
-          setVisibleColumns(new Set(orderedFields));
-        }
+        setVisibleColumns(new Set(orderedFields));
       }
     }
   }, [activeTab, orderedFields]);

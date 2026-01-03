@@ -157,7 +157,24 @@ export default function MCZPage() {
     }
   }, [user?.role, user?.zoneId, selectedCampaignId, selectedFormId, loadStats]);
 
-  const loadPrestataires = useCallback(async () => {
+  useEffect(() => {
+    if (selectedFormId && user?.role === 'MCZ' && user?.zoneId) {
+      loadPrestataires();
+    } else if (user?.role === 'MCZ' && !user?.zoneId) {
+      showAlert('Configuration', 'Votre zone de santé n\'est pas configurée. Contactez un administrateur.', 'warning');
+    }
+  }, [selectedFormId, filterStatus, selectedAireId, user]);
+
+  useEffect(() => {
+    if (selectedCampaignId && campaigns.length > 0) {
+      const campaign = campaigns.find(c => c.id === selectedCampaignId);
+      if (campaign?.enregistrementFormId) {
+        setSelectedFormId(campaign.enregistrementFormId);
+      }
+    }
+  }, [selectedCampaignId, campaigns]);
+
+  const loadPrestataires = async () => {
     if (!selectedFormId || !user?.zoneId) {
       console.warn('loadPrestataires: formId ou zoneId manquant', {
         selectedFormId,
@@ -283,7 +300,7 @@ export default function MCZPage() {
       console.log(`Après filtrage frontend (${filterStatus}): ${filtered.length}`);
       
       if (filtered.length === 0 && data.length > 0) {
-        console.warn(' ATTENTION: Des données ont été reçues mais filtrées à zéro!');
+        console.warn('⚠️ ATTENTION: Des données ont été reçues mais filtrées à zéro!');
         console.warn('Données reçues (premiers 3):', data.slice(0, 3).map(p => ({
           id: p.id,
           status: p.status,
@@ -320,24 +337,7 @@ export default function MCZPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFormId, user?.zoneId, filterStatus, selectedAireId, showAlert]);
-
-  useEffect(() => {
-    if (selectedFormId && user?.role === 'MCZ' && user?.zoneId) {
-      loadPrestataires();
-    } else if (user?.role === 'MCZ' && !user?.zoneId) {
-      showAlert('Configuration', 'Votre zone de santé n\'est pas configurée. Contactez un administrateur.', 'warning');
-    }
-  }, [selectedFormId, filterStatus, selectedAireId, user, loadPrestataires, showAlert]);
-
-  useEffect(() => {
-    if (selectedCampaignId && campaigns.length > 0) {
-      const campaign = campaigns.find(c => c.id === selectedCampaignId);
-      if (campaign?.enregistrementFormId) {
-        setSelectedFormId(campaign.enregistrementFormId);
-      }
-    }
-  }, [selectedCampaignId, campaigns]);
+  };
 
   const handleApprove = async (prestataireId: string) => {
     try {
