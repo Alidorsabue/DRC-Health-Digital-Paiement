@@ -672,6 +672,21 @@ export default function ProvincePage() {
               label: t('common.id'),
             },
             {
+              key: 'provinceId',
+              label: t('common.province'),
+              render: (_, prestataire) => prestataire.provinceId || (prestataire as any).province_id || user.provinceId || 'N/A',
+            },
+            {
+              key: 'zoneId',
+              label: t('common.zone'),
+              render: (_, prestataire) => prestataire.zoneId || (prestataire as any).zone_id || 'N/A',
+            },
+            {
+              key: 'aireId',
+              label: t('common.area'),
+              render: (_, prestataire) => prestataire.aireId || (prestataire as any).aire_id || 'N/A',
+            },
+            {
               key: 'nom',
               label: t('province.fullName'),
               render: (_, prestataire) => {
