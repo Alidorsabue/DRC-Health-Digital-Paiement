@@ -50,6 +50,7 @@ export default function DataTable({
   const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(data);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [openSelectFilters, setOpenSelectFilters] = useState<Set<string>>(new Set());
+  const [tempSelectFilters, setTempSelectFilters] = useState<Record<string, string[]>>({});
   const tableRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -238,20 +239,36 @@ export default function DataTable({
                             onClick={() => {
                               const newOpen = new Set(openSelectFilters);
                               if (newOpen.has(column.key)) {
+                                // Fermer le dropdown et appliquer les filtres temporaires
+                                const tempValues = tempSelectFilters[column.key];
+                                if (tempValues !== undefined) {
+                                  handleFilter(column.key, tempValues);
+                                  const newTemp = { ...tempSelectFilters };
+                                  delete newTemp[column.key];
+                                  setTempSelectFilters(newTemp);
+                                }
                                 newOpen.delete(column.key);
                               } else {
+                                // Ouvrir le dropdown et initialiser les valeurs temporaires
+                                const currentFilter = filters[column.key];
+                                const currentValues = Array.isArray(currentFilter) ? currentFilter : [];
+                                const newTemp: Record<string, string[]> = {
+                                  ...tempSelectFilters,
+                                  [column.key]: currentValues.slice(),
+                                };
+                                setTempSelectFilters(newTemp);
                                 newOpen.add(column.key);
                               }
                               setOpenSelectFilters(newOpen);
                             }}
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-left flex items-center justify-between"
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-900 text-left flex items-center justify-between"
                           >
-                            <span className="truncate">
+                            <span className="truncate text-gray-900">
                               {Array.isArray(filters[column.key]) && filters[column.key].length > 0
                                 ? `${filters[column.key].length} sélectionné(s)`
                                 : 'Tous'}
                             </span>
-                            <svg className="w-3 h-3 ml-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 ml-1 flex-shrink-0 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
                           </button>
@@ -260,6 +277,14 @@ export default function DataTable({
                               <div 
                                 className="fixed inset-0 z-10" 
                                 onClick={() => {
+                                  // Appliquer les filtres temporaires avant de fermer
+                                  const tempValues = tempSelectFilters[column.key];
+                                  if (tempValues !== undefined) {
+                                    handleFilter(column.key, tempValues);
+                                    const newTemp = { ...tempSelectFilters };
+                                    delete newTemp[column.key];
+                                    setTempSelectFilters(newTemp);
+                                  }
                                   const newOpen = new Set(openSelectFilters);
                                   newOpen.delete(column.key);
                                   setOpenSelectFilters(newOpen);
@@ -267,42 +292,65 @@ export default function DataTable({
                               />
                               <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-auto">
                                 <div className="p-2">
-                                  <label className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={!Array.isArray(filters[column.key]) || filters[column.key].length === 0}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          handleFilter(column.key, []);
-                                        }
-                                      }}
-                                      className="mr-2 rounded"
-                                    />
-                                    <span className="text-xs">Tous</span>
-                                  </label>
-                                  {getUniqueValues(column.key).map((value) => {
-                                    const selectedValues = Array.isArray(filters[column.key]) ? filters[column.key] : [];
-                                    const isChecked = selectedValues.includes(value);
-                                    return (
-                                      <label key={value} className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                                  {(() => {
+                                  const currentFilter = filters[column.key];
+                                  const currentFilterArray = Array.isArray(currentFilter) ? currentFilter : [];
+                                  const tempValues = tempSelectFilters[column.key] !== undefined 
+                                    ? tempSelectFilters[column.key] 
+                                    : currentFilterArray;
+                                  return (
+                                    <>
+                                      <label className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
                                         <input
                                           type="checkbox"
-                                          checked={isChecked}
+                                          checked={tempValues.length === 0}
                                           onChange={(e) => {
-                                            const filterValue = filters[column.key];
-                                            const currentValues = Array.isArray(filterValue) ? filterValue.slice() : [];
                                             if (e.target.checked) {
-                                              handleFilter(column.key, [...currentValues, value]);
-                                            } else {
-                                              handleFilter(column.key, currentValues.filter(v => v !== value));
+                                              const newTemp: Record<string, string[]> = {
+                                                ...tempSelectFilters,
+                                                [column.key]: [],
+                                              };
+                                              setTempSelectFilters(newTemp);
                                             }
                                           }}
                                           className="mr-2 rounded"
                                         />
-                                        <span className="text-xs truncate">{value}</span>
+                                        <span className="text-xs text-gray-900">Tous</span>
                                       </label>
-                                    );
-                                  })}
+                                      {getUniqueValues(column.key).map((value) => {
+                                        const isChecked = tempValues.includes(value);
+                                        return (
+                                          <label key={value} className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              onChange={(e) => {
+                                                const currentFilter = filters[column.key];
+                                                const currentFilterArray = Array.isArray(currentFilter) ? currentFilter : [];
+                                                const currentTemp = tempSelectFilters[column.key] !== undefined
+                                                  ? tempSelectFilters[column.key]
+                                                  : currentFilterArray;
+                                                let newTempValues: string[];
+                                                if (e.target.checked) {
+                                                  newTempValues = [...currentTemp, value];
+                                                } else {
+                                                  newTempValues = currentTemp.filter((v: string) => v !== value);
+                                                }
+                                                const newTemp: Record<string, string[]> = {
+                                                  ...tempSelectFilters,
+                                                  [column.key]: newTempValues,
+                                                };
+                                                setTempSelectFilters(newTemp);
+                                              }}
+                                              className="mr-2 rounded"
+                                            />
+                                            <span className="text-xs text-gray-900 truncate">{value}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </>
+                                  );
+                                })()}
                                 </div>
                               </div>
                             </>

@@ -16,7 +16,18 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 // Fonction helper pour accéder aux traductions imbriquées
 function getNestedTranslation(obj: any, path: string): string {
-  return path.split('.').reduce((current, key) => current?.[key], obj) || path;
+  const result = path.split('.').reduce((current, key) => {
+    if (current && typeof current === 'object' && key in current) {
+      return current[key];
+    }
+    return undefined;
+  }, obj);
+  
+  // Retourner la clé si le résultat n'est pas une string valide
+  if (typeof result === 'string' && result.trim() !== '') {
+    return result;
+  }
+  return path;
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -48,9 +59,16 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       translation = getNestedTranslation(frTranslations, key);
     }
     
-    // Si toujours pas trouvé, retourner la clé
-    if (translation === key) {
+    // Si toujours pas trouvé, retourner une valeur par défaut plus lisible
+    if (translation === key || !translation || typeof translation !== 'string') {
       console.warn(`Translation missing for key: ${key}`);
+      // Retourner la dernière partie de la clé comme fallback
+      const fallback = key.split('.').pop() || key;
+      // Capitaliser la première lettre et remplacer les points par des espaces
+      return fallback
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase())
+        .trim() || key;
     }
     
     if (params) {

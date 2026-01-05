@@ -440,7 +440,36 @@ export default function PartnerPage() {
     }
 
     const rawData = prestataire.raw_data || {};
-    const amount = prestataire.paymentAmount || prestataire.payment_amount || rawData.paymentAmount || rawData.payment_amount || 0;
+    // Récupérer le montant et le convertir en nombre
+    let amount: number = 0;
+    
+    // Essayer plusieurs sources et convertir en nombre
+    const amountSources = [
+      prestataire.paymentAmount,
+      prestataire.payment_amount,
+      rawData.paymentAmount,
+      rawData.payment_amount,
+      (prestataire as any).payment_amount,
+      (rawData as any).payment_amount,
+    ];
+    
+    for (const source of amountSources) {
+      if (source !== null && source !== undefined && source !== '') {
+        if (typeof source === 'number') {
+          amount = source;
+          break;
+        } else if (typeof source === 'string') {
+          // Nettoyer la chaîne et convertir en nombre
+          const cleaned = source.replace(/[$€FC\s,]/g, '').trim();
+          const parsed = parseFloat(cleaned);
+          if (!isNaN(parsed) && parsed > 0) {
+            amount = parsed;
+            break;
+          }
+        }
+      }
+    }
+    
     const currency = prestataire.paymentCurrency || prestataire.amountCurrency || rawData.paymentCurrency || 'USD';
     let currencySymbol = '$';
     if (currency === 'CDF') {

@@ -170,7 +170,19 @@ export class PartnersService {
             kycStatus: record.kyc_status,
             paymentStatus: record.payment_status,
             paymentDate: record.payment_date || record.paid_at,
-            paymentAmount: record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount,
+            paymentAmount: (() => {
+              const rawAmount = record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount;
+              if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
+                return null;
+              }
+              // Convertir en nombre si c'est une chaîne
+              if (typeof rawAmount === 'string') {
+                const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              }
+              return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
+            })(),
             presenceDays: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays,
             amountToPay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay,
             amountCurrency: record.amount_currency || record.amountCurrency || formData.amount_currency || formData.amountCurrency || 'USD',
@@ -351,7 +363,19 @@ export class PartnersService {
             kycStatus: record.kyc_status,
             paymentStatus: record.payment_status,
             paymentDate: record.payment_date || record.paid_at,
-            paymentAmount: record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount,
+            paymentAmount: (() => {
+              const rawAmount = record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount;
+              if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
+                return null;
+              }
+              // Convertir en nombre si c'est une chaîne
+              if (typeof rawAmount === 'string') {
+                const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              }
+              return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
+            })(),
             presenceDays: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays,
             amountToPay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay,
             amountCurrency: record.amount_currency || record.amountCurrency || formData.amount_currency || formData.amountCurrency || 'USD',

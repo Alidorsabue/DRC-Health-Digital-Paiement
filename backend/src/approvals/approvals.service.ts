@@ -480,8 +480,32 @@ export class ApprovalsService {
             payment_status: record.payment_status || null, // Statut de paiement (snake_case pour compatibilité)
             paymentDate: record.payment_date || record.paid_at || null, // Date de paiement
             payment_date: record.payment_date || record.paid_at || null, // Date de paiement (snake_case pour compatibilité)
-            paymentAmount: record.payment_amount || null, // Montant payé
-            payment_amount: record.payment_amount || null, // Montant payé (snake_case pour compatibilité)
+            paymentAmount: (() => {
+              const rawAmount = record.payment_amount;
+              if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
+                return null;
+              }
+              // Convertir en nombre si c'est une chaîne
+              if (typeof rawAmount === 'string') {
+                const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              }
+              return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
+            })(), // Montant payé
+            payment_amount: (() => {
+              const rawAmount = record.payment_amount;
+              if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
+                return null;
+              }
+              // Convertir en nombre si c'est une chaîne
+              if (typeof rawAmount === 'string') {
+                const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              }
+              return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
+            })(), // Montant payé (snake_case pour compatibilité)
             zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.admin2_h_c,
             aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.admin4_h_c || record.admin4_h_c,
             // Inclure les champs du formulaire pour l'affichage
