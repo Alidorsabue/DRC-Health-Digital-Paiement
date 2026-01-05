@@ -833,12 +833,18 @@ export default function PartnerPage() {
         const headers = (data[0] as any[]).map((h: any) => String(h).toLowerCase().trim());
         
         // Trouver les indices des colonnes (reconnaissance flexible des labels français et anglais)
-        const prestataireIdIndex = headers.findIndex(h => 
+        // D'abord chercher les colonnes spécifiques pour prestataireId
+        let prestataireIdIndex = headers.findIndex(h => 
           (h.includes('prestataire') && h.includes('id')) || 
           h === 'prestataireid' || 
           h === 'id prestataire' ||
           h.startsWith('id prestataire')
         );
+        
+        // Si aucune colonne spécifique n'est trouvée, accepter simplement "id"
+        if (prestataireIdIndex === -1) {
+          prestataireIdIndex = headers.findIndex(h => h === 'id');
+        }
         
         const statusIndex = headers.findIndex(h => {
           const lower = h.toLowerCase().trim();
@@ -893,7 +899,7 @@ export default function PartnerPage() {
 
         if (prestataireIdIndex === -1) {
           const availableHeaders = headers.join(', ');
-          showAlert('Erreur', `Le fichier doit contenir une colonne "ID Prestataire" ou "prestataireId". Colonnes trouvées: ${availableHeaders}`, 'error');
+          showAlert('Erreur', `Le fichier doit contenir une colonne "ID Prestataire", "prestataireId" ou "id". Colonnes trouvées: ${availableHeaders}`, 'error');
           setImporting(false);
           return;
         }
@@ -979,12 +985,18 @@ export default function PartnerPage() {
         const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
         
         // Trouver les indices des colonnes (reconnaissance flexible des labels français et anglais)
-        const prestataireIdIndex = headers.findIndex(h => 
+        // D'abord chercher les colonnes spécifiques pour prestataireId
+        let prestataireIdIndex = headers.findIndex(h => 
           (h.includes('prestataire') && h.includes('id')) || 
           h === 'prestataireid' || 
           h === 'id prestataire' ||
           h.startsWith('id prestataire')
         );
+        
+        // Si aucune colonne spécifique n'est trouvée, accepter simplement "id"
+        if (prestataireIdIndex === -1) {
+          prestataireIdIndex = headers.findIndex(h => h === 'id');
+        }
         
         const statusIndex = headers.findIndex(h => {
           const lower = h.toLowerCase().trim();
@@ -1039,7 +1051,7 @@ export default function PartnerPage() {
 
         if (prestataireIdIndex === -1) {
           const availableHeaders = headers.join(', ');
-          showAlert('Erreur', `Le fichier doit contenir une colonne "ID Prestataire" ou "prestataireId". Colonnes trouvées: ${availableHeaders}`, 'error');
+          showAlert('Erreur', `Le fichier doit contenir une colonne "ID Prestataire", "prestataireId" ou "id". Colonnes trouvées: ${availableHeaders}`, 'error');
           setImporting(false);
           return;
         }

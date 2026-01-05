@@ -270,9 +270,16 @@ export default function KycVerificationPage() {
 
         // Trouver les colonnes
         const headers = (data[0] || []).map((h: any) => String(h || '').trim().toLowerCase());
-        const prestataireIdIndex = headers.findIndex((h: string) => 
+        // D'abord chercher les colonnes spécifiques pour prestataireId
+        let prestataireIdIndex = headers.findIndex((h: string) => 
           h.includes('prestataire') && h.includes('id')
         );
+        
+        // Si aucune colonne spécifique n'est trouvée, accepter simplement "id"
+        if (prestataireIdIndex === -1) {
+          prestataireIdIndex = headers.findIndex((h: string) => h === 'id');
+        }
+        
         const statusIndex = headers.findIndex((h: string) => 
           h.includes('status') || h.includes('statut')
         );
@@ -281,7 +288,7 @@ export default function KycVerificationPage() {
         );
 
         if (prestataireIdIndex === -1 || statusIndex === -1) {
-          showAlert('Erreur', 'Format Excel invalide. Colonnes requises: prestataireId, status', 'error');
+          showAlert('Erreur', 'Format Excel invalide. Colonnes requises: prestataireId (ou id), status', 'error');
           return;
         }
 
@@ -313,9 +320,16 @@ export default function KycVerificationPage() {
         }
 
         const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
-        const prestataireIdIndex = headers.findIndex((h: string) => 
+        // D'abord chercher les colonnes spécifiques pour prestataireId
+        let prestataireIdIndex = headers.findIndex((h: string) => 
           h.includes('prestataire') && h.includes('id')
         );
+        
+        // Si aucune colonne spécifique n'est trouvée, accepter simplement "id"
+        if (prestataireIdIndex === -1) {
+          prestataireIdIndex = headers.findIndex((h: string) => h === 'id');
+        }
+        
         const statusIndex = headers.findIndex((h: string) => 
           h.includes('status') || h.includes('statut')
         );
@@ -324,7 +338,7 @@ export default function KycVerificationPage() {
         );
 
         if (prestataireIdIndex === -1 || statusIndex === -1) {
-          showAlert('Erreur', 'Format CSV invalide. Colonnes requises: prestataireId, status', 'error');
+          showAlert('Erreur', 'Format CSV invalide. Colonnes requises: prestataireId (ou id), status', 'error');
           return;
         }
 
@@ -347,7 +361,7 @@ export default function KycVerificationPage() {
       }
 
       if (kycResults.length === 0) {
-        showAlert('Erreur', 'Aucun résultat KYC valide trouvé dans le fichier. Format CSV ou Excel attendu: prestataireId,status(CORRECT|INCORRECT|SANS_COMPTE),telephone(optionnel)', 'error');
+        showAlert('Erreur', 'Aucun résultat KYC valide trouvé dans le fichier. Format CSV ou Excel attendu: prestataireId (ou id),status(CORRECT|INCORRECT|SANS_COMPTE),telephone(optionnel)', 'error');
         return;
       }
 
@@ -834,7 +848,7 @@ export default function KycVerificationPage() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h2 className="text-xl font-bold mb-4" style={{ color: '#111827' }}>Importer un rapport de résultats KYC</h2>
             <p className="text-sm mb-4" style={{ color: '#374151' }}>
-              Format CSV ou Excel attendu: prestataireId,status(CORRECT|INCORRECT|SANS_COMPTE),telephone(optionnel)
+              Format CSV ou Excel attendu: prestataireId (ou id),status(CORRECT|INCORRECT|SANS_COMPTE),telephone(optionnel)
             </p>
             <div className="mb-4 text-xs" style={{ color: '#374151' }}>
               <p className="font-medium mb-2" style={{ color: '#111827' }}>Les statuts possibles sont :</p>
