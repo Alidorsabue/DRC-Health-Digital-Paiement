@@ -652,6 +652,41 @@ export default function MCZPage() {
     return validationStatus;
   };
 
+  // Fonction helper pour récupérer le statut d'approbation
+  // IMPORTANT: Utiliser approval_status (ou approvalStatus) et non status pour le statut d'approbation
+  const getApprovalStatus = (prestataire: PrestataireForApproval): string => {
+    const rawData = prestataire.raw_data || {};
+    // Récupérer approval_status depuis les colonnes directes (pas depuis status)
+    const approvalStatus = (prestataire as any).approval_status ||
+                          (prestataire as any).approvalStatus ||
+                          rawData.approval_status ||
+                          rawData.approvalStatus;
+    
+    // Si un statut d'approbation existe, le retourner
+    if (approvalStatus && approvalStatus !== null && approvalStatus !== '') {
+      return approvalStatus;
+    }
+    
+    // Si pas de statut d'approbation, vérifier le status pour compatibilité
+    const status = prestataire.status || rawData.status;
+    const statusStr = String(status || '').trim().toUpperCase();
+    if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+      return 'APPROUVE_PAR_MCZ';
+    }
+    if (statusStr === 'REJETE_PAR_MCZ' || statusStr === 'REJETÉ_PAR_MCZ') {
+      return 'REJETE_PAR_MCZ';
+    }
+    
+    // Si validé par IT mais pas encore approuvé, retourner "EN_ATTENTE_PAR_MCZ"
+    const validationStatus = getValidationStatus(prestataire);
+    if (validationStatus === 'VALIDE_PAR_IT') {
+      return 'EN_ATTENTE_PAR_MCZ';
+    }
+    
+    // Sinon, retourner "ENREGISTRE"
+    return 'ENREGISTRE';
+  };
+
   // Fonction helper pour récupérer le montant payé
   const getPaymentAmount = (prestataire: PrestataireForApproval): number => {
     const rawData = prestataire.raw_data || {};
@@ -699,38 +734,65 @@ export default function MCZPage() {
       </div>
 
       {/* Statistiques */}
-      {stats && (
-        <StatCardGroup columns={4}>
-          <StatCard
-            title={t('dashboard.totalProviders')}
-            value={stats.total || 0}
-            icon="👥"
-            color="indigo"
-            progress={stats.total > 0 ? 100 : 0}
-          />
-          <StatCard
-            title={t('dashboard.validatedByIT')}
-            value={stats.byStatus?.VALIDE_PAR_IT || 0}
-            icon="✅"
-            color="blue"
-            progress={stats.total > 0 ? ((stats.byStatus?.VALIDE_PAR_IT || 0) / stats.total) * 100 : 0}
-          />
-          <StatCard
-            title={t('dashboard.approvedByMCZ')}
-            value={stats.byStatus?.APPROUVE_PAR_MCZ || 0}
-            icon="✓"
-            color="green"
-            progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
-          />
-          <StatCard
-            title={t('dashboard.rejectedByMCZ')}
-            value={stats.byStatus?.REJETE_PAR_MCZ || 0}
-            icon="✗"
-            color="red"
-            progress={stats.total > 0 ? ((stats.byStatus?.REJETE_PAR_MCZ || 0) / stats.total) * 100 : 0}
-          />
-        </StatCardGroup>
-      )}
+      {(() => {
+        // Calculer les statistiques à partir des prestataires chargés
+        const total = prestataires.length;
+        let validesIt = 0;
+        let approuvesMcz = 0;
+        let rejetesMcz = 0;
+
+        prestataires.forEach((p) => {
+          // Compter validés par IT (tous ceux qui ont été validés, même s'ils sont ensuite approuvés/rejetés)
+          const validationStatus = getValidationStatus(p);
+          if (validationStatus === 'VALIDE_PAR_IT') {
+            validesIt++;
+          }
+
+          // Compter approuvés par MCZ
+          const approvalStatus = getApprovalStatus(p);
+          if (approvalStatus === 'APPROUVE_PAR_MCZ' || approvalStatus === 'APPROVED') {
+            approuvesMcz++;
+          }
+
+          // Compter rejetés par MCZ
+          if (approvalStatus === 'REJETE_PAR_MCZ' || approvalStatus === 'REJECTED') {
+            rejetesMcz++;
+          }
+        });
+
+        return (
+          <StatCardGroup columns={4}>
+            <StatCard
+              title={t('dashboard.totalProviders')}
+              value={total}
+              icon="👥"
+              color="indigo"
+              progress={total > 0 ? 100 : 0}
+            />
+            <StatCard
+              title={t('dashboard.validatedByIT')}
+              value={validesIt}
+              icon="✅"
+              color="blue"
+              progress={total > 0 ? (validesIt / total) * 100 : 0}
+            />
+            <StatCard
+              title={t('dashboard.approvedByMCZ')}
+              value={approuvesMcz}
+              icon="✓"
+              color="green"
+              progress={total > 0 ? (approuvesMcz / total) * 100 : 0}
+            />
+            <StatCard
+              title={t('dashboard.rejectedByMCZ')}
+              value={rejetesMcz}
+              icon="✗"
+              color="red"
+              progress={total > 0 ? (rejetesMcz / total) * 100 : 0}
+            />
+          </StatCardGroup>
+        );
+      })()}
 
       {/* Filtres */}
       <div className="mb-6 bg-white p-4 rounded-lg shadow">

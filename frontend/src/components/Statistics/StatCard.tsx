@@ -92,7 +92,7 @@ export default function StatCard({
         ${colors.border}
         border-2
         rounded-xl
-        p-6
+        p-4
         shadow-lg
         hover:shadow-xl
         transition-all
@@ -110,19 +110,19 @@ export default function StatCard({
 
       <div className="relative z-10">
         {/* En-tête avec icône */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
             {icon && (
-              <div className={`${colors.icon} p-2.5 rounded-lg shadow-md flex items-center justify-center`}>
-                <span className="text-white text-2xl leading-none">{icon}</span>
+              <div className={`${colors.icon} p-2 rounded-lg shadow-md flex items-center justify-center`}>
+                <span className="text-white text-xl leading-none">{icon}</span>
               </div>
             )}
             <div>
-              <h3 className={`${colors.text} text-sm font-semibold uppercase tracking-wide`}>
+              <h3 className={`${colors.text} text-xs font-semibold uppercase tracking-wide`}>
                 {title}
               </h3>
               {subtitle && (
-                <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
               )}
             </div>
           </div>
@@ -134,22 +134,22 @@ export default function StatCard({
         </div>
 
         {/* Valeur principale */}
-        <div className="mb-3">
-          <div className={`${colors.value} text-4xl font-bold mb-1`}>
+        <div className="mb-2">
+          <div className={`${colors.value} text-3xl font-bold`}>
             {typeof value === 'number' ? value.toLocaleString('fr-FR') : value}
           </div>
         </div>
 
         {/* Barre de progression si fournie */}
         {progress !== undefined && (
-          <div className="mt-4">
-            <div className="w-full bg-white/50 rounded-full h-2 overflow-hidden">
+          <div className="mt-2">
+            <div className="w-full bg-white/50 rounded-full h-1.5 overflow-hidden">
               <div
                 className={`${colors.progress} h-full rounded-full transition-all duration-500 ease-out`}
                 style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
               />
             </div>
-            <div className="text-xs text-gray-600 mt-1">{progress.toFixed(0)}%</div>
+            <div className="text-xs text-gray-600 mt-0.5">{progress.toFixed(0)}%</div>
           </div>
         )}
       </div>

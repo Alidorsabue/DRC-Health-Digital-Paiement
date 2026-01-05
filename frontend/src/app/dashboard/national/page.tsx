@@ -52,6 +52,7 @@ export default function NationalPage() {
 
   useEffect(() => {
     if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+      loadData();
       loadPrestataires();
     }
   }, [selectedProvinceId, selectedZoneId, selectedCampaignId, filterStatus, user]);
@@ -498,7 +499,7 @@ export default function NationalPage() {
               {t('common.province')}
             </label>
             <select
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={selectedProvinceId}
               onChange={(e) => setSelectedProvinceId(e.target.value)}
             >
@@ -515,7 +516,7 @@ export default function NationalPage() {
               {t('common.zone')}
             </label>
             <select
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white disabled:bg-gray-100 disabled:text-gray-500"
               value={selectedZoneId}
               onChange={(e) => setSelectedZoneId(e.target.value)}
               disabled={!selectedProvinceId}
@@ -533,7 +534,7 @@ export default function NationalPage() {
               {t('common.campaign')}
             </label>
             <select
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={selectedCampaignId}
               onChange={(e) => setSelectedCampaignId(e.target.value)}
             >
@@ -550,7 +551,7 @@ export default function NationalPage() {
               {t('common.status')}
             </label>
             <select
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
