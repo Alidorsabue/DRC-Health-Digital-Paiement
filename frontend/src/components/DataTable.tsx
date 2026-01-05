@@ -10,6 +10,7 @@ export interface Column {
   label: string;
   sortable?: boolean;
   filterable?: boolean;
+  filterType?: 'text' | 'select'; // Type de filtre: texte ou sélection multiple
   render?: (value: any, row: any) => React.ReactNode;
 }
 
@@ -48,8 +49,24 @@ export default function DataTable({
 }: DataTableProps) {
   const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(data);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [openSelectFilters, setOpenSelectFilters] = useState<Set<string>>(new Set());
   const tableRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+
+  // Extraire les valeurs uniques pour chaque colonne catégorielle
+  const getUniqueValues = (columnKey: string): string[] => {
+    const values = new Set<string>();
+    data.forEach((row) => {
+      const value = row[columnKey];
+      if (value !== null && value !== undefined && value !== '') {
+        const stringValue = String(value).trim();
+        if (stringValue) {
+          values.add(stringValue);
+        }
+      }
+    });
+    return Array.from(values).sort();
+  };
 
   // Préparer les colonnes pour l'export
   const exportColumns: ExportColumn[] = columns.map((col) => ({
@@ -214,13 +231,92 @@ export default function DataTable({
                     </div>
                     {/* Filtre */}
                     {column.filterable !== false && (
-                      <input
-                        type="text"
-                        placeholder={t('common.filterPlaceholder')}
-                        value={filters[column.key] || ''}
-                        onChange={(e) => handleFilter(column.key, e.target.value)}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                      />
+                      column.filterType === 'select' ? (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newOpen = new Set(openSelectFilters);
+                              if (newOpen.has(column.key)) {
+                                newOpen.delete(column.key);
+                              } else {
+                                newOpen.add(column.key);
+                              }
+                              setOpenSelectFilters(newOpen);
+                            }}
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-left flex items-center justify-between"
+                          >
+                            <span className="truncate">
+                              {Array.isArray(filters[column.key]) && filters[column.key].length > 0
+                                ? `${filters[column.key].length} sélectionné(s)`
+                                : 'Tous'}
+                            </span>
+                            <svg className="w-3 h-3 ml-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {openSelectFilters.has(column.key) && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={() => {
+                                  const newOpen = new Set(openSelectFilters);
+                                  newOpen.delete(column.key);
+                                  setOpenSelectFilters(newOpen);
+                                }}
+                              />
+                              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-auto">
+                                <div className="p-2">
+                                  <label className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={!Array.isArray(filters[column.key]) || filters[column.key].length === 0}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          handleFilter(column.key, []);
+                                        }
+                                      }}
+                                      className="mr-2 rounded"
+                                    />
+                                    <span className="text-xs">Tous</span>
+                                  </label>
+                                  {getUniqueValues(column.key).map((value) => {
+                                    const selectedValues = Array.isArray(filters[column.key]) ? filters[column.key] : [];
+                                    const isChecked = selectedValues.includes(value);
+                                    return (
+                                      <label key={value} className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            const filterValue = filters[column.key];
+                                            const currentValues = Array.isArray(filterValue) ? filterValue.slice() : [];
+                                            if (e.target.checked) {
+                                              handleFilter(column.key, [...currentValues, value]);
+                                            } else {
+                                              handleFilter(column.key, currentValues.filter(v => v !== value));
+                                            }
+                                          }}
+                                          className="mr-2 rounded"
+                                        />
+                                        <span className="text-xs truncate">{value}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder={t('common.filterPlaceholder')}
+                          value={typeof filters[column.key] === 'string' ? filters[column.key] : ''}
+                          onChange={(e) => handleFilter(column.key, e.target.value)}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                        />
+                      )
                     )}
                       </div>
                     </th>

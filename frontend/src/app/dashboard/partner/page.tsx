@@ -33,7 +33,8 @@ export default function PartnerPage() {
   const [aires, setAires] = useState<GeographicOption[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [selectedFormId, setSelectedFormId] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [selectedProvinceId, setSelectedProvinceId] = useState<string>('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>('');
   const [selectedAireId, setSelectedAireId] = useState<string>('');
@@ -175,10 +176,11 @@ export default function PartnerPage() {
     setLoading(true);
     try {
       // Charger les prestataires même sans filtres (le backend gère les cas sans formId/campaignId)
+      // L'API n'accepte qu'une seule catégorie, donc on charge toutes les données et on filtre côté frontend
       let data = await partnersApi.getApprovedPrestataires(
         selectedCampaignId || undefined,
         selectedFormId || undefined,
-        selectedCategory || undefined,
+        undefined, // Ne pas filtrer par catégorie côté backend, on le fera côté frontend
         selectedProvinceId || undefined,
         selectedZoneId || undefined,
         selectedAireId || undefined,
@@ -249,6 +251,14 @@ export default function PartnerPage() {
         data = data.filter(p => {
           const aireId = p.aireId || p.aire_id || p.aire;
           return aireId === selectedAireId;
+        });
+      }
+
+      // Filtrer par catégories (sélection multiple)
+      if (selectedCategory.length > 0) {
+        data = data.filter(p => {
+          const category = p.categorie || p.role || p.campaign_role || p.campaign_role_i_f;
+          return category && selectedCategory.includes(category);
         });
       }
 
@@ -1208,18 +1218,21 @@ export default function PartnerPage() {
       key: 'provinceId',
       label: t('common.province'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => prestataire.provinceId || prestataire.province_id || 'N/A',
     },
     {
       key: 'zoneId',
       label: t('common.zone'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => prestataire.zoneId || prestataire.zone_id || 'N/A',
     },
     {
       key: 'aireId',
       label: t('common.area'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => prestataire.aireId || prestataire.aire_id || 'N/A',
     },
     {
@@ -1265,6 +1278,7 @@ export default function PartnerPage() {
       key: 'gender',
       label: t('common.gender'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const rawData = prestataire.raw_data || {};
         const gender = (prestataire as any).gender_i_c ||
@@ -1315,6 +1329,7 @@ export default function PartnerPage() {
       key: 'categorie',
       label: t('common.role'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const categorie = prestataire.categorie || prestataire.role || prestataire.campaign_role || prestataire.campaign_role_i_f || 'N/A';
         return categorie;
@@ -1373,6 +1388,15 @@ export default function PartnerPage() {
       },
     },
     {
+      key: 'presenceDays',
+      label: 'JOURS DE PRESENCE',
+      sortable: true,
+      render: (value: any, prestataire: PrestataireForPartner) => {
+        const days = prestataire.presenceDays || prestataire.presence_days || prestataire.presence || 0;
+        return days || 'N/A';
+      },
+    },
+    {
       key: 'validationDate',
       label: t('partner.validationDate'),
       render: (value: any, prestataire: PrestataireForPartner) => getValidationDate(prestataire),
@@ -1386,15 +1410,6 @@ export default function PartnerPage() {
       key: 'approvalDate',
       label: t('partner.approvalDate'),
       render: (value: any, prestataire: PrestataireForPartner) => getApprovalDate(prestataire),
-    },
-    {
-      key: 'presenceDays',
-      label: t('partner.presenceDays'),
-      sortable: true,
-      render: (value: any, prestataire: PrestataireForPartner) => {
-        const days = prestataire.presenceDays || prestataire.presence_days || prestataire.presence || 0;
-        return days || 'N/A';
-      },
     },
     {
       key: 'amountToPay',
@@ -1560,18 +1575,67 @@ export default function PartnerPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Rôle/Catégorie
             </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-            >
-              <option value="">Tous les rôles</option>
-              {availableCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowCategoryFilter(!showCategoryFilter)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white text-left flex items-center justify-between"
+              >
+                <span className="truncate">
+                  {selectedCategory.length > 0
+                    ? `${selectedCategory.length} sélectionné(s)`
+                    : 'Tous les rôles'}
+                </span>
+                <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showCategoryFilter && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowCategoryFilter(false)}
+                  />
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-auto">
+                    <div className="p-2">
+                      <label className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCategory.length === 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCategory([]);
+                            }
+                          }}
+                          className="mr-2 rounded"
+                        />
+                        <span className="text-sm">Tous les rôles</span>
+                      </label>
+                      {availableCategories.map((category) => {
+                        const isChecked = selectedCategory.includes(category);
+                        return (
+                          <label key={category} className="flex items-center px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedCategory([...selectedCategory, category]);
+                                } else {
+                                  setSelectedCategory(selectedCategory.filter(c => c !== category));
+                                }
+                              }}
+                              className="mr-2 rounded"
+                            />
+                            <span className="text-sm truncate">{category}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

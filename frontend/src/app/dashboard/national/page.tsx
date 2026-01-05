@@ -303,7 +303,7 @@ export default function NationalPage() {
     
     // Si pas de statut d'approbation, vérifier si le prestataire est validé par IT
     const validationStatus = getValidationStatus(prestataire);
-    // Si validé par IT mais pas encore approuvé, afficher "En attente"
+    // Si validé par IT mais pas encore approuvé, afficher "Validé par IT"
     if (validationStatus === 'VALIDE_PAR_IT') {
       return 'EN_ATTENTE_PAR_MCZ';
     }
@@ -377,13 +377,6 @@ export default function NationalPage() {
               progress={100}
             />
             <StatCard
-              title={t('dashboard.registered')}
-              value={stats.byStatus?.ENREGISTRE || 0}
-              icon="📝"
-              color="gray"
-              progress={stats.total > 0 ? ((stats.byStatus?.ENREGISTRE || 0) / stats.total) * 100 : 0}
-            />
-            <StatCard
               title={t('dashboard.validatedByIT')}
               value={stats.byStatus?.VALIDE_PAR_IT || 0}
               icon="✅"
@@ -398,6 +391,13 @@ export default function NationalPage() {
               progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
             />
             <StatCard
+              title={t('dashboard.paid')}
+              value={stats.paid || 0}
+              icon="💰"
+              color="purple"
+              progress={stats.total > 0 ? ((stats.paid || 0) / stats.total) * 100 : 0}
+            />
+            <StatCard
               title={t('dashboard.rejectedByMCZ')}
               value={stats.byStatus?.REJETE_PAR_MCZ || 0}
               icon="✗"
@@ -407,17 +407,59 @@ export default function NationalPage() {
           </StatCardGroup>
 
           {/* Statistiques par province */}
-          {stats.byProvince && Object.keys(stats.byProvince).length > 0 && (
+          {prestataires.length > 0 && (
             <div className="mt-8">
               <DataTable
-                data={Object.entries(stats.byProvince).map(([provinceId, count]) => ({
-                  id: provinceId,
-                  province: provinceId,
-                  total: count,
-                  enregistres: count,
-                  validesIt: '-',
-                  approuvesMcz: '-',
-                }))}
+                data={(() => {
+                  // Calculer les statistiques par province depuis les prestataires
+                  const provinceStats: Record<string, {
+                    total: number;
+                    validesIt: number;
+                    approuvesMcz: number;
+                    payes: number;
+                  }> = {};
+
+                  prestataires.forEach((p) => {
+                    const provinceId = p.provinceId || 'N/A';
+                    if (!provinceStats[provinceId]) {
+                      provinceStats[provinceId] = {
+                        total: 0,
+                        validesIt: 0,
+                        approuvesMcz: 0,
+                        payes: 0,
+                      };
+                    }
+
+                    provinceStats[provinceId].total++;
+
+                    // Compter validés par IT
+                    const validationStatus = getValidationStatus(p);
+                    if (validationStatus === 'VALIDE_PAR_IT') {
+                      provinceStats[provinceId].validesIt++;
+                    }
+
+                    // Compter approuvés par MCZ
+                    const approvalStatus = getApprovalStatus(p);
+                    if (approvalStatus === 'APPROUVE_PAR_MCZ') {
+                      provinceStats[provinceId].approuvesMcz++;
+                    }
+
+                    // Compter payés
+                    const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                    if (paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ') {
+                      provinceStats[provinceId].payes++;
+                    }
+                  });
+
+                  return Object.entries(provinceStats).map(([provinceId, stats]) => ({
+                    id: provinceId,
+                    province: provinceId,
+                    total: stats.total,
+                    payes: stats.payes,
+                    validesIt: stats.validesIt,
+                    approuvesMcz: stats.approuvesMcz,
+                  }));
+                })()}
                 columns={[
                   {
                     key: 'province',
@@ -428,8 +470,8 @@ export default function NationalPage() {
                     label: t('dashboard.totalProviders'),
                   },
                   {
-                    key: 'enregistres',
-                    label: t('dashboard.registered'),
+                    key: 'payes',
+                    label: t('dashboard.paid'),
                   },
                   {
                     key: 'validesIt',
@@ -540,16 +582,19 @@ export default function NationalPage() {
             {
               key: 'provinceId',
               label: t('national.province'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.provinceId || 'N/A',
             },
             {
               key: 'zoneId',
               label: t('national.zone'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.zoneId || 'N/A',
             },
             {
               key: 'aireId',
               label: t('national.area'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.aireId || 'N/A',
             },
             {
@@ -573,6 +618,7 @@ export default function NationalPage() {
             {
               key: 'gender',
               label: t('common.gender'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const rawData = prestataire.raw_data || {};
                 const gender = (prestataire as any).gender_i_c ||
@@ -598,6 +644,7 @@ export default function NationalPage() {
             {
               key: 'categorie',
               label: t('common.role'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const categorie = prestataire.categorie || prestataire.campaign_role_i_f || prestataire.campaign_role || prestataire.role || prestataire.role_prestataire || '';
                 const rawData = prestataire.raw_data || {};
@@ -632,6 +679,15 @@ export default function NationalPage() {
                     {label}
                   </span>
                 );
+              },
+            },
+            {
+              key: 'presenceDays',
+              label: 'JOURS DE PRESENCE',
+              sortable: true,
+              render: (_, prestataire) => {
+                const days = (prestataire as any).presenceDays || (prestataire as any).presence_days || (prestataire as any).presence || 0;
+                return days || 'N/A';
               },
             },
             {

@@ -910,7 +910,7 @@ export default function DashboardPage() {
             progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
           />
           <StatCard
-            title={t('dashboard.pending')}
+            title={t('dashboard.validatedByIT')}
             value={stats.byStatus?.VALIDE_PAR_IT || 0}
             icon="⏳"
             color="yellow"

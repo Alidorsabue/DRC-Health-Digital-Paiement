@@ -469,6 +469,27 @@ export default function ProvincePage() {
     return formatDate(paymentDate);
   };
 
+  // Fonction helper pour récupérer le statut d'approbation
+  const getApprovalStatus = (prestataire: Prestataire): string => {
+    const rawData = prestataire.raw_data || {};
+    const approvalStatus = (prestataire as any).approval_status ||
+                          (prestataire as any).approvalStatus ||
+                          rawData.approval_status ||
+                          rawData.approvalStatus ||
+                          prestataire.status;
+    
+    if (approvalStatus && approvalStatus !== null && approvalStatus !== '') {
+      return approvalStatus;
+    }
+    
+    const validationStatus = getValidationStatus(prestataire);
+    if (validationStatus === 'VALIDE_PAR_IT') {
+      return 'EN_ATTENTE_PAR_MCZ';
+    }
+    
+    return 'ENREGISTRE';
+  };
+
   if (user?.role !== 'DPS') {
     return (
       <div className="text-center py-12">
@@ -516,13 +537,6 @@ export default function ProvincePage() {
             progress={100}
           />
           <StatCard
-            title={t('dashboard.registered')}
-            value={stats.byStatus?.ENREGISTRE || 0}
-            icon="📝"
-            color="gray"
-            progress={stats.total > 0 ? ((stats.byStatus?.ENREGISTRE || 0) / stats.total) * 100 : 0}
-          />
-          <StatCard
             title={t('dashboard.validatedByIT')}
             value={stats.byStatus?.VALIDE_PAR_IT || 0}
             icon="✅"
@@ -536,7 +550,100 @@ export default function ProvincePage() {
             color="green"
             progress={stats.total > 0 ? ((stats.byStatus?.APPROUVE_PAR_MCZ || 0) / stats.total) * 100 : 0}
           />
+          <StatCard
+            title={t('dashboard.paid')}
+            value={stats.paid || 0}
+            icon="💰"
+            color="purple"
+            progress={stats.total > 0 ? ((stats.paid || 0) / stats.total) * 100 : 0}
+          />
         </StatCardGroup>
+      )}
+
+      {/* Statistiques par zone de santé */}
+      {prestataires.length > 0 && (
+        <div className="mb-8">
+          <DataTable
+            data={(() => {
+              // Calculer les statistiques par zone depuis les prestataires
+              const zoneStats: Record<string, {
+                total: number;
+                validesIt: number;
+                approuvesMcz: number;
+                payes: number;
+              }> = {};
+
+              prestataires.forEach((p) => {
+                const zoneId = p.zoneId || (p as any).zone_id || 'N/A';
+                if (!zoneStats[zoneId]) {
+                  zoneStats[zoneId] = {
+                    total: 0,
+                    validesIt: 0,
+                    approuvesMcz: 0,
+                    payes: 0,
+                  };
+                }
+
+                zoneStats[zoneId].total++;
+
+                // Compter validés par IT
+                const validationStatus = getValidationStatus(p);
+                if (validationStatus === 'VALIDE_PAR_IT') {
+                  zoneStats[zoneId].validesIt++;
+                }
+
+                // Compter approuvés par MCZ
+                const approvalStatus = getApprovalStatus(p);
+                if (approvalStatus === 'APPROUVE_PAR_MCZ') {
+                  zoneStats[zoneId].approuvesMcz++;
+                }
+
+                // Compter payés
+                const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                if (paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ') {
+                  zoneStats[zoneId].payes++;
+                }
+              });
+
+              return Object.entries(zoneStats).map(([zoneId, stats]) => {
+                // Trouver le nom de la zone depuis la liste des zones
+                const zone = zones.find(z => z.id === zoneId);
+                return {
+                  id: zoneId,
+                  zone: zone ? zone.name : zoneId,
+                  total: stats.total,
+                  payes: stats.payes,
+                  validesIt: stats.validesIt,
+                  approuvesMcz: stats.approuvesMcz,
+                };
+              });
+            })()}
+            columns={[
+              {
+                key: 'zone',
+                label: t('province.zone'),
+              },
+              {
+                key: 'total',
+                label: t('dashboard.totalProviders'),
+              },
+              {
+                key: 'payes',
+                label: t('dashboard.paid'),
+              },
+              {
+                key: 'validesIt',
+                label: t('dashboard.validatedByIT'),
+              },
+              {
+                key: 'approuvesMcz',
+                label: t('dashboard.approvedByMCZ'),
+              },
+            ]}
+            title="Répartition par Zone de Santé"
+            exportFilename="statistiques-par-zone"
+          />
+        </div>
       )}
 
       {/* Filtres */}
@@ -674,16 +781,19 @@ export default function ProvincePage() {
             {
               key: 'provinceId',
               label: t('common.province'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.provinceId || (prestataire as any).province_id || user.provinceId || 'N/A',
             },
             {
               key: 'zoneId',
               label: t('common.zone'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.zoneId || (prestataire as any).zone_id || 'N/A',
             },
             {
               key: 'aireId',
               label: t('common.area'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.aireId || (prestataire as any).aire_id || 'N/A',
             },
             {
@@ -707,6 +817,7 @@ export default function ProvincePage() {
             {
               key: 'gender',
               label: t('common.gender'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const rawData = prestataire.raw_data || {};
                 const gender = (prestataire as any).gender_i_c ||
@@ -732,6 +843,7 @@ export default function ProvincePage() {
             {
               key: 'categorie',
               label: t('common.role'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const categorie = prestataire.categorie || prestataire.campaign_role_i_f || prestataire.campaign_role || prestataire.role || prestataire.role_prestataire || '';
                 const rawData = prestataire.raw_data || {};
@@ -766,6 +878,15 @@ export default function ProvincePage() {
                     {label}
                   </span>
                 );
+              },
+            },
+            {
+              key: 'presenceDays',
+              label: 'JOURS DE PRESENCE',
+              sortable: true,
+              render: (_, prestataire) => {
+                const days = (prestataire as any).presenceDays || (prestataire as any).presence_days || (prestataire as any).presence || 0;
+                return days || 'N/A';
               },
             },
             {

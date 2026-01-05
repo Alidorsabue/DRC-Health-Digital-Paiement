@@ -223,7 +223,7 @@ export default function MCZPage() {
         return acc;
       }, {});
       console.log('Répartition par zoneId:', zoneIdCount);
-      console.log('ZoneId de l\'utilisateur:', user.zoneId);
+      console.log('ZoneId de l\'utilisateur:', user?.zoneId);
       console.log('Exemples de zoneId dans les données:', data.slice(0, 5).map(p => ({
         id: p.id,
         zoneId: p.zoneId,
@@ -253,25 +253,26 @@ export default function MCZPage() {
         return String(zoneId).trim().toLowerCase();
       };
       
-      const userZoneIdNormalized = normalizeZoneId(user.zoneId);
-      console.log('ZoneId utilisateur normalisé:', userZoneIdNormalized);
-      
-      // Sécurité: Filtrer par zone de santé de l'utilisateur (ne devrait jamais être nécessaire si le backend filtre correctement)
-      // Mais on le fait quand même pour garantir que seules les données de la zone sont affichées
+      // Filtrer par zone de santé de l'utilisateur
       // Comparaison normalisée pour gérer les différences de format
-      filtered = filtered.filter(p => {
-        const pZoneId = p.zoneId || p.zone_id || p.zone_de_sante_id || p.zoneDeSanteId;
-        const pZoneIdNormalized = normalizeZoneId(pZoneId);
+      if (user?.zoneId) {
+        const userZoneIdNormalized = normalizeZoneId(user.zoneId);
+        console.log('ZoneId utilisé pour filtrage normalisé:', userZoneIdNormalized);
         
-        // Comparaison normalisée
-        const matches = pZoneIdNormalized === userZoneIdNormalized;
-        
-        if (!matches && pZoneId) {
-          console.warn(`ZoneId mismatch: prestataire zoneId="${pZoneId}" (normalisé: "${pZoneIdNormalized}") !== user zoneId="${user.zoneId}" (normalisé: "${userZoneIdNormalized}")`);
-        }
-        
-        return matches;
-      });
+        filtered = filtered.filter(p => {
+          const pZoneId = p.zoneId || p.zone_id || p.zone_de_sante_id || p.zoneDeSanteId;
+          const pZoneIdNormalized = normalizeZoneId(pZoneId);
+          
+          // Comparaison normalisée
+          const matches = pZoneIdNormalized === userZoneIdNormalized;
+          
+          if (!matches && pZoneId) {
+            console.warn(`ZoneId mismatch: prestataire zoneId="${pZoneId}" (normalisé: "${pZoneIdNormalized}") !== user zoneId="${user.zoneId}" (normalisé: "${userZoneIdNormalized}")`);
+          }
+          
+          return matches;
+        });
+      }
       
       console.log(`Après filtrage par zoneId: ${filtered.length} prestataires (sur ${data.length} reçus)`);
       
@@ -472,7 +473,7 @@ export default function MCZPage() {
     } else {
       return (
         <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-          {t('common.pending')}
+          {t('status.validatedByIT')}
         </span>
       );
     }
@@ -770,7 +771,7 @@ export default function MCZPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Aires de Santé {aires.length > 0 && `(${aires.length})`}
+              Aire de Santé {aires.length > 0 && `(${aires.length})`}
             </label>
             <select
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
@@ -806,7 +807,7 @@ export default function MCZPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="">Tous les statuts</option>
-              <option value="VALIDE_PAR_IT">Validés par IT (en attente)</option>
+              <option value="VALIDE_PAR_IT">Validés par IT</option>
               <option value="APPROUVE_PAR_MCZ">Approuvés</option>
               <option value="REJETE_PAR_MCZ">Rejetés</option>
             </select>
@@ -865,7 +866,7 @@ export default function MCZPage() {
             {!filterStatus || filterStatus === ''
               ? 'Aucun prestataire dans votre zone pour ce formulaire'
               : filterStatus === 'VALIDE_PAR_IT'
-              ? 'Aucun prestataire validé par IT (en attente) dans votre zone pour ce formulaire'
+              ? 'Aucun prestataire validé par IT dans votre zone pour ce formulaire'
               : `Aucun prestataire avec le statut sélectionné dans votre zone`}
           </p>
         </div>
@@ -880,11 +881,13 @@ export default function MCZPage() {
             {
               key: 'zoneId',
               label: t('mcz.zone'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.zoneId || prestataire.zone_id || user.zoneId || 'N/A',
             },
             {
               key: 'aireId',
               label: t('mcz.healthArea'),
+              filterType: 'select',
               render: (_, prestataire) => prestataire.aireId || prestataire.aire_id || 'N/A',
             },
             {
@@ -908,6 +911,7 @@ export default function MCZPage() {
             {
               key: 'gender',
               label: t('common.gender'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const rawData = prestataire.raw_data || {};
                 const gender = (prestataire as any).gender_i_c ||
@@ -943,6 +947,7 @@ export default function MCZPage() {
             {
               key: 'categorie',
               label: t('mcz.role'),
+              filterType: 'select',
               render: (_, prestataire) => {
                 const role = prestataire.categorie || 
                             prestataire.campaign_role_i_f || 
@@ -985,6 +990,15 @@ export default function MCZPage() {
                     {label}
                   </span>
                 );
+              },
+            },
+            {
+              key: 'presenceDays',
+              label: 'JOURS DE PRESENCE',
+              sortable: true,
+              render: (_, prestataire) => {
+                const days = (prestataire as any).presenceDays || (prestataire as any).presence_days || (prestataire as any).presence || 0;
+                return days || 'N/A';
               },
             },
             {

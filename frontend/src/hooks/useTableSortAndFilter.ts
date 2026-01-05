@@ -8,7 +8,7 @@ export interface SortState {
 }
 
 export interface FilterState {
-  [column: string]: string;
+  [column: string]: string | string[];
 }
 
 /**
@@ -44,10 +44,12 @@ export function useTableSortAndFilter<T extends Record<string, any>>(
   /**
    * Met à jour le filtre pour une colonne
    */
-  const handleFilter = (column: string, value: string) => {
+  const handleFilter = (column: string, value: string | string[]) => {
     setFilters((prev) => {
       const newFilters = { ...prev };
-      if (value === '') {
+      if (Array.isArray(value) && value.length === 0) {
+        delete newFilters[column];
+      } else if (typeof value === 'string' && value === '') {
         delete newFilters[column];
       } else {
         newFilters[column] = value;
@@ -79,10 +81,21 @@ export function useTableSortAndFilter<T extends Record<string, any>>(
     // Appliquer les filtres
     Object.entries(filters).forEach(([column, filterValue]) => {
       if (filterValue) {
-        result = result.filter((row) => {
-          const cellValue = String(row[column] || '').toLowerCase();
-          return cellValue.includes(filterValue.toLowerCase());
-        });
+        if (Array.isArray(filterValue)) {
+          // Filtre de sélection multiple
+          if (filterValue.length > 0) {
+            result = result.filter((row) => {
+              const cellValue = String(row[column] || '').toLowerCase();
+              return filterValue.some(fv => cellValue === fv.toLowerCase() || cellValue.includes(fv.toLowerCase()));
+            });
+          }
+        } else {
+          // Filtre texte
+          result = result.filter((row) => {
+            const cellValue = String(row[column] || '').toLowerCase();
+            return cellValue.includes(filterValue.toLowerCase());
+          });
+        }
       }
     });
 
