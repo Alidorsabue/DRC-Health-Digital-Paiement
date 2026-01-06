@@ -115,7 +115,7 @@ export default function StatsPage() {
       }
     };
 
-    if (user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL' || user?.role === 'MCZ' || user?.role === 'DPS' || user?.role === 'PARTNER') {
+    if (user?.role === 'SUPERADMIN' || user?.role === 'ADMIN' || user?.role === 'NATIONAL' || user?.role === 'MCZ' || user?.role === 'DPS' || user?.role === 'PARTNER') {
       fetchCampaigns();
     }
   }, [user]);

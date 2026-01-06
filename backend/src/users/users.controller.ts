@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Users')
 @Controller('users')
@@ -31,19 +32,19 @@ export class UsersController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'Créer un utilisateur (SuperAdmin uniquement)' })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  @ApiOperation({ summary: 'Créer un utilisateur (SuperAdmin et Admin uniquement)' })
+  create(@Body() createUserDto: CreateUserDto, @CurrentUser() user: any) {
+    return this.usersService.create(createUserDto, user.role);
   }
 
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN, Role.NATIONAL)
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.NATIONAL)
   @ApiOperation({ summary: 'Liste tous les utilisateurs' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@CurrentUser() user: any) {
+    return this.usersService.findAll(user.role);
   }
 
   @Get(':id')
@@ -57,19 +58,19 @@ export class UsersController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
   @ApiOperation({ summary: 'Modifier un utilisateur' })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @CurrentUser() user: any) {
+    return this.usersService.update(id, updateUserDto, user.role);
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
   @ApiOperation({ summary: 'Supprimer un utilisateur' })
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.usersService.remove(id, user.role);
   }
 }
 

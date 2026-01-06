@@ -176,6 +176,7 @@
   "login": {
     "connectToAccount": "Sign in to your account",
     "username": "Username",
+    "identifier": "Username, phone or email",
     "password": "Password",
     "loginButton": "Sign in",
     "connecting": "Connecting...",

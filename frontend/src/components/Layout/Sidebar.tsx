@@ -24,19 +24,19 @@ const navigation: NavItem[] = [
     translationKey: 'navigation.forms',
     href: '/dashboard/forms',
     icon: '📝',
-    roles: [Role.SUPERADMIN],
+    roles: [Role.SUPERADMIN, Role.ADMIN],
   },
   {
     translationKey: 'navigation.campaigns',
     href: '/dashboard/campaigns',
     icon: '🎯',
-    roles: [Role.SUPERADMIN],
+    roles: [Role.SUPERADMIN, Role.ADMIN],
   },
   {
     translationKey: 'navigation.users',
     href: '/dashboard/users',
     icon: '👥',
-    roles: [Role.SUPERADMIN],
+    roles: [Role.SUPERADMIN, Role.ADMIN],
   },
   {
     translationKey: 'navigation.mczApprovals',
@@ -66,7 +66,7 @@ const navigation: NavItem[] = [
     translationKey: 'navigation.nationalMonitoring',
     href: '/dashboard/national',
     icon: '🌍',
-    roles: [Role.NATIONAL, Role.SUPERADMIN],
+    roles: [Role.NATIONAL, Role.SUPERADMIN, Role.ADMIN],
   },
   {
     translationKey: 'navigation.statistics',

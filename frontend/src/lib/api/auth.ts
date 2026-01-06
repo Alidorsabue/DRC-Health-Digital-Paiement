@@ -2,9 +2,9 @@ import api from '../api';
 import { LoginResponse, CreateUserDto, User } from '../../types';
 
 export const authApi = {
-  login: async (username: string, password: string): Promise<LoginResponse> => {
+  login: async (identifier: string, password: string): Promise<LoginResponse> => {
     const response = await api.post<LoginResponse>('/auth/login', {
-      username,
+      username: identifier, // Le backend attend toujours "username" mais on peut y mettre username/telephone/email
       password,
     });
     return response.data;

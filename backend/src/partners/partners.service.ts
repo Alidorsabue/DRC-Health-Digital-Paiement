@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrestatairesService } from '../prestataires/prestataires.service';
 import { PaymentsService } from '../payments/payments.service';
 import { DynamicTableService } from '../forms/dynamic-table.service';
@@ -8,6 +9,23 @@ import { PrestataireStatus } from '../common/enums/status.enum';
 import { PaymentStatus } from '../common/enums/status.enum';
 import * as crypto from 'crypto';
 
+// Stockage temporaire pour les liens partagés (en production, utiliser Redis ou une base de données)
+const sharedLinksStore = new Map<string, { 
+  filters: any; 
+  expiresAt: number;
+  partnerId?: string;
+}>();
+
+// Nettoyer les liens expirés toutes les heures
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of sharedLinksStore.entries()) {
+    if (value.expiresAt < now) {
+      sharedLinksStore.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // 1 heure
+
 @Injectable()
 export class PartnersService {
   constructor(
@@ -16,6 +34,7 @@ export class PartnersService {
     private dynamicTableService: DynamicTableService,
     private campaignsService: CampaignsService,
     private formsService: FormsService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -886,6 +905,94 @@ export class PartnersService {
     }
 
     return { success, errors };
+  }
+
+  /**
+   * Génère un lien public partageable pour les données filtrées
+   */
+  async createSharedLink(
+    filters: {
+      campaignId?: string;
+      formId?: string;
+      categories?: string[];
+      provinceId?: string;
+      zoneId?: string;
+      aireId?: string;
+      includeAmountCalculation?: boolean;
+    },
+    expiresInHours: number = 168, // 7 jours par défaut
+    partnerId?: string,
+  ): Promise<{ token: string; publicUrl: string; expiresAt: string }> {
+    // Générer un token unique
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    const expiresAt = Date.now() + (expiresInHours * 60 * 60 * 1000);
+    
+    // Stocker les filtres avec le token
+    sharedLinksStore.set(token, {
+      filters,
+      expiresAt,
+      partnerId,
+    });
+    
+    // Construire l'URL publique
+    const apiUrl = this.configService.get<string>('API_URL') || 
+                   this.configService.get<string>('BACKEND_URL') || 
+                   'http://localhost:3001';
+    const publicUrl = `${apiUrl}/partner/public/prestataires/${token}`;
+    
+    return {
+      token,
+      publicUrl,
+      expiresAt: new Date(expiresAt).toISOString(),
+    };
+  }
+
+  /**
+   * Récupère les données filtrées depuis un token partagé
+   */
+  async getSharedPrestataires(token: string): Promise<any[]> {
+    const stored = sharedLinksStore.get(token);
+    
+    if (!stored) {
+      throw new NotFoundException('Lien non trouvé ou expiré');
+    }
+    
+    if (stored.expiresAt < Date.now()) {
+      sharedLinksStore.delete(token);
+      throw new NotFoundException('Lien expiré');
+    }
+    
+    const { filters } = stored;
+    
+    // Récupérer les prestataires avec les filtres
+    let prestataires = await this.getApprovedPrestataires(
+      filters.campaignId,
+      filters.formId,
+      filters.categories?.[0], // Pour compatibilité avec l'API existante
+      filters.provinceId,
+      filters.zoneId,
+      filters.aireId,
+    );
+    
+    // Si plusieurs catégories, filtrer manuellement
+    if (filters.categories && filters.categories.length > 1) {
+      prestataires = prestataires.filter((p: any) => {
+        const prestataireCategory = p.categorie || p.role || p.campaign_role;
+        return filters.categories!.some(cat => 
+          prestataireCategory?.toLowerCase().includes(cat.toLowerCase()) ||
+          cat.toLowerCase().includes(prestataireCategory?.toLowerCase() || '')
+        );
+      });
+    }
+    
+    // Appliquer le calcul des montants si demandé
+    if (filters.includeAmountCalculation) {
+      // Le calcul des montants est déjà fait dans getApprovedPrestataires
+      // via paymentAmount qui est calculé depuis presenceDays et les tarifs
+    }
+    
+    return prestataires;
   }
 }
 

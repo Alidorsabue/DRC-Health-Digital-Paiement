@@ -4,6 +4,7 @@ export enum Role {
   DPS = 'DPS',
   NATIONAL = 'NATIONAL',
   SUPERADMIN = 'SUPERADMIN',
+  ADMIN = 'ADMIN',
   PARTNER = 'PARTNER',
 }
 

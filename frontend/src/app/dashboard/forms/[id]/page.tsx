@@ -35,7 +35,7 @@ export default function FormEditorPage() {
   }, [params.id]);
 
   useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
+    if ((user?.role === 'SUPERADMIN') && params.id) {
       loadForm();
     }
   }, [params.id, user, loadForm]);

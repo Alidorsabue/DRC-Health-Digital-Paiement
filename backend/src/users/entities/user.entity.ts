@@ -23,8 +23,11 @@ export class User {
   @Column()
   password: string;
 
-  @Column()
+  @Column({ nullable: true })
   email: string;
+
+  @Column()
+  telephone: string;
 
   @Column()
   fullName: string;

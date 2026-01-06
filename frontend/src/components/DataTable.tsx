@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTableSortAndFilter } from '../hooks/useTableSortAndFilter';
 import { exportData, ExportColumn, ExportRow } from '../utils/export';
 import { useTranslation } from '../hooks/useTranslation';
@@ -50,7 +50,32 @@ export default function DataTable({
   onFilteredDataChange,
   hideHeader = false,
 }: DataTableProps) {
-  const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(data);
+  // Préparer les données avec les valeurs rendues pour les colonnes avec render
+  const preparedData = useMemo(() => {
+    return data.map((row) => {
+      const preparedRow = { ...row };
+      columns.forEach((col) => {
+        if (col.render) {
+          // Pour les colonnes avec render, stocker aussi la valeur rendue pour le filtrage
+          const rendered = col.render(row[col.key], row);
+          // Extraire le texte de la valeur rendue
+          let renderedText = '';
+          if (typeof rendered === 'string') {
+            renderedText = rendered;
+          } else if (rendered && typeof rendered === 'object' && 'props' in rendered) {
+            renderedText = String(rendered.props?.children || rendered.props?.value || '');
+          } else {
+            renderedText = String(row[col.key] || '');
+          }
+          // Stocker la valeur rendue dans une propriété spéciale pour le filtrage
+          preparedRow[`_rendered_${col.key}`] = renderedText;
+        }
+      });
+      return preparedRow;
+    });
+  }, [data, columns]);
+
+  const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(preparedData, columns);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [openSelectFilters, setOpenSelectFilters] = useState<Set<string>>(new Set());
   const [tempSelectFilters, setTempSelectFilters] = useState<Record<string, string[]>>({});
@@ -67,11 +92,21 @@ export default function DataTable({
   // Extraire les valeurs uniques pour chaque colonne catégorielle
   const getUniqueValues = (columnKey: string): string[] => {
     const values = new Set<string>();
-    data.forEach((row) => {
-      const value = row[columnKey];
+    const column = columns.find(col => col.key === columnKey);
+    
+    preparedData.forEach((row: any) => {
+      let value: any;
+      
+      // Si la colonne a un render, utiliser la valeur rendue stockée
+      if (column?.render) {
+        value = row[`_rendered_${columnKey}`] || row[columnKey];
+      } else {
+        value = row[columnKey];
+      }
+      
       if (value !== null && value !== undefined && value !== '') {
         const stringValue = String(value).trim();
-        if (stringValue) {
+        if (stringValue && stringValue !== 'N/A') {
           values.add(stringValue);
         }
       }

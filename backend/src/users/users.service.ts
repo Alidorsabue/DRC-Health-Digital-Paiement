@@ -32,7 +32,15 @@ export class UsersService {
     return this.create(createUserDto);
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto, requestingUserRole?: Role): Promise<User> {
+    // Si l'utilisateur est Admin, vérifier qu'il ne peut créer que IT, MCZ, DPS
+    if (requestingUserRole === Role.ADMIN) {
+      const allowedRoles = [Role.IT, Role.MCZ, Role.DPS];
+      if (!allowedRoles.includes(createUserDto.role)) {
+        throw new ForbiddenException('Vous ne pouvez créer que des utilisateurs IT, MCZ ou DPS');
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
     const user = this.usersRepository.create({
       ...createUserDto,
@@ -41,10 +49,29 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async findAll(): Promise<User[]> {
-    return this.usersRepository.find({
-      select: ['id', 'username', 'email', 'fullName', 'role', 'scope', 'isActive', 'createdAt', 'password'],
-    });
+  async findAll(requestingUserRole?: Role): Promise<User[]> {
+    const query = this.usersRepository.createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.username',
+        'user.email',
+        'user.telephone',
+        'user.fullName',
+        'user.role',
+        'user.scope',
+        'user.isActive',
+        'user.createdAt',
+        'user.password',
+      ]);
+
+    // Si l'utilisateur est Admin, filtrer pour exclure SUPERADMIN, ADMIN, PARTNER, NATIONAL
+    if (requestingUserRole === Role.ADMIN) {
+      query.where('user.role NOT IN (:...excludedRoles)', {
+        excludedRoles: [Role.SUPERADMIN, Role.ADMIN, Role.PARTNER, Role.NATIONAL],
+      });
+    }
+
+    return query.getMany();
   }
 
   async findOne(id: string): Promise<User> {
@@ -59,8 +86,43 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { username } });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async findByTelephone(telephone: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { telephone } });
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { email } });
+  }
+
+  async findByIdentifier(identifier: string): Promise<User | null> {
+    // Chercher d'abord par username
+    let user = await this.findByUsername(identifier);
+    if (user) return user;
+
+    // Ensuite par téléphone
+    user = await this.findByTelephone(identifier);
+    if (user) return user;
+
+    // Enfin par email
+    user = await this.findByEmail(identifier);
+    return user;
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto, requestingUserRole?: Role): Promise<User> {
     const user = await this.findOne(id);
+    
+    // Si l'utilisateur est Admin, vérifier qu'il ne peut modifier que IT, MCZ, DPS
+    if (requestingUserRole === Role.ADMIN) {
+      const allowedRoles = [Role.IT, Role.MCZ, Role.DPS];
+      if (!allowedRoles.includes(user.role)) {
+        throw new ForbiddenException('Vous ne pouvez modifier que les utilisateurs IT, MCZ ou DPS');
+      }
+      // Empêcher le changement de rôle vers un rôle non autorisé
+      if (updateUserDto.role && !allowedRoles.includes(updateUserDto.role)) {
+        throw new ForbiddenException('Vous ne pouvez attribuer que les rôles IT, MCZ ou DPS');
+      }
+    }
+
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
@@ -68,8 +130,17 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, requestingUserRole?: Role): Promise<void> {
     const user = await this.findOne(id);
+    
+    // Si l'utilisateur est Admin, vérifier qu'il ne peut supprimer que IT, MCZ, DPS
+    if (requestingUserRole === Role.ADMIN) {
+      const allowedRoles = [Role.IT, Role.MCZ, Role.DPS];
+      if (!allowedRoles.includes(user.role)) {
+        throw new ForbiddenException('Vous ne pouvez supprimer que les utilisateurs IT, MCZ ou DPS');
+      }
+    }
+
     await this.usersRepository.remove(user);
   }
 }

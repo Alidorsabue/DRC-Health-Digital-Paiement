@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { formsApi } from '../../../lib/api/forms';
-import { Form, CreateFormDto } from '../../../types';
+import { Form, CreateFormDto, Role } from '../../../types';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AlertModal from '../../../components/Modal/AlertModal';
@@ -224,6 +224,8 @@ function FormsPageContent() {
 
   const [showXlsFormModal, setShowXlsFormModal] = useState(false);
   const [xlsFormFile, setXlsFormFile] = useState<File | null>(null);
+  const [xlsFormUrl, setXlsFormUrl] = useState<string>('');
+  const [xlsFormMethod, setXlsFormMethod] = useState<'file' | 'url'>('file');
   const [xlsFormType, setXlsFormType] = useState<'enregistrement' | 'validation'>('enregistrement');
   const [xlsFormTitle, setXlsFormTitle] = useState<string>('');
   const [importing, setImporting] = useState(false);
@@ -240,17 +242,52 @@ function FormsPageContent() {
 
   const handleXlsFormImport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!xlsFormFile) {
-      showAlert(t('common.error'), t('errors.selectFile'), 'error');
-      return;
+    let fileToProcess: File | null = xlsFormFile;
+
+    // Si import depuis URL
+    if (xlsFormMethod === 'url') {
+      if (!xlsFormUrl || !xlsFormUrl.trim()) {
+        showAlert(t('common.error'), 'Veuillez saisir une URL', 'error');
+        return;
+      }
+
+      setImporting(true);
+      try {
+        // Télécharger le fichier depuis l'URL
+        const response = await fetch(xlsFormUrl);
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const urlParts = xlsFormUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1] || 'imported-form.xlsx';
+        
+        // Créer un File à partir du Blob
+        fileToProcess = new File([blob], fileName, { type: blob.type });
+      } catch (error: any) {
+        console.error('Erreur lors du téléchargement depuis l\'URL:', error);
+        showAlert(t('common.error'), `Erreur lors du téléchargement: ${error.message}`, 'error');
+        setImporting(false);
+        return;
+      }
+    } else {
+      // Import depuis fichier local
+      if (!xlsFormFile) {
+        showAlert(t('common.error'), t('errors.selectFile'), 'error');
+        return;
+      }
+      fileToProcess = xlsFormFile;
     }
 
     setImporting(true);
     try {
-      const result = await formsApi.importXlsForm(xlsFormFile, xlsFormType, xlsFormTitle || undefined);
+      const result = await formsApi.importXlsForm(fileToProcess, xlsFormType, xlsFormTitle || undefined);
       showAlert('Succès', result.message, 'success');
       setShowXlsFormModal(false);
       setXlsFormFile(null);
+      setXlsFormUrl('');
+      setXlsFormMethod('file');
       setXlsFormType('enregistrement');
       setXlsFormTitle('');
       // Recharger les formulaires
@@ -334,7 +371,14 @@ function FormsPageContent() {
           onClick={() => setShowMethodSelection(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
         >
-          + Créer un formulaire
+          {(user?.role === Role.SUPERADMIN) && (
+            <button
+              onClick={() => setShowMethodSelection(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              + Créer un formulaire
+            </button>
+          )}
         </button>
       </div>
 
@@ -719,28 +763,89 @@ function FormsPageContent() {
                     Importer un formulaire XlsForm
                   </h3>
                   <div className="space-y-4">
+                    {/* Sélection de la méthode d'import */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Fichier Excel (.xlsx ou .xls)
+                        Méthode d'import
                       </label>
-                      <input
-                        type="file"
-                        accept=".xlsx,.xls"
-                        required
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setXlsFormFile(file);
-                          }
-                        }}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      {xlsFormFile && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          Fichier sélectionné: {xlsFormFile.name}
-                        </p>
-                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setXlsFormMethod('file');
+                            setXlsFormUrl('');
+                          }}
+                          className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                            xlsFormMethod === 'file'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          📁 Fichier local
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setXlsFormMethod('url');
+                            setXlsFormFile(null);
+                          }}
+                          className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                            xlsFormMethod === 'url'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          🔗 URL / API
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Import depuis fichier */}
+                    {xlsFormMethod === 'file' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fichier Excel (.xlsx ou .xls)
+                        </label>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          required={xlsFormMethod === 'file'}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setXlsFormFile(file);
+                            }
+                          }}
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        {xlsFormFile && (
+                          <p className="mt-2 text-sm text-gray-600">
+                            Fichier sélectionné: {xlsFormFile.name}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Import depuis URL */}
+                    {xlsFormMethod === 'url' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          URL de l'API ou lien du fichier
+                        </label>
+                        <input
+                          type="url"
+                          value={xlsFormUrl}
+                          onChange={(e) => setXlsFormUrl(e.target.value)}
+                          placeholder="https://example.com/api/form.xlsx ou https://api.example.com/form"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={importing}
+                          required={xlsFormMethod === 'url'}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          L'URL doit pointer vers un fichier Excel (.xlsx ou .xls) accessible publiquement
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Titre du formulaire
@@ -785,7 +890,7 @@ function FormsPageContent() {
                 <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                   <button
                     type="submit"
-                    disabled={importing || !xlsFormFile}
+                    disabled={importing || (xlsFormMethod === 'file' && !xlsFormFile) || (xlsFormMethod === 'url' && !xlsFormUrl.trim())}
                     className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     {importing ? 'Import en cours...' : 'Importer'}
@@ -795,6 +900,8 @@ function FormsPageContent() {
                     onClick={() => {
                       setShowXlsFormModal(false);
                       setXlsFormFile(null);
+                      setXlsFormUrl('');
+                      setXlsFormMethod('file');
                       setXlsFormTitle('');
                     }}
                     disabled={importing}

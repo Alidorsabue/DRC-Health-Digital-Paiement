@@ -19,6 +19,7 @@ export default function UsersPage() {
     username: '',
     password: '',
     email: '',
+    telephone: '',
     fullName: '',
     role: Role.IT,
     scope: GeographicScope.AIRE,
@@ -39,7 +40,7 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    if (currentUser?.role === Role.SUPERADMIN) {
+    if (currentUser?.role === Role.SUPERADMIN || currentUser?.role === Role.ADMIN) {
       loadUsers();
     }
   }, [currentUser, loadUsers]);
@@ -50,6 +51,7 @@ export default function UsersPage() {
       // Nettoyer les champs vides avant l'envoi
       const cleanedData: CreateUserDto = {
         ...formData,
+        email: formData.email || undefined,
         provinceId: formData.provinceId || undefined,
         zoneId: formData.zoneId || undefined,
         aireId: formData.aireId || undefined,
@@ -62,6 +64,7 @@ export default function UsersPage() {
         username: '',
         password: '',
         email: '',
+        telephone: '',
         fullName: '',
         role: Role.IT,
         scope: GeographicScope.AIRE,
@@ -95,7 +98,8 @@ export default function UsersPage() {
     setFormData({
       username: user.username,
       password: '', // Mot de passe vide pour l'édition (optionnel)
-      email: user.email,
+      email: user.email || '',
+      telephone: user.telephone || '',
       fullName: user.fullName,
       role: user.role,
       scope: user.scope,
@@ -114,7 +118,8 @@ export default function UsersPage() {
       // Nettoyer les champs vides avant l'envoi
       const updateData: Partial<CreateUserDto> = {
         username: formData.username,
-        email: formData.email,
+        email: formData.email || undefined,
+        telephone: formData.telephone,
         fullName: formData.fullName,
         role: formData.role,
         scope: formData.scope,
@@ -136,6 +141,7 @@ export default function UsersPage() {
         username: '',
         password: '',
         email: '',
+        telephone: '',
         fullName: '',
         role: Role.IT,
         scope: GeographicScope.AIRE,
@@ -174,13 +180,18 @@ export default function UsersPage() {
     }
   };
 
-  if (currentUser?.role !== Role.SUPERADMIN) {
+  if (currentUser?.role !== Role.SUPERADMIN && currentUser?.role !== Role.ADMIN) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Accès non autorisé</p>
       </div>
     );
   }
+
+  // Rôles disponibles selon l'utilisateur connecté
+  const availableRoles = currentUser?.role === Role.ADMIN
+    ? [Role.IT, Role.MCZ, Role.DPS]
+    : Object.values(Role);
 
   if (loading) {
     return <div className="text-center py-12">Chargement...</div>;
@@ -221,7 +232,7 @@ export default function UsersPage() {
                       {user.fullName}
                     </div>
                     <div className="text-sm text-gray-500">
-                      {user.username} • {user.email}
+                      {user.username} {user.email && `• ${user.email}`} • {user.telephone}
                     </div>
                     <div className="mt-1 flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -305,16 +316,30 @@ export default function UsersPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
-                        Email
+                        Email <span className="text-gray-400">(optionnel)</span>
                       </label>
                       <input
                         type="email"
-                        required
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
-                        value={formData.email}
+                        value={formData.email || ''}
                         onChange={(e) =>
                           setFormData({ ...formData, email: e.target.value })
                         }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Téléphone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                        value={formData.telephone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, telephone: e.target.value })
+                        }
+                        placeholder="Ex: +243 900 000 000"
                       />
                     </div>
                     <div>
@@ -366,7 +391,7 @@ export default function UsersPage() {
                           })
                         }
                       >
-                        {Object.values(Role).map((role) => (
+                        {availableRoles.map((role) => (
                           <option key={role} value={role}>
                             {role}
                           </option>
@@ -531,16 +556,30 @@ export default function UsersPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
-                        Email
+                        Email <span className="text-gray-400">(optionnel)</span>
                       </label>
                       <input
                         type="email"
-                        required
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
-                        value={formData.email}
+                        value={formData.email || ''}
                         onChange={(e) =>
                           setFormData({ ...formData, email: e.target.value })
                         }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Téléphone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                        value={formData.telephone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, telephone: e.target.value })
+                        }
+                        placeholder="Ex: +243 900 000 000"
                       />
                     </div>
                     <div>
@@ -592,7 +631,7 @@ export default function UsersPage() {
                           })
                         }
                       >
-                        {Object.values(Role).map((role) => (
+                        {availableRoles.map((role) => (
                           <option key={role} value={role}>
                             {role}
                           </option>

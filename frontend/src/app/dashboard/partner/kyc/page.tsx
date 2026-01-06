@@ -23,6 +23,7 @@ export default function KycVerificationPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [prestataires, setPrestataires] = useState<PrestataireForPartner[]>([]);
+  const [filteredData, setFilteredData] = useState<PrestataireForPartner[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
   const [provinces, setProvinces] = useState<GeographicOption[]>([]);
@@ -40,6 +41,8 @@ export default function KycVerificationPage() {
   const [showImportKycModal, setShowImportKycModal] = useState(false);
   const [importKycFile, setImportKycFile] = useState<File | null>(null);
   const [importKycFileName, setImportKycFileName] = useState<string>('');
+  const [importKycUrl, setImportKycUrl] = useState<string>('');
+  const [importKycMethod, setImportKycMethod] = useState<'file' | 'url'>('file');
   const [importingKyc, setImportingKyc] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -245,19 +248,52 @@ export default function KycVerificationPage() {
   };
 
   const handleImportKycReport = async () => {
-    if (!importKycFile) {
-      showAlert('Erreur', 'Veuillez sélectionner un fichier', 'error');
-      return;
+    let fileToProcess: File | null = importKycFile;
+
+    // Si import depuis URL
+    if (importKycMethod === 'url') {
+      if (!importKycUrl || !importKycUrl.trim()) {
+        showAlert('Erreur', 'Veuillez saisir une URL', 'error');
+        return;
+      }
+
+      setImportingKyc(true);
+      try {
+        // Télécharger le fichier depuis l'URL
+        const response = await fetch(importKycUrl);
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const urlParts = importKycUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1] || 'imported-file.xlsx';
+        
+        // Créer un File à partir du Blob
+        fileToProcess = new File([blob], fileName, { type: blob.type });
+      } catch (error: any) {
+        console.error('Erreur lors du téléchargement depuis l\'URL:', error);
+        showAlert('Erreur', `Erreur lors du téléchargement: ${error.message}`, 'error');
+        setImportingKyc(false);
+        return;
+      }
+    } else {
+      // Import depuis fichier local
+      if (!importKycFile) {
+        showAlert('Erreur', 'Veuillez sélectionner un fichier', 'error');
+        return;
+      }
+      fileToProcess = importKycFile;
     }
 
     setImportingKyc(true);
     try {
       let kycResults: KycReportRow[] = [];
-      const fileExtension = importKycFile.name.split('.').pop()?.toLowerCase();
+      const fileExtension = fileToProcess.name.split('.').pop()?.toLowerCase();
 
       if (fileExtension === 'xlsx' || fileExtension === 'xls') {
         // Parser Excel
-        const arrayBuffer = await importKycFile.arrayBuffer();
+        const arrayBuffer = await fileToProcess.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
@@ -311,7 +347,7 @@ export default function KycVerificationPage() {
         }
       } else {
         // Parser CSV
-        const text = await importKycFile.text();
+        const text = await fileToProcess.text();
         const lines = text.split('\n').filter(line => line.trim());
         
         if (lines.length < 2) {
@@ -410,8 +446,9 @@ export default function KycVerificationPage() {
       label: col.label,
     }));
 
-    // Préparer les données pour l'export (sans le rendu personnalisé)
-    const exportDataRows: ExportRow[] = prestataires.map((row) => {
+    // Préparer les données pour l'export (utiliser les données filtrées)
+    const dataToExport = filteredData.length > 0 ? filteredData : prestataires;
+    const exportDataRows: ExportRow[] = dataToExport.map((row) => {
       const exportRow: ExportRow = {};
       columns.forEach((col) => {
         // Extraire la valeur textuelle si c'est un rendu personnalisé
@@ -455,6 +492,7 @@ export default function KycVerificationPage() {
       key: 'province',
       label: t('common.province'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const provinceId = prestataire.provinceId || prestataire.province_id;
         if (!provinceId) return 'N/A';
@@ -466,6 +504,7 @@ export default function KycVerificationPage() {
       key: 'zone',
       label: t('common.zone'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const zoneId = prestataire.zoneId || prestataire.zone_id;
         if (!zoneId) return 'N/A';
@@ -478,6 +517,7 @@ export default function KycVerificationPage() {
       key: 'aire',
       label: t('common.area'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const aireId = prestataire.aireId || prestataire.aire_id;
         if (!aireId) return 'N/A';
@@ -532,6 +572,7 @@ export default function KycVerificationPage() {
       key: 'gender',
       label: t('common.gender'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const rawData = prestataire.rawData || prestataire.raw_data || {};
         const gender = (prestataire as any).gender_i_c ||
@@ -580,6 +621,7 @@ export default function KycVerificationPage() {
       key: 'categorie',
       label: t('common.role'),
       sortable: true,
+      filterType: 'select',
       render: (value: any, prestataire: PrestataireForPartner) => {
         const categorie = prestataire.categorie || prestataire.role || prestataire.campaign_role || prestataire.campaign_role_i_f || 'N/A';
         return categorie;
@@ -836,6 +878,7 @@ export default function KycVerificationPage() {
                 columns={columns}
                 exportFilename="prestataires-enregistres-kyc"
                 hideHeader={true}
+                onFilteredDataChange={setFilteredData}
               />
             )}
           </div>
@@ -858,50 +901,116 @@ export default function KycVerificationPage() {
                 <li>SANS_COMPTE - Le prestataire n'a pas de compte mobile money</li>
               </ul>
             </div>
+            
+            {/* Sélection de la méthode d'import */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
-                Fichier à importer
+                Méthode d'import
               </label>
-              <div className="flex gap-2 items-center">
-                <label className="flex-1 cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setImportKycFile(file);
-                      setImportKycFileName(file ? file.name : '');
-                    }}
-                    className="hidden"
-                    id="kyc-file-input"
-                  />
-                  <div className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white text-center cursor-pointer">
-                    <span className="text-sm" style={{ color: '#374151' }}>
-                      {importKycFileName || 'Choisir un fichier'}
-                    </span>
-                  </div>
-                </label>
-                {importKycFile && (
-                  <button
-                    onClick={() => {
-                      setImportKycFile(null);
-                      setImportKycFileName('');
-                      const input = document.getElementById('kyc-file-input') as HTMLInputElement;
-                      if (input) input.value = '';
-                    }}
-                    className="px-3 py-2 text-sm text-red-600 hover:text-red-700"
-                    type="button"
-                  >
-                    ✕
-                  </button>
-                )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportKycMethod('file');
+                    setImportKycUrl('');
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                    importKycMethod === 'file'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  📁 Fichier local
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportKycMethod('url');
+                    setImportKycFile(null);
+                    setImportKycFileName('');
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                    importKycMethod === 'url'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  🔗 URL / API
+                </button>
               </div>
             </div>
+
+            {/* Import depuis fichier */}
+            {importKycMethod === 'file' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
+                  Fichier à importer
+                </label>
+                <div className="flex gap-2 items-center">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setImportKycFile(file);
+                        setImportKycFileName(file ? file.name : '');
+                      }}
+                      className="hidden"
+                      id="kyc-file-input"
+                    />
+                    <div className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white text-center cursor-pointer">
+                      <span className="text-sm" style={{ color: '#374151' }}>
+                        {importKycFileName || 'Choisir un fichier'}
+                      </span>
+                    </div>
+                  </label>
+                  {importKycFile && (
+                    <button
+                      onClick={() => {
+                        setImportKycFile(null);
+                        setImportKycFileName('');
+                        const input = document.getElementById('kyc-file-input') as HTMLInputElement;
+                        if (input) input.value = '';
+                      }}
+                      className="px-3 py-2 text-sm text-red-600 hover:text-red-700"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Import depuis URL */}
+            {importKycMethod === 'url' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
+                  URL de l'API ou lien du fichier
+                </label>
+                <input
+                  type="url"
+                  value={importKycUrl}
+                  onChange={(e) => setImportKycUrl(e.target.value)}
+                  placeholder="https://example.com/api/data.xlsx ou https://api.example.com/data"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  disabled={importingKyc}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  L'URL doit pointer vers un fichier CSV ou Excel accessible publiquement
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-4 justify-end">
               <button
                 onClick={() => {
                   setShowImportKycModal(false);
                   setImportKycFile(null);
+                  setImportKycFileName('');
+                  setImportKycUrl('');
+                  setImportKycMethod('file');
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white"
                 style={{ color: '#374151' }}
@@ -911,7 +1020,7 @@ export default function KycVerificationPage() {
               </button>
               <button
                 onClick={handleImportKycReport}
-                disabled={!importKycFile || importingKyc}
+                disabled={(importKycMethod === 'file' && !importKycFile) || (importKycMethod === 'url' && !importKycUrl.trim()) || importingKyc}
                 className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:text-white"
               >
                 {importingKyc ? 'Importation...' : 'Importer'}

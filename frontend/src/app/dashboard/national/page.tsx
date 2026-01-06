@@ -33,7 +33,7 @@ export default function NationalPage() {
 
   useEffect(() => {
     console.log('🟢 [NationalPage] useEffect[initial] - Déclenché', { role: user?.role });
-    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN' || user?.role === 'ADMIN') {
       console.log('🟢 [NationalPage] useEffect[initial] - Chargement des données');
       loadData();
       loadProvinces();
@@ -51,7 +51,7 @@ export default function NationalPage() {
   }, [selectedProvinceId]);
 
   useEffect(() => {
-    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN') {
+    if (user?.role === 'NATIONAL' || user?.role === 'SUPERADMIN' || user?.role === 'ADMIN') {
       loadData();
       loadPrestataires();
     }
@@ -358,7 +358,7 @@ export default function NationalPage() {
     return amount;
   };
 
-  if (user?.role !== 'NATIONAL' && user?.role !== 'SUPERADMIN') {
+  if (user?.role !== 'NATIONAL' && user?.role !== 'SUPERADMIN' && user?.role !== 'ADMIN') {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">{t('errors.unauthorizedAccess')}</p>

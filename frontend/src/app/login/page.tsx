@@ -12,7 +12,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { login } = useAuthStore();
   const { t } = useTranslation();
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,7 +32,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const response = await authApi.login(username, password);
+      const response = await authApi.login(identifier, password);
       login(response);
       router.push('/dashboard');
     } catch (err: any) {
@@ -68,18 +68,18 @@ function LoginForm() {
           )}
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="sr-only">
-                {t('login.username')}
+              <label htmlFor="identifier" className="sr-only">
+                {t('login.identifier')}
               </label>
               <input
-                id="username"
-                name="username"
+                id="identifier"
+                name="identifier"
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder={t('login.username')}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder={t('login.identifier')}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
               />
             </div>
             <div>

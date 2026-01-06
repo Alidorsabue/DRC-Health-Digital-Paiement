@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { campaignsApi } from '../../../lib/api/campaigns';
 import { formsApi } from '../../../lib/api/forms';
-import { Campaign, CreateCampaignDto, Form } from '../../../types';
+import { Campaign, CreateCampaignDto, Form, Role } from '../../../types';
 import Link from 'next/link';
 
 export default function CampaignsPage() {
@@ -123,7 +123,7 @@ export default function CampaignsPage() {
             Gestion des campagnes de santé publique
           </p>
         </div>
-        {user?.role === 'SUPERADMIN' && (
+        {(user?.role === Role.SUPERADMIN) && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -169,7 +169,7 @@ export default function CampaignsPage() {
                 </div>
                 <div>Durée: {campaign.durationDays} jours</div>
               </div>
-              {user?.role === 'SUPERADMIN' && (
+              {(user?.role === Role.SUPERADMIN) && (
                 <div className="mt-4 flex space-x-2">
                   <button
                     onClick={() => handleEdit(campaign)}

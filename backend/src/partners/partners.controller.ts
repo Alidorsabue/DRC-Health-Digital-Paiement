@@ -5,6 +5,7 @@ import {
   Body,
   Query,
   Headers,
+  Param,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
@@ -14,11 +15,13 @@ import { PaymentNotificationDto } from './dto/payment-notification.dto';
 import { ImportPaymentReportDto } from './dto/import-payment-report.dto';
 import { ImportPrestatairesDto } from './dto/import-prestataires.dto';
 import { ImportKycReportDto } from './dto/import-kyc-report.dto';
+import { CreateSharedLinkDto } from './dto/create-shared-link.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Partners')
@@ -173,6 +176,60 @@ export class PartnersController {
     @Query('formId') formId?: string,
   ) {
     return this.partnersService.updatePaymentAmounts(dto.amounts, formId);
+  }
+
+  @Post('shared-link')
+  @ApiOperation({ summary: 'Créer un lien public partageable pour les données filtrées' })
+  async createSharedLink(
+    @Body() dto: CreateSharedLinkDto,
+    @CurrentUser() user?: any,
+  ) {
+    const expiresInHours = dto.expiresInHours || 168; // 7 jours par défaut
+    
+    return this.partnersService.createSharedLink(
+      {
+        campaignId: dto.campaignId,
+        formId: dto.formId,
+        categories: dto.categories,
+        provinceId: dto.provinceId,
+        zoneId: dto.zoneId,
+        aireId: dto.aireId,
+        includeAmountCalculation: dto.includeAmountCalculation !== false, // true par défaut
+      },
+      expiresInHours,
+      user?.partnerId,
+    );
+  }
+}
+
+/**
+ * Controller public pour les données partagées (sans authentification)
+ */
+@ApiTags('Partners Public')
+@Controller('partner/public')
+export class PartnersPublicController {
+  constructor(
+    private readonly partnersService: PartnersService,
+  ) {}
+
+  @Get('prestataires/:token')
+  @Public()
+  @ApiOperation({ summary: 'Récupérer les prestataires filtrés via un lien public partagé' })
+  async getSharedPrestataires(@Param('token') token: string) {
+    const prestataires = await this.partnersService.getSharedPrestataires(token);
+    
+    return {
+      success: true,
+      count: prestataires.length,
+      data: prestataires,
+      format: 'json',
+      // Informations sur les formats disponibles
+      formats: {
+        json: 'Les données sont déjà au format JSON',
+        csv: 'Ajoutez ?format=csv à l\'URL pour obtenir un CSV',
+        excel: 'Ajoutez ?format=excel à l\'URL pour obtenir un Excel',
+      },
+    };
   }
 }
 

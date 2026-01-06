@@ -76,6 +76,23 @@ export interface UpdatePaymentAmountsDto {
   }>;
 }
 
+export interface CreateSharedLinkDto {
+  campaignId?: string;
+  formId?: string;
+  categories?: string[];
+  provinceId?: string;
+  zoneId?: string;
+  aireId?: string;
+  expiresInHours?: number;
+  includeAmountCalculation?: boolean;
+}
+
+export interface SharedLinkResponse {
+  token: string;
+  publicUrl: string;
+  expiresAt: string;
+}
+
 export const partnersApi = {
   /**
    * Récupère la liste des prestataires enregistrés (statut ENREGISTRE) pour la vérification KYC
@@ -186,6 +203,19 @@ export const partnersApi = {
     
     const response = await api.post<{ success: number; errors: string[] }>(
       `/partner/payment-amounts?${params.toString()}`,
+      dto,
+    );
+    return response.data;
+  },
+
+  /**
+   * Crée un lien public partageable pour les données filtrées
+   */
+  createSharedLink: async (
+    dto: CreateSharedLinkDto,
+  ): Promise<SharedLinkResponse> => {
+    const response = await api.post<SharedLinkResponse>(
+      '/partner/shared-link',
       dto,
     );
     return response.data;

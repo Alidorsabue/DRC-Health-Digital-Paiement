@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuthStore } from '../../../../../store/authStore';
 import { formsApi } from '../../../../../lib/api/forms';
-import { Form } from '../../../../../types';
+import { Form, Role } from '../../../../../types';
 import AlertModal from '../../../../../components/Modal/AlertModal';
 import ConfirmModal from '../../../../../components/Modal/ConfirmModal';
 
@@ -680,10 +681,22 @@ export default function FormBuilderPage() {
   }, [form?.id, loadEnregistrementFields, showAlert]);
 
   useEffect(() => {
-    if (user?.role === 'SUPERADMIN' && params.id) {
+    if ((user?.role === Role.SUPERADMIN) && params.id) {
       loadForm();
     }
   }, [params.id, user, loadForm]);
+
+  // Bloquer l'accès pour ADMIN (peut voir les données mais pas éditer)
+  if (user?.role === Role.ADMIN) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Accès non autorisé. Vous pouvez consulter les données du formulaire mais pas l'éditer.</p>
+        <Link href={`/dashboard/forms/${params.id}/data`} className="text-blue-600 hover:text-blue-800 mt-4 inline-block">
+          Voir les données du formulaire
+        </Link>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (form?.type === 'validation') {
@@ -1456,29 +1469,33 @@ export default function FormBuilderPage() {
 
             return (
               <>
-                {!isPublished && (
-                  <button
-                    onClick={handlePublish}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                  >
-                    Publier
-                  </button>
-                )}
-                {isPublished && !isSentToMobile && (
-                  <button
-                    onClick={handleSendToMobile}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                  >
-                    Envoyer
-                  </button>
-                )}
-                {isPublished && isSentToMobile && (
-                  <button
-                    onClick={handleRetractFromMobile}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                  >
-                    Retirer
-                  </button>
+                {(user?.role === Role.SUPERADMIN) && (
+                  <>
+                    {!isPublished && (
+                      <button
+                        onClick={handlePublish}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                      >
+                        Publier
+                      </button>
+                    )}
+                    {isPublished && !isSentToMobile && (
+                      <button
+                        onClick={handleSendToMobile}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                      >
+                        Envoyer
+                      </button>
+                    )}
+                    {isPublished && isSentToMobile && (
+                      <button
+                        onClick={handleRetractFromMobile}
+                        className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             );

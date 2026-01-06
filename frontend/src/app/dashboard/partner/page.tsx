@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../../../store/authStore';
-import { partnersApi, PrestataireForPartner, PaymentReportRow } from '../../../lib/api/partners';
+import { partnersApi, PrestataireForPartner, PaymentReportRow, CreateSharedLinkDto } from '../../../lib/api/partners';
 import { campaignsApi } from '../../../lib/api/campaigns';
 import { formsApi } from '../../../lib/api/forms';
 import { geographicApi } from '../../../lib/api/geographic';
@@ -41,9 +41,14 @@ export default function PartnerPage() {
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importUrl, setImportUrl] = useState<string>('');
+  const [importMethod, setImportMethod] = useState<'file' | 'url'>('file');
   const [importing, setImporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCalculateAmountModal, setShowCalculateAmountModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharedLink, setSharedLink] = useState<{ token: string; publicUrl: string; expiresAt: string } | null>(null);
+  const [creatingLink, setCreatingLink] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const [rateRules, setRateRules] = useState<Array<{ role: string; currency: string; rate: number }>>([
     { role: '', currency: 'USD', rate: 0 },
@@ -485,6 +490,31 @@ export default function PartnerPage() {
     return amount > 0 ? `${amount} ${currencySymbol}` : 'N/A';
   };
 
+  const handleCreateSharedLink = async () => {
+    setCreatingLink(true);
+    try {
+      const filters: CreateSharedLinkDto = {
+        campaignId: selectedCampaignId || undefined,
+        formId: selectedFormId || undefined,
+        categories: selectedCategory.length > 0 ? selectedCategory : undefined,
+        provinceId: selectedProvinceId || undefined,
+        zoneId: selectedZoneId || undefined,
+        aireId: selectedAireId || undefined,
+        expiresInHours: 168, // 7 jours par défaut
+        includeAmountCalculation: true,
+      };
+
+      const linkData = await partnersApi.createSharedLink(filters);
+      setSharedLink(linkData);
+      setShowShareModal(true);
+    } catch (error: any) {
+      console.error('Erreur lors de la création du lien:', error);
+      showAlert('Erreur', error.response?.data?.message || error.message || 'Erreur lors de la création du lien', 'error');
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
   const handleExport = async (format: 'csv' | 'excel' | 'pdf' | 'image') => {
     setShowExportMenu(false);
     
@@ -850,20 +880,53 @@ export default function PartnerPage() {
   };
 
   const handleImportPaymentReport = async () => {
-    if (!importFile) {
-      showAlert('Erreur', 'Veuillez sélectionner un fichier', 'error');
-      return;
+    let fileToProcess: File | null = importFile;
+
+    // Si import depuis URL
+    if (importMethod === 'url') {
+      if (!importUrl || !importUrl.trim()) {
+        showAlert('Erreur', 'Veuillez saisir une URL', 'error');
+        return;
+      }
+
+      setImporting(true);
+      try {
+        // Télécharger le fichier depuis l'URL
+        const response = await fetch(importUrl);
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const urlParts = importUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1] || 'imported-file.xlsx';
+        
+        // Créer un File à partir du Blob
+        fileToProcess = new File([blob], fileName, { type: blob.type });
+      } catch (error: any) {
+        console.error('Erreur lors du téléchargement depuis l\'URL:', error);
+        showAlert('Erreur', `Erreur lors du téléchargement: ${error.message}`, 'error');
+        setImporting(false);
+        return;
+      }
+    } else {
+      // Import depuis fichier local
+      if (!importFile) {
+        showAlert('Erreur', 'Veuillez sélectionner un fichier', 'error');
+        return;
+      }
+      fileToProcess = importFile;
     }
 
     setImporting(true);
     try {
       const payments: PaymentReportRow[] = [];
-      const fileName = importFile.name.toLowerCase();
+      const fileName = fileToProcess.name.toLowerCase();
       const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
       if (isExcel) {
         // Lire le fichier Excel
-        const arrayBuffer = await importFile.arrayBuffer();
+        const arrayBuffer = await fileToProcess.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
@@ -1046,7 +1109,7 @@ export default function PartnerPage() {
         }
       } else {
         // Lire le fichier CSV
-        const text = await importFile.text();
+        const text = await fileToProcess.text();
         const lines = text.split('\n').filter(line => line.trim());
         
         if (lines.length < 2) {
@@ -1246,6 +1309,8 @@ export default function PartnerPage() {
 
       setShowImportModal(false);
       setImportFile(null);
+      setImportUrl('');
+      setImportMethod('file');
       
       // Recharger les données depuis le serveur pour avoir les dernières mises à jour
       // avec un délai pour laisser le backend terminer la mise à jour
@@ -1754,6 +1819,16 @@ export default function PartnerPage() {
                 </svg>
                 Importer rapport de paiement
               </button>
+              <button
+                onClick={handleCreateSharedLink}
+                disabled={creatingLink}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center gap-2 disabled:bg-gray-400"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                {creatingLink ? 'Création...' : 'Partager API'}
+              </button>
               <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
@@ -1816,6 +1891,77 @@ export default function PartnerPage() {
         </div>
       )}
 
+      {/* Modal de partage API */}
+      {showShareModal && sharedLink && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+            <h2 className="text-xl font-bold mb-4" style={{ color: '#111827' }}>Lien API partagé</h2>
+            <p className="text-sm mb-4" style={{ color: '#374151' }}>
+              Ce lien permet d'accéder aux données filtrées via une API publique. Il expire le {new Date(sharedLink.expiresAt).toLocaleString('fr-FR')}.
+            </p>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
+                URL de l'API :
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={sharedLink.publicUrl}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm font-mono"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(sharedLink.publicUrl);
+                    showAlert('Succès', 'Lien copié dans le presse-papiers', 'success');
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                >
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4 p-4 bg-blue-50 rounded-md">
+              <h3 className="text-sm font-semibold text-blue-900 mb-2">💡 Utilisation de l'API :</h3>
+              <div className="text-xs text-blue-800 space-y-2">
+                <p><strong>Format JSON :</strong> Accédez directement à l'URL pour obtenir les données au format JSON.</p>
+                <p><strong>Exemple avec curl :</strong></p>
+                <code className="block bg-blue-100 p-2 rounded text-xs font-mono break-all">
+                  curl {sharedLink.publicUrl}
+                </code>
+                <p><strong>Exemple avec Python :</strong></p>
+                <code className="block bg-blue-100 p-2 rounded text-xs font-mono">
+                  import requests<br/>
+                  response = requests.get('{sharedLink.publicUrl}')<br/>
+                  data = response.json()
+                </code>
+                <p><strong>Exemple avec JavaScript :</strong></p>
+                <code className="block bg-blue-100 p-2 rounded text-xs font-mono">
+                  fetch('{sharedLink.publicUrl}')<br/>
+                  &nbsp;&nbsp;.then(res =&gt; res.json())<br/>
+                  &nbsp;&nbsp;.then(data =&gt; console.log(data))
+                </code>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setSharedLink(null);
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal d'import */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1827,41 +1973,104 @@ export default function PartnerPage() {
                 Note: Si le statut n'est pas spécifié, il sera déterminé automatiquement : PAID si montant &gt; 0, PENDING si montant = 0/vide/N/A
               </span>
             </p>
+            {/* Sélection de la méthode d'import */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
-                Fichier à importer
+                Méthode d'import
               </label>
-              <div className="flex items-center gap-3">
-                <label className="flex-1 cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                    id="payment-file-input"
-                  />
-                  <div className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white text-center cursor-pointer">
-                    <span className="text-sm" style={{ color: '#374151' }}>
-                      {importFile ? importFile.name : 'Choisir un fichier'}
-                    </span>
-                  </div>
-                </label>
-                {importFile && (
-                  <button
-                    onClick={() => setImportFile(null)}
-                    className="px-3 py-2 text-sm text-red-600 hover:text-red-700"
-                    type="button"
-                  >
-                    ✕
-                  </button>
-                )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportMethod('file');
+                    setImportUrl('');
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                    importMethod === 'file'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  📁 Fichier local
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportMethod('url');
+                    setImportFile(null);
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
+                    importMethod === 'url'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  🔗 URL / API
+                </button>
               </div>
             </div>
+
+            {/* Import depuis fichier */}
+            {importMethod === 'file' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
+                  Fichier à importer
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="payment-file-input"
+                    />
+                    <div className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white text-center cursor-pointer">
+                      <span className="text-sm" style={{ color: '#374151' }}>
+                        {importFile ? importFile.name : 'Choisir un fichier'}
+                      </span>
+                    </div>
+                  </label>
+                  {importFile && (
+                    <button
+                      onClick={() => setImportFile(null)}
+                      className="px-3 py-2 text-sm text-red-600 hover:text-red-700"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Import depuis URL */}
+            {importMethod === 'url' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
+                  URL de l'API ou lien du fichier
+                </label>
+                <input
+                  type="url"
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://example.com/api/data.xlsx ou https://api.example.com/data"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={importing}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  L'URL doit pointer vers un fichier CSV ou Excel accessible publiquement
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-4 justify-end">
               <button
                 onClick={() => {
                   setShowImportModal(false);
                   setImportFile(null);
+                  setImportUrl('');
+                  setImportMethod('file');
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 bg-white"
                 style={{ color: '#374151' }}
@@ -1871,7 +2080,7 @@ export default function PartnerPage() {
               </button>
               <button
                 onClick={handleImportPaymentReport}
-                disabled={!importFile || importing}
+                disabled={(importMethod === 'file' && !importFile) || (importMethod === 'url' && !importUrl.trim()) || importing}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:text-white"
               >
                 {importing ? 'Importation...' : 'Importer'}

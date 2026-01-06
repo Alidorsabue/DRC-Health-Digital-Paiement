@@ -21,10 +21,15 @@ export class CreateUserDto {
   @MinLength(6)
   password: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @ApiProperty()
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  telephone: string;
 
   @ApiProperty()
   @IsString()

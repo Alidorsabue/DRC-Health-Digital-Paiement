@@ -105,7 +105,7 @@ export default function DashboardPage() {
       }
     };
 
-    if (user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL') {
+    if (user?.role === 'SUPERADMIN' || user?.role === 'ADMIN' || user?.role === 'NATIONAL') {
       fetchGeographicData();
     } else if (user?.role === 'MCZ' && user?.zoneId) {
       // Pour MCZ, initialiser la zoneId dans les filtres

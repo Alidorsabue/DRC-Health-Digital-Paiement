@@ -4,6 +4,7 @@ export enum Role {
   DPS = 'DPS',
   NATIONAL = 'NATIONAL',
   SUPERADMIN = 'SUPERADMIN',
+  ADMIN = 'ADMIN',
   PARTNER = 'PARTNER',
 }
 
@@ -24,7 +25,8 @@ export enum PrestataireStatus {
 export interface User {
   id: string;
   username: string;
-  email: string;
+  email?: string;
+  telephone: string;
   fullName: string;
   role: Role;
   scope: GeographicScope;
@@ -87,7 +89,8 @@ export interface Campaign {
 export interface CreateUserDto {
   username: string;
   password: string;
-  email: string;
+  email?: string;
+  telephone: string;
   fullName: string;
   role: Role;
   scope: GeographicScope;

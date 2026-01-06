@@ -11,11 +11,17 @@ export interface FilterState {
   [column: string]: string | string[];
 }
 
+export interface Column {
+  key: string;
+  render?: (value: any, row: any) => React.ReactNode;
+}
+
 /**
  * Hook personnalisé pour le tri et le filtrage des tableaux
  */
 export function useTableSortAndFilter<T extends Record<string, any>>(
-  data: T[]
+  data: T[],
+  columns?: Column[]
 ) {
   const [sortState, setSortState] = useState<SortState>({
     column: null,
@@ -81,18 +87,32 @@ export function useTableSortAndFilter<T extends Record<string, any>>(
     // Appliquer les filtres
     Object.entries(filters).forEach(([column, filterValue]) => {
       if (filterValue) {
+        const col = columns?.find(c => c.key === column);
+        
         if (Array.isArray(filterValue)) {
           // Filtre de sélection multiple
           if (filterValue.length > 0) {
             result = result.filter((row) => {
-              const cellValue = String(row[column] || '').toLowerCase();
+              // Utiliser la valeur rendue si disponible, sinon la valeur brute
+              let cellValue: string;
+              if (col?.render) {
+                cellValue = String(row[`_rendered_${column}`] || row[column] || '').toLowerCase();
+              } else {
+                cellValue = String(row[column] || '').toLowerCase();
+              }
               return filterValue.some(fv => cellValue === fv.toLowerCase() || cellValue.includes(fv.toLowerCase()));
             });
           }
         } else {
           // Filtre texte
           result = result.filter((row) => {
-            const cellValue = String(row[column] || '').toLowerCase();
+            // Utiliser la valeur rendue si disponible, sinon la valeur brute
+            let cellValue: string;
+            if (col?.render) {
+              cellValue = String(row[`_rendered_${column}`] || row[column] || '').toLowerCase();
+            } else {
+              cellValue = String(row[column] || '').toLowerCase();
+            }
             return cellValue.includes(filterValue.toLowerCase());
           });
         }
@@ -123,7 +143,7 @@ export function useTableSortAndFilter<T extends Record<string, any>>(
     }
 
     return result;
-  }, [data, filters, sortState]);
+  }, [data, filters, sortState, columns]);
 
   return {
     processedData,
