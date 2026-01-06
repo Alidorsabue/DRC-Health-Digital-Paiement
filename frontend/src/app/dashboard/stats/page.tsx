@@ -4,18 +4,30 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../../store/authStore';
 import { statsApi, NationalStats, ZoneStats, AireStats, ProvinceStats } from '../../../lib/api/stats';
 import { campaignsApi } from '../../../lib/api/campaigns';
+import { prestatairesApi, Prestataire } from '../../../lib/api/prestataires';
+import { geographicApi } from '../../../lib/api/geographic';
 import { Campaign } from '../../../types';
 import { getErrorMessage } from '../../../utils/error-handler';
 import AlertModal from '../../../components/Modal/AlertModal';
+import DataTable, { Column } from '../../../components/DataTable';
+import { useTranslation } from '../../../hooks/useTranslation';
+
+interface GeographicOption {
+  id: string;
+  name: string;
+}
 
 export default function StatsPage() {
   console.log('🟡 [StatsPage] RENDER - Début du composant');
   const { user } = useAuthStore();
   console.log('🟡 [StatsPage] RENDER - Hooks de base initialisés', { userId: user?.id, role: user?.role });
+  const { t } = useTranslation();
   const [stats, setStats] = useState<NationalStats | ZoneStats | AireStats | ProvinceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
+  const [aires, setAires] = useState<GeographicOption[]>([]);
   const [alert, setAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
@@ -56,6 +68,11 @@ export default function StatsPage() {
       const data = await statsApi.getZone(user.zoneId, filters);
       console.log('Statistiques MCZ chargées:', data);
       setStats(data);
+      
+      // Charger les prestataires pour le tableau de répartition
+      await loadPrestatairesForMCZ();
+      // Charger les aires de santé
+      await loadAiresForMCZ(user.zoneId);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques MCZ:', error);
       const errorMsg = getErrorMessage(error, 'Erreur inconnue');
@@ -63,6 +80,58 @@ export default function StatsPage() {
       setStats(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPrestatairesForMCZ = async () => {
+    if (!user?.zoneId) return;
+    
+    try {
+      const filters: any = {
+        zoneId: user.zoneId,
+      };
+      if (selectedCampaignId) filters.campaignId = selectedCampaignId;
+      
+      const data = await prestatairesApi.getAll(filters);
+      setPrestataires(data);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des prestataires MCZ:', error);
+      setPrestataires([]);
+    }
+  };
+
+  const loadAiresForMCZ = async (zoneId: string) => {
+    try {
+      const airesFromGeo = await geographicApi.getAires(zoneId);
+      
+      // Récupérer les aires depuis les données (tables form_*)
+      let airesFromData: { id: string; name: string }[] = [];
+      try {
+        airesFromData = await statsApi.getAiresFromData(zoneId);
+      } catch (error) {
+        console.warn('Impossible de récupérer les aires depuis les données:', error);
+      }
+      
+      // Combiner et dédupliquer les aires
+      const allAiresMap = new Map<string, { id: string; name: string }>();
+      
+      // Ajouter les aires de l'API géographique
+      airesFromGeo.forEach(a => {
+        allAiresMap.set(a.id, a);
+      });
+      
+      // Ajouter les aires des données
+      airesFromData.forEach(a => {
+        if (!allAiresMap.has(a.id)) {
+          allAiresMap.set(a.id, { id: a.id, name: a.name || a.id });
+        }
+      });
+      
+      const allAires = Array.from(allAiresMap.values());
+      setAires(allAires);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des aires MCZ:', error);
+      setAires([]);
     }
   };
 
@@ -301,6 +370,93 @@ export default function StatsPage() {
           </div>
         </div>
       </div>
+
+      {/* Tableau de répartition par aire de santé pour MCZ */}
+      {user?.role === 'MCZ' && prestataires.length > 0 && (
+        <div className="mt-8">
+          <DataTable
+            data={(() => {
+              // Calculer les statistiques par aire depuis les prestataires
+              const aireStats: Record<string, {
+                total: number;
+                validesIt: number;
+                approuvesMcz: number;
+                payes: number;
+              }> = {};
+
+              prestataires.forEach((p) => {
+                const aireId = p.aireId || p.aire_id || 'N/A';
+                if (!aireStats[aireId]) {
+                  aireStats[aireId] = {
+                    total: 0,
+                    validesIt: 0,
+                    approuvesMcz: 0,
+                    payes: 0,
+                  };
+                }
+
+                aireStats[aireId].total++;
+
+                // Compter validés par IT
+                const validationStatus = (p.validationStatus || p.status || '').toUpperCase();
+                if (validationStatus === 'VALIDE_PAR_IT' || validationStatus === 'VALIDATED') {
+                  aireStats[aireId].validesIt++;
+                }
+
+                // Compter approuvés par MCZ
+                const approvalStatus = (p.approvalStatus || p.status || '').toUpperCase();
+                if (approvalStatus === 'APPROUVE_PAR_MCZ' || approvalStatus === 'APPROVED') {
+                  aireStats[aireId].approuvesMcz++;
+                }
+
+                // Compter payés
+                const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                if (paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ') {
+                  aireStats[aireId].payes++;
+                }
+              });
+
+              return Object.entries(aireStats).map(([aireId, stats]) => {
+                // Trouver le nom de l'aire depuis la liste des aires
+                const aire = aires.find(a => a.id === aireId);
+                return {
+                  id: aireId,
+                  aire: aire ? aire.name : aireId,
+                  total: stats.total,
+                  payes: stats.payes,
+                  validesIt: stats.validesIt,
+                  approuvesMcz: stats.approuvesMcz,
+                };
+              });
+            })()}
+            columns={[
+              {
+                key: 'aire',
+                label: t('common.area'),
+                filterType: 'select',
+              },
+              {
+                key: 'total',
+                label: t('dashboard.totalProviders'),
+              },
+              {
+                key: 'payes',
+                label: t('dashboard.paid'),
+              },
+              {
+                key: 'validesIt',
+                label: t('dashboard.validatedByIT'),
+              },
+              {
+                key: 'approuvesMcz',
+                label: t('dashboard.approvedByMCZ'),
+              },
+            ]}
+            title="Répartition par Aire de Santé"
+            exportFilename="statistiques-par-aire-mcz"
+          />
+        </div>
+      )}
     </div>
   );
 }

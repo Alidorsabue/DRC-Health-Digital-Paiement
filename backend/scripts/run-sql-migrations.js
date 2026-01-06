@@ -13,6 +13,11 @@ const dbConfig = {
 };
 
 // Ordre d'exécution des migrations SQL
+// IMPORTANT: Les migrations pré-synchronisation doivent être avant createTablesFromEntities()
+const preSyncMigrationFiles = [
+  'fix_users_telephone_not_null.sql',  // Doit être exécutée AVANT la synchronisation
+];
+
 const migrationFiles = [
   'migrate_to_composite_primary_key.sql',
   'change_prestataire_id_format.sql',
@@ -117,6 +122,79 @@ async function createTablesFromEntities() {
   }
 }
 
+async function runPreSyncMigrations() {
+  const client = new Client(dbConfig);
+  
+  try {
+    console.log('🔌 Connexion à la base de données pour les migrations pré-synchronisation...');
+    await client.connect();
+    console.log('✅ Connecté à la base de données');
+    
+    // Créer la table de suivi des migrations si elle n'existe pas
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS migrations_history (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Table migrations_history créée/vérifiée');
+    
+    const migrationsDir = path.join(__dirname, '../migrations');
+    
+    if (preSyncMigrationFiles.length === 0) {
+      console.log('ℹ️  Aucune migration pré-synchronisation à exécuter');
+      return;
+    }
+    
+    console.log('📋 Exécution des migrations pré-synchronisation...');
+    
+    for (const filename of preSyncMigrationFiles) {
+      const filePath = path.join(migrationsDir, filename);
+      
+      // Vérifier si le fichier existe
+      if (!fs.existsSync(filePath)) {
+        console.log(`⚠️  Fichier ${filename} introuvable, ignoré`);
+        continue;
+      }
+      
+      // Vérifier si la migration a déjà été exécutée
+      const checkResult = await client.query(
+        'SELECT filename FROM migrations_history WHERE filename = $1',
+        [filename]
+      );
+      
+      if (checkResult.rows.length > 0) {
+        console.log(`⏭️  Migration pré-sync ${filename} déjà exécutée, ignorée`);
+        continue;
+      }
+      
+      // Lire et exécuter le fichier SQL
+      console.log(`📝 Exécution pré-sync de ${filename}...`);
+      const sql = fs.readFileSync(filePath, 'utf8');
+      
+      // Exécuter le SQL
+      await client.query(sql);
+      
+      // Enregistrer dans l'historique
+      await client.query(
+        'INSERT INTO migrations_history (filename) VALUES ($1)',
+        [filename]
+      );
+      
+      console.log(`✅ Migration pré-sync ${filename} exécutée avec succès`);
+    }
+    
+    console.log('✅ Migrations pré-synchronisation terminées');
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'exécution des migrations pré-synchronisation:', error);
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function runMigrations() {
   const client = new Client(dbConfig);
   
@@ -191,10 +269,13 @@ async function main() {
   console.log('');
   
   try {
-    // D'abord créer les tables à partir des entités
+    // D'abord exécuter les migrations pré-synchronisation (pour corriger les données existantes)
+    await runPreSyncMigrations();
+    
+    // Ensuite créer/mettre à jour les tables à partir des entités
     await createTablesFromEntities();
     
-    // Ensuite exécuter les migrations SQL
+    // Enfin exécuter les migrations SQL normales
     await runMigrations();
     
     console.log('');
