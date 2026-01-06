@@ -257,34 +257,85 @@ export default function StatsPage() {
         />
       )}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          {subtitle}
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              {subtitle}
+            </p>
+          </div>
+          {campaigns.length > 0 && (
+            <div className="sm:w-64">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Campagne
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+              >
+                <option value="">Toutes les campagnes</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.name} {campaign.isActive ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Répartition par statut</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Répartition par statut</h2>
           <div className="space-y-3">
-            {Object.entries(stats.byStatus || {}).map(([status, count]) => (
-              <div key={status} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{status}</span>
-                <div className="flex items-center space-x-4">
-                  <div className="w-48 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{
-                        width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%`,
-                      }}
-                    ></div>
+            {(() => {
+              // Combiner les statuts d'approbation et de paiement
+              const allStatuses: Record<string, number> = { ...(stats.byStatus || {}) };
+              
+              // Ajouter les statuts de paiement si disponibles
+              if (prestataires.length > 0 && user?.role === 'MCZ') {
+                const paymentStatuses: Record<string, number> = {};
+                prestataires.forEach((p) => {
+                  const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                  if (paymentStatus && paymentStatus !== 'PENDING' && paymentStatus !== '') {
+                    const statusLabel = paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ' 
+                      ? 'PAYÉ' 
+                      : paymentStatus === 'SENT' 
+                      ? 'ENVOYÉ' 
+                      : paymentStatus === 'FAILED' || paymentStatus === 'ECHEC'
+                      ? 'ÉCHEC'
+                      : paymentStatus;
+                    paymentStatuses[statusLabel] = (paymentStatuses[statusLabel] || 0) + 1;
+                  }
+                });
+                
+                // Fusionner avec les statuts existants
+                Object.entries(paymentStatuses).forEach(([status, count]) => {
+                  allStatuses[status] = (allStatuses[status] || 0) + count;
+                });
+              }
+              
+              return Object.entries(allStatuses).map(([status, count]) => (
+                <div key={status} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800">{status}</span>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-48 bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
+                        style={{
+                          width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%`,
+                        }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 w-12 text-right">
+                      {count}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 w-12 text-right">
-                    {count}
-                  </span>
                 </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
 
@@ -292,7 +343,7 @@ export default function StatsPage() {
           {/* Répartition par province - pour SUPERADMIN, NATIONAL et PARTNER */}
           {(user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') && 'byProvince' in stats && (
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Répartition par province</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">Répartition par province</h2>
               <div className="space-y-2">
                 {Object.entries((stats as NationalStats).byProvince || {})
                   .sort(([, a], [, b]) => (b as number) - (a as number))
@@ -302,8 +353,8 @@ export default function StatsPage() {
                       key={province}
                       className="flex items-center justify-between text-sm"
                     >
-                      <span className="text-gray-600">{province}</span>
-                      <span className="font-medium text-gray-900">{count as number}</span>
+                      <span className="text-gray-800 font-medium">{province}</span>
+                      <span className="font-semibold text-gray-900">{count as number}</span>
                     </div>
                   ))}
               </div>
@@ -313,7 +364,7 @@ export default function StatsPage() {
           {/* Répartition par zone - pour DPS */}
           {user?.role === 'DPS' && 'byZone' in stats && (
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Répartition par zone de santé</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">Répartition par zone de santé</h2>
               <div className="space-y-2">
                 {Object.entries((stats as ProvinceStats).byZone || {})
                   .sort(([, a], [, b]) => (b as number) - (a as number))
@@ -323,8 +374,8 @@ export default function StatsPage() {
                       key={zone}
                       className="flex items-center justify-between text-sm"
                     >
-                      <span className="text-gray-600">{zone}</span>
-                      <span className="font-medium text-gray-900">{count as number}</span>
+                      <span className="text-gray-800 font-medium">{zone}</span>
+                      <span className="font-semibold text-gray-900">{count as number}</span>
                     </div>
                   ))}
               </div>
@@ -334,7 +385,7 @@ export default function StatsPage() {
           {/* Répartition par aire - pour MCZ */}
           {user?.role === 'MCZ' && 'byAire' in stats && (
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Répartition par aire de santé</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">Répartition par aire de santé</h2>
               <div className="space-y-2">
                 {Object.entries((stats as ZoneStats).byAire || {})
                   .sort(([, a], [, b]) => (b as number) - (a as number))
@@ -344,8 +395,8 @@ export default function StatsPage() {
                       key={aire}
                       className="flex items-center justify-between text-sm"
                     >
-                      <span className="text-gray-600">{aire}</span>
-                      <span className="font-medium text-gray-900">{count as number}</span>
+                      <span className="text-gray-800 font-medium">{aire}</span>
+                      <span className="font-semibold text-gray-900">{count as number}</span>
                     </div>
                   ))}
               </div>
@@ -353,7 +404,7 @@ export default function StatsPage() {
           )}
 
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Répartition par catégorie</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Répartition par catégorie</h2>
             <div className="space-y-2">
               {Object.entries(stats.byCategory || {})
                 .sort(([, a], [, b]) => (b as number) - (a as number))
@@ -362,8 +413,8 @@ export default function StatsPage() {
                     key={category}
                     className="flex items-center justify-between text-sm"
                   >
-                    <span className="text-gray-600">{category}</span>
-                    <span className="font-medium text-gray-900">{count as number}</span>
+                    <span className="text-gray-800 font-medium">{category}</span>
+                    <span className="font-semibold text-gray-900">{count as number}</span>
                   </div>
                 ))}
             </div>
@@ -376,6 +427,51 @@ export default function StatsPage() {
         <div className="mt-8">
           <DataTable
             data={(() => {
+              // Fonction helper pour déterminer si un prestataire a été validé par IT
+              const isValidatedByIT = (p: Prestataire): boolean => {
+                const rawData = p.raw_data || {};
+                
+                // Vérifier validation_status
+                let validationStatus = (p as any).validation_status ||
+                                      rawData.validation_status ||
+                                      (p as any).validationStatus ||
+                                      rawData.validationStatus;
+                
+                if (validationStatus) {
+                  const statusUpper = String(validationStatus).toUpperCase().trim();
+                  if (statusUpper === 'VALIDE_PAR_IT' || statusUpper === 'VALIDATED') {
+                    return true;
+                  }
+                }
+                
+                // Vérifier si une date de validation existe (indique validation par IT)
+                const validationDate = (p as any).validation_date ||
+                                      (p as any).validationDate ||
+                                      (p as any).validated_at ||
+                                      rawData.validation_date ||
+                                      rawData.validationDate ||
+                                      rawData.validated_at;
+                
+                if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                  return true;
+                }
+                
+                // Si le statut est APPROUVE_PAR_MCZ, cela signifie qu'il a d'abord été validé par IT
+                const status = p.status || rawData.status;
+                const statusStr = String(status || '').trim().toUpperCase();
+                if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                  return true;
+                }
+                
+                // Vérifier aussi validationStatus depuis le champ status si c'est VALIDE_PAR_IT
+                const statusFromStatus = (p.validationStatus || '').toUpperCase();
+                if (statusFromStatus === 'VALIDE_PAR_IT' || statusFromStatus === 'VALIDATED') {
+                  return true;
+                }
+                
+                return false;
+              };
+
               // Calculer les statistiques par aire depuis les prestataires
               const aireStats: Record<string, {
                 total: number;
@@ -397,9 +493,8 @@ export default function StatsPage() {
 
                 aireStats[aireId].total++;
 
-                // Compter validés par IT
-                const validationStatus = (p.validationStatus || p.status || '').toUpperCase();
-                if (validationStatus === 'VALIDE_PAR_IT' || validationStatus === 'VALIDATED') {
+                // Compter validés par IT (en utilisant la fonction helper)
+                if (isValidatedByIT(p)) {
                   aireStats[aireId].validesIt++;
                 }
 

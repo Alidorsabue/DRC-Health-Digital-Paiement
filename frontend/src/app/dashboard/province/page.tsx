@@ -544,7 +544,7 @@ export default function ProvincePage() {
         <h1 className="text-3xl font-bold text-gray-900">
           {t('province.title')}
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-gray-800">
           {t('province.province')}: {user.provinceId || t('mcz.notDefined')} {t('province.readOnly')}
         </p>
       </div>

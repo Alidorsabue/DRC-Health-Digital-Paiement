@@ -539,17 +539,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _usernameController,
                     decoration: const InputDecoration(
-                      labelText: 'Nom d\'utilisateur',
+                      labelText: 'Identifiant',
+                      hintText: 'Nom d\'utilisateur, téléphone ou email',
                       prefixIcon: Icon(Icons.person),
                       border: OutlineInputBorder(),
+                      helperText: 'Vous pouvez utiliser votre nom d\'utilisateur, votre numéro de téléphone ou votre adresse email',
                     ),
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre nom d\'utilisateur';
+                        return 'Veuillez entrer votre identifiant (nom d\'utilisateur, téléphone ou email)';
                       }
                       return null;
                     },
-                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(

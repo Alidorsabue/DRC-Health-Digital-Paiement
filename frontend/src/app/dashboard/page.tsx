@@ -1012,23 +1012,34 @@ export default function DashboardPage() {
                 {t('dashboard.statusDistribution')}
               </h3>
               <div className="space-y-2">
-                {Object.entries(stats.byStatus).map(([status, count]) => {
-                  let statusLabel = status;
-                  if (status === 'ENREGISTRE') statusLabel = t('status.registered');
-                  else if (status === 'VALIDE_PAR_IT') statusLabel = t('status.validatedByIT');
-                  else if (status === 'APPROUVE_PAR_MCZ') statusLabel = t('status.approvedByMCZ');
-                  else if (status === 'REJETE_PAR_MCZ') statusLabel = t('status.rejectedByMCZ');
-                  else if (status === 'EN_ATTENTE_PAR_MCZ') statusLabel = t('status.pendingMCZ');
+                {(() => {
+                  // Combiner les statuts d'approbation et de paiement
+                  const allStatuses: Record<string, number> = { ...(stats.byStatus || {}) };
                   
-                  return (
-                    <div key={status} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{statusLabel}</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {count}
-                      </span>
-                    </div>
-                  );
-                })}
+                  // Ajouter les statuts de paiement si disponibles dans les stats
+                  if (stats.paid !== undefined) {
+                    allStatuses['PAYÉ'] = stats.paid || 0;
+                  }
+                  
+                  return Object.entries(allStatuses).map(([status, count]) => {
+                    let statusLabel = status;
+                    if (status === 'ENREGISTRE') statusLabel = t('status.registered');
+                    else if (status === 'VALIDE_PAR_IT') statusLabel = t('status.validatedByIT');
+                    else if (status === 'APPROUVE_PAR_MCZ') statusLabel = t('status.approvedByMCZ');
+                    else if (status === 'REJETE_PAR_MCZ') statusLabel = t('status.rejectedByMCZ');
+                    else if (status === 'EN_ATTENTE_PAR_MCZ') statusLabel = t('status.pendingMCZ');
+                    else if (status === 'PAYÉ') statusLabel = t('status.paid');
+                    
+                    return (
+                      <div key={status} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-800">{statusLabel}</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>

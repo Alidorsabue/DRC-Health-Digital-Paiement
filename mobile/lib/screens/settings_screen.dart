@@ -11,6 +11,17 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Charger les données utilisateur au démarrage de l'écran
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.user == null) {
+        authProvider.loadUser();
+      }
+    });
+  }
 
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
@@ -45,16 +56,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
 
-  String _getInitials(String? fullName) {
-    if (fullName == null || fullName.isEmpty) return 'IT';
-    final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
-    if (parts.length >= 2) {
-      // Prendre la première lettre du prénom (premier mot) et la première lettre du nom (deuxième mot)
-      // Exemple: "Héritier WATA" -> "HW"
-      return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
-    } else if (parts.length == 1) {
-      return parts[0][0].toUpperCase();
+  String _getInitials(String? fullName, String? username) {
+    // Utiliser fullName si disponible
+    if (fullName != null && fullName.isNotEmpty) {
+      final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+      if (parts.length >= 2) {
+        // Prendre la première lettre du prénom (premier mot) et la première lettre du nom (deuxième mot)
+        // Exemple: "Héritier WATA" -> "HW"
+        return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
+      } else if (parts.length == 1) {
+        return parts[0][0].toUpperCase();
+      }
     }
+    
+    // Utiliser username comme fallback si fullName n'est pas disponible
+    if (username != null && username.isNotEmpty) {
+      return username[0].toUpperCase();
+    }
+    
+    // Fallback par défaut
     return 'IT';
   }
 
@@ -82,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         radius: 50,
                         backgroundColor: Colors.blue.shade700,
                         child: Text(
-                          _getInitials(user?.fullName),
+                          _getInitials(user?.fullName, user?.username),
                           style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
@@ -91,10 +111,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Nom complet (Prénom + Nom)
-                      if (user?.fullName != null && user!.fullName!.isNotEmpty) ...[
+                      // Nom complet (Prénom + Nom) ou nom d'utilisateur
+                      if (user != null) ...[
                         Text(
-                          user!.fullName!,
+                          (user!.fullName != null && user!.fullName!.isNotEmpty)
+                              ? user!.fullName!
+                              : user!.username,
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
