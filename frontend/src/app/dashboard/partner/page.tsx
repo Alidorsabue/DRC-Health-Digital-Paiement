@@ -49,6 +49,9 @@ export default function PartnerPage() {
     { role: '', currency: 'USD', rate: 0 },
   ]);
   const tableRef = useRef<HTMLDivElement>(null);
+  
+  // État pour stocker les données filtrées du DataTable
+  const [filteredData, setFilteredData] = useState<PrestataireForPartner[]>([]);
 
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
@@ -263,6 +266,8 @@ export default function PartnerPage() {
       }
 
       setPrestataires(data);
+      // Initialiser filteredData avec les données chargées si vide
+      setFilteredData((prev) => prev.length === 0 ? data : prev);
       
       // Extraire les catégories uniques pour le filtre
       const categories = new Set<string>();
@@ -489,8 +494,9 @@ export default function PartnerPage() {
       label: col.label,
     }));
 
-    // Préparer les données pour l'export (sans le rendu personnalisé)
-    const exportDataRows: ExportRow[] = prestataires.map((row) => {
+    // Utiliser les données filtrées (filteredData) si disponibles, sinon utiliser toutes les données (prestataires)
+    const dataToExport = filteredData.length > 0 ? filteredData : prestataires;
+    const exportDataRows: ExportRow[] = dataToExport.map((row: PrestataireForPartner) => {
       const exportRow: ExportRow = {};
       columns.forEach((col) => {
         // Extraire la valeur textuelle si c'est un rendu personnalisé
@@ -952,7 +958,7 @@ export default function PartnerPage() {
         
         console.log('Colonnes détectées (Excel):', {
           prestataireId: headers[prestataireIdIndex],
-          status: headers[statusIndex],
+          status: statusIndex >= 0 ? headers[statusIndex] : 'non trouvée (sera déterminé depuis le montant)',
           paymentDate: paymentDateIndex >= 0 ? headers[paymentDateIndex] : 'non trouvée',
           transactionId: transactionIdIndex >= 0 ? headers[transactionIdIndex] : 'non trouvée',
           paymentReference: paymentReferenceIndex >= 0 ? headers[paymentReferenceIndex] : 'non trouvée',
@@ -964,31 +970,66 @@ export default function PartnerPage() {
           if (!row || row.length === 0) continue;
 
           const prestataireId = String(row[prestataireIdIndex] || '').trim();
-          const statusRaw = String(row[statusIndex] || '').trim();
+          if (!prestataireId) continue;
 
-          if (!prestataireId || !statusRaw) continue;
+          // Extraire le montant payé d'abord pour déterminer le statut si nécessaire
+          const extractedAmount = paymentAmountIndex >= 0 && row[paymentAmountIndex] ? (() => {
+            const amountValue = row[paymentAmountIndex];
+            
+            // Gérer les valeurs vides ou "N/A"
+            if (amountValue === null || amountValue === undefined || amountValue === '') {
+              return null;
+            }
+            
+            // Gérer les chaînes "N/A", "na", "vide", etc.
+            const stringValue = String(amountValue).trim().toUpperCase();
+            if (stringValue === 'N/A' || stringValue === 'NA' || stringValue === 'VIDE' || stringValue === '') {
+              return null;
+            }
+            
+            if (typeof amountValue === 'number') {
+              return amountValue > 0 ? amountValue : null;
+            }
+            
+            // Nettoyer la chaîne : enlever les espaces, $, FC, €, etc.
+            const cleaned = String(amountValue).replace(/[$€FC\s,]/g, '').trim();
+            const parsed = parseFloat(cleaned);
+            return (!isNaN(parsed) && parsed > 0) ? parsed : null;
+          })() : null;
 
-          // Normaliser le statut (accepter les valeurs en français et anglais, avec ou sans accents)
-          const statusUpper = statusRaw.toUpperCase();
+          // Déterminer le statut : d'abord depuis la colonne, sinon depuis le montant
           let normalizedStatus: 'PENDING' | 'SENT' | 'PAID' | 'FAILED' = 'PENDING';
           
-          // Vérifier les statuts en français
-          if (statusUpper === 'PAYE' || statusUpper === 'PAYÉ' || statusUpper === 'PAID' || 
-              statusRaw.toLowerCase().includes('payé') || statusRaw.toLowerCase().includes('paye')) {
-            normalizedStatus = 'PAID';
-          } else if (statusUpper === 'ENVOYE' || statusUpper === 'ENVOYÉ' || statusUpper === 'SENT' ||
-                     statusRaw.toLowerCase().includes('envoyé') || statusRaw.toLowerCase().includes('envoye')) {
-            normalizedStatus = 'SENT';
-          } else if (statusUpper === 'ECHEC' || statusUpper === 'ÉCHEC' || statusUpper === 'FAILED' ||
-                     statusRaw.toLowerCase().includes('échec') || statusRaw.toLowerCase().includes('echec')) {
-            normalizedStatus = 'FAILED';
-          } else if (statusUpper === 'EN ATTENTE' || statusUpper === 'PENDING' ||
-                     statusRaw.toLowerCase().includes('en attente') || statusRaw.toLowerCase().includes('pending')) {
-            normalizedStatus = 'PENDING';
+          const statusRaw = statusIndex >= 0 ? String(row[statusIndex] || '').trim() : '';
+          
+          if (statusRaw) {
+            // Statut spécifié dans le fichier - normaliser le statut
+            const statusUpper = statusRaw.toUpperCase();
+            
+            // Vérifier les statuts en français
+            if (statusUpper === 'PAYE' || statusUpper === 'PAYÉ' || statusUpper === 'PAID' || 
+                statusRaw.toLowerCase().includes('payé') || statusRaw.toLowerCase().includes('paye')) {
+              normalizedStatus = 'PAID';
+            } else if (statusUpper === 'ENVOYE' || statusUpper === 'ENVOYÉ' || statusUpper === 'SENT' ||
+                       statusRaw.toLowerCase().includes('envoyé') || statusRaw.toLowerCase().includes('envoye')) {
+              normalizedStatus = 'SENT';
+            } else if (statusUpper === 'ECHEC' || statusUpper === 'ÉCHEC' || statusUpper === 'FAILED' ||
+                       statusRaw.toLowerCase().includes('échec') || statusRaw.toLowerCase().includes('echec')) {
+              normalizedStatus = 'FAILED';
+            } else if (statusUpper === 'EN ATTENTE' || statusUpper === 'PENDING' ||
+                       statusRaw.toLowerCase().includes('en attente') || statusRaw.toLowerCase().includes('pending')) {
+              normalizedStatus = 'PENDING';
+            } else {
+              // Si le statut n'est pas reconnu, déterminer depuis le montant
+              normalizedStatus = (extractedAmount !== null && extractedAmount !== undefined && extractedAmount > 0) ? 'PAID' : 'PENDING';
+            }
           } else {
-            // Si le statut n'est pas reconnu, on le saute avec un warning
-            console.warn(`Statut non reconnu pour ${prestataireId}: ${statusRaw}`);
-            continue;
+            // Statut non spécifié - déterminer depuis le montant
+            if (extractedAmount !== null && extractedAmount !== undefined && extractedAmount > 0) {
+              normalizedStatus = 'PAID';
+            } else {
+              normalizedStatus = 'PENDING'; // Non payé
+            }
           }
 
           const paymentDateRaw = paymentDateIndex >= 0 && row[paymentDateIndex] !== undefined && row[paymentDateIndex] !== null ? row[paymentDateIndex] : undefined;
@@ -1000,14 +1041,7 @@ export default function PartnerPage() {
             paymentDate: paymentDateISO,
             transactionId: transactionIdIndex >= 0 && row[transactionIdIndex] ? String(row[transactionIdIndex]).trim() : undefined,
             paymentReference: paymentReferenceIndex >= 0 && row[paymentReferenceIndex] ? String(row[paymentReferenceIndex]).trim() : undefined,
-            paymentAmount: paymentAmountIndex >= 0 && row[paymentAmountIndex] ? (() => {
-              const amountValue = row[paymentAmountIndex];
-              if (typeof amountValue === 'number') return amountValue;
-              // Nettoyer la chaîne : enlever les espaces, $, FC, €, etc.
-              const cleaned = String(amountValue).replace(/[$€FC\s,]/g, '').trim();
-              const parsed = parseFloat(cleaned);
-              return isNaN(parsed) ? undefined : parsed;
-            })() : undefined,
+            paymentAmount: extractedAmount !== null && extractedAmount !== undefined ? extractedAmount : undefined,
           });
         }
       } else {
@@ -1095,16 +1129,11 @@ export default function PartnerPage() {
           return;
         }
         
-        if (statusIndex === -1) {
-          const availableHeaders = headers.join(', ');
-          showAlert('Erreur', `Le fichier doit contenir une colonne "Statut Paiement" ou "status". Colonnes trouvées: ${availableHeaders}`, 'error');
-          setImporting(false);
-          return;
-        }
+        // La colonne statut est maintenant optionnelle - on déterminera le statut à partir du montant si non spécifié
         
         console.log('Colonnes détectées (CSV):', {
           prestataireId: headers[prestataireIdIndex],
-          status: headers[statusIndex],
+          status: statusIndex >= 0 ? headers[statusIndex] : 'non trouvée (sera déterminé depuis le montant)',
           paymentDate: paymentDateIndex >= 0 ? headers[paymentDateIndex] : 'non trouvée',
           transactionId: transactionIdIndex >= 0 ? headers[transactionIdIndex] : 'non trouvée',
           paymentReference: paymentReferenceIndex >= 0 ? headers[paymentReferenceIndex] : 'non trouvée',
@@ -1116,31 +1145,62 @@ export default function PartnerPage() {
           if (values.length < 2) continue;
 
           const prestataireId = values[prestataireIdIndex]?.trim() || '';
-          const statusRaw = values[statusIndex]?.trim() || '';
+          if (!prestataireId) continue;
 
-          if (!prestataireId || !statusRaw) continue;
+          // Extraire le montant payé d'abord pour déterminer le statut si nécessaire
+          const extractedAmount = paymentAmountIndex >= 0 && values[paymentAmountIndex] ? (() => {
+            const amountValue = values[paymentAmountIndex];
+            
+            // Gérer les valeurs vides ou "N/A"
+            if (amountValue === null || amountValue === undefined || amountValue === '' || !amountValue) {
+              return null;
+            }
+            
+            // Gérer les chaînes "N/A", "na", "vide", etc.
+            const stringValue = String(amountValue).trim().toUpperCase();
+            if (stringValue === 'N/A' || stringValue === 'NA' || stringValue === 'VIDE' || stringValue === '') {
+              return null;
+            }
+            
+            // Nettoyer la chaîne : enlever les espaces, $, FC, €, etc.
+            const cleaned = String(amountValue).replace(/[$€FC\s,]/g, '').trim();
+            const parsed = parseFloat(cleaned);
+            return (!isNaN(parsed) && parsed > 0) ? parsed : null;
+          })() : null;
 
-          // Normaliser le statut (accepter les valeurs en français et anglais, avec ou sans accents)
-          const statusUpper = statusRaw.toUpperCase();
+          // Déterminer le statut : d'abord depuis la colonne, sinon depuis le montant
           let normalizedStatus: 'PENDING' | 'SENT' | 'PAID' | 'FAILED' = 'PENDING';
           
-          // Vérifier les statuts en français
-          if (statusUpper === 'PAYE' || statusUpper === 'PAYÉ' || statusUpper === 'PAID' || 
-              statusRaw.toLowerCase().includes('payé') || statusRaw.toLowerCase().includes('paye')) {
-            normalizedStatus = 'PAID';
-          } else if (statusUpper === 'ENVOYE' || statusUpper === 'ENVOYÉ' || statusUpper === 'SENT' ||
-                     statusRaw.toLowerCase().includes('envoyé') || statusRaw.toLowerCase().includes('envoye')) {
-            normalizedStatus = 'SENT';
-          } else if (statusUpper === 'ECHEC' || statusUpper === 'ÉCHEC' || statusUpper === 'FAILED' ||
-                     statusRaw.toLowerCase().includes('échec') || statusRaw.toLowerCase().includes('echec')) {
-            normalizedStatus = 'FAILED';
-          } else if (statusUpper === 'EN ATTENTE' || statusUpper === 'PENDING' ||
-                     statusRaw.toLowerCase().includes('en attente') || statusRaw.toLowerCase().includes('pending')) {
-            normalizedStatus = 'PENDING';
+          const statusRaw = statusIndex >= 0 ? (values[statusIndex]?.trim() || '') : '';
+          
+          if (statusRaw) {
+            // Statut spécifié dans le fichier - normaliser le statut
+            const statusUpper = statusRaw.toUpperCase();
+            
+            // Vérifier les statuts en français
+            if (statusUpper === 'PAYE' || statusUpper === 'PAYÉ' || statusUpper === 'PAID' || 
+                statusRaw.toLowerCase().includes('payé') || statusRaw.toLowerCase().includes('paye')) {
+              normalizedStatus = 'PAID';
+            } else if (statusUpper === 'ENVOYE' || statusUpper === 'ENVOYÉ' || statusUpper === 'SENT' ||
+                       statusRaw.toLowerCase().includes('envoyé') || statusRaw.toLowerCase().includes('envoye')) {
+              normalizedStatus = 'SENT';
+            } else if (statusUpper === 'ECHEC' || statusUpper === 'ÉCHEC' || statusUpper === 'FAILED' ||
+                       statusRaw.toLowerCase().includes('échec') || statusRaw.toLowerCase().includes('echec')) {
+              normalizedStatus = 'FAILED';
+            } else if (statusUpper === 'EN ATTENTE' || statusUpper === 'PENDING' ||
+                       statusRaw.toLowerCase().includes('en attente') || statusRaw.toLowerCase().includes('pending')) {
+              normalizedStatus = 'PENDING';
+            } else {
+              // Si le statut n'est pas reconnu, déterminer depuis le montant
+              normalizedStatus = (extractedAmount !== null && extractedAmount !== undefined && extractedAmount > 0) ? 'PAID' : 'PENDING';
+            }
           } else {
-            // Si le statut n'est pas reconnu, on le saute avec un warning
-            console.warn(`Statut non reconnu pour ${prestataireId}: ${statusRaw}`);
-            continue;
+            // Statut non spécifié - déterminer depuis le montant
+            if (extractedAmount !== null && extractedAmount !== undefined && extractedAmount > 0) {
+              normalizedStatus = 'PAID';
+            } else {
+              normalizedStatus = 'PENDING'; // Non payé
+            }
           }
 
           const paymentDateRaw = paymentDateIndex >= 0 && values[paymentDateIndex] ? values[paymentDateIndex].trim() : undefined;
@@ -1152,13 +1212,7 @@ export default function PartnerPage() {
             paymentDate: paymentDateISO,
             transactionId: transactionIdIndex >= 0 && values[transactionIdIndex] ? values[transactionIdIndex].trim() : undefined,
             paymentReference: paymentReferenceIndex >= 0 && values[paymentReferenceIndex] ? values[paymentReferenceIndex].trim() : undefined,
-            paymentAmount: paymentAmountIndex >= 0 && values[paymentAmountIndex] ? (() => {
-              const amountValue = values[paymentAmountIndex];
-              // Nettoyer la chaîne : enlever les espaces, $, FC, €, etc.
-              const cleaned = String(amountValue).replace(/[$€FC\s,]/g, '').trim();
-              const parsed = parseFloat(cleaned);
-              return isNaN(parsed) ? undefined : parsed;
-            })() : undefined,
+            paymentAmount: extractedAmount !== null && extractedAmount !== undefined ? extractedAmount : undefined,
           });
         }
       }
@@ -1679,7 +1733,7 @@ export default function PartnerPage() {
           {/* En-tête avec titre et boutons */}
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-medium text-gray-900">
-              Tableau ({prestataires.length})
+              Tableau ({filteredData.length > 0 ? filteredData.length : prestataires.length})
             </h2>
             <div className="flex items-center gap-3">
               <button
@@ -1756,6 +1810,7 @@ export default function PartnerPage() {
               columns={columns}
               exportFilename="prestataires-approuves"
               hideHeader={true}
+              onFilteredDataChange={setFilteredData}
             />
           </div>
         </div>
@@ -1767,7 +1822,10 @@ export default function PartnerPage() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h2 className="text-xl font-bold mb-4" style={{ color: '#111827' }}>Importer un rapport de paiement</h2>
             <p className="text-sm mb-4" style={{ color: '#374151' }}>
-              Format CSV ou Excel attendu: prestataireId,status,paymentDate,transactionId,paymentReference,paymentAmount
+              Format CSV ou Excel attendu: prestataireId,status (optionnel),paymentDate,transactionId,paymentReference,paymentAmount<br/>
+              <span className="text-sm text-gray-600 mt-2 block">
+                Note: Si le statut n'est pas spécifié, il sera déterminé automatiquement : PAID si montant &gt; 0, PENDING si montant = 0/vide/N/A
+              </span>
             </p>
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>

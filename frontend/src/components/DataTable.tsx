@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTableSortAndFilter } from '../hooks/useTableSortAndFilter';
 import { exportData, ExportColumn, ExportRow } from '../utils/export';
 import { useTranslation } from '../hooks/useTranslation';
@@ -29,6 +29,8 @@ interface DataTableProps {
   actions?: (row: any) => React.ReactNode;
   // Support pour désactiver certaines lignes
   isRowDisabled?: (row: any) => boolean;
+  // Callback pour exposer les données filtrées au parent
+  onFilteredDataChange?: (filteredData: any[]) => void;
   // Masquer le header par défaut si un header personnalisé est fourni
   hideHeader?: boolean;
 }
@@ -45,6 +47,7 @@ export default function DataTable({
   getRowId = (row) => row.id || String(row),
   actions,
   isRowDisabled = () => false,
+  onFilteredDataChange,
   hideHeader = false,
 }: DataTableProps) {
   const { processedData, sortState, filters, handleSort, handleFilter } = useTableSortAndFilter(data);
@@ -53,6 +56,13 @@ export default function DataTable({
   const [tempSelectFilters, setTempSelectFilters] = useState<Record<string, string[]>>({});
   const tableRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+
+  // Exposer les données filtrées au parent si un callback est fourni
+  useEffect(() => {
+    if (onFilteredDataChange) {
+      onFilteredDataChange(processedData);
+    }
+  }, [processedData, onFilteredDataChange]);
 
   // Extraire les valeurs uniques pour chaque colonne catégorielle
   const getUniqueValues = (columnKey: string): string[] => {
