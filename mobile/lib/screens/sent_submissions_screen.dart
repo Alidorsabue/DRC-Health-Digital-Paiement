@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/prestataire.dart';
 import '../models/campaign.dart';
+import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 
 class SentSubmissionsScreen extends StatefulWidget {
   const SentSubmissionsScreen({super.key});
@@ -108,6 +110,20 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
         data = await _apiService.getPrestatairesPendingValidation();
       }
       
+      // Récupérer l'utilisateur connecté pour filtrer par aireId
+      final authService = AuthService(_apiService);
+      User? currentUser;
+      String? userAireId;
+      String? userId;
+      try {
+        currentUser = await authService.getCurrentUser();
+        userAireId = currentUser?.aireId;
+        userId = currentUser?.id;
+        print('DEBUG SENT: Utilisateur connecté - role=${currentUser?.role}, aireId=$userAireId, userId=$userId');
+      } catch (e) {
+        print('DEBUG SENT: Erreur lors de la récupération de l\'utilisateur: $e');
+      }
+
       // Créer les prestataires et récupérer les informations de validation depuis le JSON original
       final prestataires = <Prestataire>[];
       final prestataireIdsSet = <String>{}; // Pour éviter les doublons
@@ -118,6 +134,38 @@ class _SentSubmissionsScreenState extends State<SentSubmissionsScreen> {
         
         // Utiliser prestataireId si disponible (ID réel du prestataire), sinon utiliser id
         final prestataireRealId = prestataire.prestataireId ?? prestataire.id;
+        
+        // Pour les utilisateurs IT, filtrer par aireId avant de traiter le prestataire
+        if (currentUser?.role == 'IT' && userAireId != null && userAireId.isNotEmpty) {
+          // Vérifier l'aireId du prestataire
+          final prestataireAireId = prestataire.aireId ?? 
+                                   json['aireId']?.toString() ?? 
+                                   json['aire_id']?.toString() ?? 
+                                   json['aire_de_sante_id']?.toString();
+          
+          // Vérifier aussi enregistrePar pour s'assurer que le prestataire a été enregistré par cet IT
+          final enregistrePar = json['enregistrePar']?.toString() ?? 
+                               json['enregistre_par']?.toString() ?? 
+                               json['created_by']?.toString();
+          
+          // Normaliser les IDs pour la comparaison (enlever espaces, convertir en minuscules)
+          final normalizeId = (String? id) => id?.trim().toLowerCase() ?? '';
+          final userAireIdNormalized = normalizeId(userAireId);
+          final prestataireAireIdNormalized = normalizeId(prestataireAireId);
+          final enregistreParNormalized = normalizeId(enregistrePar);
+          final userIdNormalized = normalizeId(userId);
+          
+          // Inclure seulement si l'aireId correspond OU si enregistré par cet IT
+          final matchesAire = prestataireAireIdNormalized == userAireIdNormalized;
+          final matchesEnregistrePar = enregistreParNormalized == userIdNormalized;
+          
+          if (!matchesAire && !matchesEnregistrePar) {
+            print('DEBUG SENT: Prestataire ${prestataireRealId} ignoré - aireId=$prestataireAireId (attendu: $userAireId), enregistrePar=$enregistrePar (attendu: $userId)');
+            continue;
+          }
+          
+          print('DEBUG SENT: Prestataire ${prestataireRealId} inclus - aireId=$prestataireAireId, enregistrePar=$enregistrePar');
+        }
         
         // Éviter les doublons : ne garder qu'un seul enregistrement par prestataire
         // Prioriser l'enregistrement original (validation_sequence IS NULL) ou la validation la plus récente

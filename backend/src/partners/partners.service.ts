@@ -763,8 +763,8 @@ export class PartnersService {
           if (data && data.length > 0) {
             // Chercher d'abord les enregistrements avec statut APPROUVE_PAR_MCZ
             let prestataireRecord = data.find((r: any) => 
-              r.validation_sequence != null && r.status === 'APPROUVE_PAR_MCZ'
-            ) || data.find((r: any) => r.validation_sequence == null && r.status === 'APPROUVE_PAR_MCZ');
+              r.validation_sequence != null && (r.approval_status === 'APPROUVE_PAR_MCZ' || r.validation_status === 'APPROUVE_PAR_MCZ')
+            ) || data.find((r: any) => r.validation_sequence == null && (r.approval_status === 'APPROUVE_PAR_MCZ' || r.validation_status === 'APPROUVE_PAR_MCZ'));
             
             // Si pas trouvé, prendre le premier enregistrement trouvé
             if (!prestataireRecord) {

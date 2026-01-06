@@ -100,6 +100,11 @@ class _KYCScreenState extends State<KYCScreen> {
 
       // Parser les données et filtrer les objets invalides
       final parsedPrestataires = <Prestataire>[];
+      final userAireId = currentUser?.aireId;
+      final userId = currentUser?.id;
+      
+      print('DEBUG KYC: Filtrage par aireId=$userAireId, userId=$userId (role=${currentUser?.role})');
+      
       for (final json in data) {
         try {
           final prestataire = Prestataire.fromJson(json);
@@ -107,6 +112,39 @@ class _KYCScreenState extends State<KYCScreen> {
           if (prestataire.id.isNotEmpty && 
               prestataire.nom.isNotEmpty && 
               prestataire.prenom.isNotEmpty) {
+            
+            // Pour les utilisateurs IT, filtrer par aireId
+            if (currentUser?.role == 'IT' && userAireId != null && userAireId.isNotEmpty) {
+              // Vérifier l'aireId du prestataire
+              final prestataireAireId = prestataire.aireId ?? 
+                                       json['aireId']?.toString() ?? 
+                                       json['aire_id']?.toString() ?? 
+                                       json['aire_de_sante_id']?.toString();
+              
+              // Vérifier aussi enregistrePar pour s'assurer que le prestataire a été enregistré par cet IT
+              final enregistrePar = json['enregistrePar']?.toString() ?? 
+                                   json['enregistre_par']?.toString() ?? 
+                                   json['created_by']?.toString();
+              
+              // Normaliser les IDs pour la comparaison (enlever espaces, convertir en minuscules)
+              final normalizeId = (String? id) => id?.trim().toLowerCase() ?? '';
+              final userAireIdNormalized = normalizeId(userAireId);
+              final prestataireAireIdNormalized = normalizeId(prestataireAireId);
+              final enregistreParNormalized = normalizeId(enregistrePar);
+              final userIdNormalized = normalizeId(userId);
+              
+              // Inclure seulement si l'aireId correspond OU si enregistré par cet IT
+              final matchesAire = prestataireAireIdNormalized == userAireIdNormalized;
+              final matchesEnregistrePar = enregistreParNormalized == userIdNormalized;
+              
+              if (!matchesAire && !matchesEnregistrePar) {
+                print('DEBUG KYC: Prestataire ${prestataire.id} ignoré - aireId=$prestataireAireId (attendu: $userAireId), enregistrePar=$enregistrePar (attendu: $userId)');
+                continue;
+              }
+              
+              print('DEBUG KYC: Prestataire ${prestataire.id} inclus - aireId=$prestataireAireId, enregistrePar=$enregistrePar');
+            }
+            
             parsedPrestataires.add(prestataire);
           } else {
             print('DEBUG KYC: Prestataire ignoré - id=${prestataire.id}, nom=${prestataire.nom}, prenom=${prestataire.prenom}');

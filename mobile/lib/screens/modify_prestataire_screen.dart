@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../models/prestataire.dart';
 import '../models/campaign.dart';
+import '../models/user.dart';
 import 'edit_prestataire_screen.dart';
 
 class ModifyPrestataireScreen extends StatefulWidget {
@@ -85,6 +87,20 @@ class _ModifyPrestataireScreenState extends State<ModifyPrestataireScreen> {
         print('DEBUG MODIFY: ATTENTION - Aucune donnée retournée par l\'API');
       }
 
+      // Récupérer l'utilisateur connecté pour filtrer par aireId
+      final authService = AuthService(_apiService);
+      User? currentUser;
+      String? userAireId;
+      String? userId;
+      try {
+        currentUser = await authService.getCurrentUser();
+        userAireId = currentUser?.aireId;
+        userId = currentUser?.id;
+        print('DEBUG MODIFY: Utilisateur connecté - role=${currentUser?.role}, aireId=$userAireId, userId=$userId');
+      } catch (e) {
+        print('DEBUG MODIFY: Erreur lors de la récupération de l\'utilisateur: $e');
+      }
+
       // Parser les données et filtrer les objets invalides
       final parsedPrestataires = <Prestataire>[];
       for (final json in data) {
@@ -94,6 +110,39 @@ class _ModifyPrestataireScreenState extends State<ModifyPrestataireScreen> {
           if (prestataire.id.isNotEmpty && 
               prestataire.nom.isNotEmpty && 
               prestataire.prenom.isNotEmpty) {
+            
+            // Pour les utilisateurs IT, filtrer par aireId
+            if (currentUser?.role == 'IT' && userAireId != null && userAireId.isNotEmpty) {
+              // Vérifier l'aireId du prestataire
+              final prestataireAireId = prestataire.aireId ?? 
+                                       json['aireId']?.toString() ?? 
+                                       json['aire_id']?.toString() ?? 
+                                       json['aire_de_sante_id']?.toString();
+              
+              // Vérifier aussi enregistrePar pour s'assurer que le prestataire a été enregistré par cet IT
+              final enregistrePar = json['enregistrePar']?.toString() ?? 
+                                   json['enregistre_par']?.toString() ?? 
+                                   json['created_by']?.toString();
+              
+              // Normaliser les IDs pour la comparaison (enlever espaces, convertir en minuscules)
+              final normalizeId = (String? id) => id?.trim().toLowerCase() ?? '';
+              final userAireIdNormalized = normalizeId(userAireId);
+              final prestataireAireIdNormalized = normalizeId(prestataireAireId);
+              final enregistreParNormalized = normalizeId(enregistrePar);
+              final userIdNormalized = normalizeId(userId);
+              
+              // Inclure seulement si l'aireId correspond OU si enregistré par cet IT
+              final matchesAire = prestataireAireIdNormalized == userAireIdNormalized;
+              final matchesEnregistrePar = enregistreParNormalized == userIdNormalized;
+              
+              if (!matchesAire && !matchesEnregistrePar) {
+                print('DEBUG MODIFY: Prestataire ${prestataire.id} ignoré - aireId=$prestataireAireId (attendu: $userAireId), enregistrePar=$enregistrePar (attendu: $userId)');
+                continue;
+              }
+              
+              print('DEBUG MODIFY: Prestataire ${prestataire.id} inclus - aireId=$prestataireAireId, enregistrePar=$enregistrePar');
+            }
+            
             parsedPrestataires.add(prestataire);
           } else {
             print('DEBUG MODIFY: Prestataire ignoré - id=${prestataire.id}, nom=${prestataire.nom}, prenom=${prestataire.prenom}');

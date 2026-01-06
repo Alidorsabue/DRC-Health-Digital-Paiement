@@ -526,9 +526,8 @@ export class FormsService {
           id: record.id, // record.id est l'ID du prestataire au format ID-YYMM-HHmm-XXX
           prestataireId: record.prestataire_id || record.id,
           submissionId: record.submission_id || record.id,
-          status: record.status || 'ENREGISTRE', // Statut global pour compatibilité
-          validationStatus: record.validation_status || record.status || 'ENREGISTRE', // Statut de validation IT (camelCase)
-          validation_status: record.validation_status || record.status || 'ENREGISTRE', // Statut de validation IT (snake_case)
+          validationStatus: record.validation_status || 'ENREGISTRE', // Statut de validation IT (camelCase)
+          validation_status: record.validation_status || 'ENREGISTRE', // Statut de validation IT (snake_case)
           campaignId: record.campaign_id,
           presenceDays: record.presence_days,
           validationDate: record.validation_date, // camelCase pour faciliter l'accès depuis le mobile

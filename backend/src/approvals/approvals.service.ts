@@ -64,14 +64,14 @@ export class ApprovalsService {
 
     // Trouver la dernière validation (avec validation_sequence le plus élevé) ou l'enregistrement original
     const prestataireRecord = data.find((r: any) => 
-      r.validation_sequence != null && r.status === 'VALIDE_PAR_IT'
+      r.validation_sequence != null && r.validation_status === 'VALIDE_PAR_IT'
     ) || data.find((r: any) => r.validation_sequence == null);
 
     if (!prestataireRecord) {
       throw new NotFoundException(`Prestataire avec l'ID ${prestataireId} non trouvé dans la table du formulaire`);
     }
 
-    const currentStatus = prestataireRecord.status;
+    const currentStatus = prestataireRecord.validation_status || prestataireRecord.status;
     if (currentStatus !== 'VALIDE_PAR_IT') {
       throw new BadRequestException(
         'Le prestataire doit être validé par IT avant approbation',
@@ -194,7 +194,7 @@ export class ApprovalsService {
         // mais aussi ceux déjà approuvés/rejetés pour les statistiques
       } else if (status) {
         // Si un status est explicitement demandé, l'utiliser
-        filters.status = status;
+        filters.validation_status = status;
       }
 
       console.log(`[ApprovalsService.findByZoneOrAire] Récupération avec filtres:`, filters);

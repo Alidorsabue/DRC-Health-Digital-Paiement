@@ -59,14 +59,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _getInitials(String? fullName, String? username) {
     // Utiliser fullName si disponible
     if (fullName != null && fullName.isNotEmpty) {
-      final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
-      if (parts.length >= 2) {
-        // Prendre la première lettre du prénom (premier mot) et la première lettre du nom (deuxième mot)
-        // Exemple: "Héritier WATA" -> "HW"
-        return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
-      } else if (parts.length == 1) {
-        return parts[0][0].toUpperCase();
-      }
+    final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      // Prendre la première lettre du prénom (premier mot) et la première lettre du nom (deuxième mot)
+      // Exemple: "Héritier WATA" -> "HW"
+      return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
+    } else if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
     }
     
     // Utiliser username comme fallback si fullName n'est pas disponible

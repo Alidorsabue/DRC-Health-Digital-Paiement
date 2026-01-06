@@ -3,8 +3,10 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../models/prestataire.dart';
 import '../models/campaign.dart';
+import '../models/user.dart';
 
 class PaymentReportScreen extends StatefulWidget {
   const PaymentReportScreen({super.key});
@@ -105,6 +107,20 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
         print('DEBUG PAYMENT: ATTENTION - Aucune donnée retournée par l\'API');
       }
 
+      // Récupérer l'utilisateur connecté pour filtrer par aireId
+      final authService = AuthService(_apiService);
+      User? currentUser;
+      String? userAireId;
+      String? userId;
+      try {
+        currentUser = await authService.getCurrentUser();
+        userAireId = currentUser?.aireId;
+        userId = currentUser?.id;
+        print('DEBUG PAYMENT: Utilisateur connecté - role=${currentUser?.role}, aireId=$userAireId, userId=$userId');
+      } catch (e) {
+        print('DEBUG PAYMENT: Erreur lors de la récupération de l\'utilisateur: $e');
+      }
+
       // Parser les données et filtrer les objets invalides
       final parsedPrestataires = <Prestataire>[];
       final rawDataMap = <String, Map<String, dynamic>>{};
@@ -116,6 +132,39 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
           if (prestataire.id.isNotEmpty && 
               prestataire.nom.isNotEmpty && 
               prestataire.prenom.isNotEmpty) {
+            
+            // Pour les utilisateurs IT, filtrer par aireId
+            if (currentUser?.role == 'IT' && userAireId != null && userAireId.isNotEmpty) {
+              // Vérifier l'aireId du prestataire
+              final prestataireAireId = prestataire.aireId ?? 
+                                       json['aireId']?.toString() ?? 
+                                       json['aire_id']?.toString() ?? 
+                                       json['aire_de_sante_id']?.toString();
+              
+              // Vérifier aussi enregistrePar pour s'assurer que le prestataire a été enregistré par cet IT
+              final enregistrePar = json['enregistrePar']?.toString() ?? 
+                                   json['enregistre_par']?.toString() ?? 
+                                   json['created_by']?.toString();
+              
+              // Normaliser les IDs pour la comparaison (enlever espaces, convertir en minuscules)
+              final normalizeId = (String? id) => id?.trim().toLowerCase() ?? '';
+              final userAireIdNormalized = normalizeId(userAireId);
+              final prestataireAireIdNormalized = normalizeId(prestataireAireId);
+              final enregistreParNormalized = normalizeId(enregistrePar);
+              final userIdNormalized = normalizeId(userId);
+              
+              // Inclure seulement si l'aireId correspond OU si enregistré par cet IT
+              final matchesAire = prestataireAireIdNormalized == userAireIdNormalized;
+              final matchesEnregistrePar = enregistreParNormalized == userIdNormalized;
+              
+              if (!matchesAire && !matchesEnregistrePar) {
+                print('DEBUG PAYMENT: Prestataire ${prestataire.id} ignoré - aireId=$prestataireAireId (attendu: $userAireId), enregistrePar=$enregistrePar (attendu: $userId)');
+                continue;
+              }
+              
+              print('DEBUG PAYMENT: Prestataire ${prestataire.id} inclus - aireId=$prestataireAireId, enregistrePar=$enregistrePar');
+            }
+            
             parsedPrestataires.add(prestataire);
             // Stocker les données JSON brutes pour accéder au paymentAmount
             // Utiliser plusieurs clés pour être sûr de retrouver les données

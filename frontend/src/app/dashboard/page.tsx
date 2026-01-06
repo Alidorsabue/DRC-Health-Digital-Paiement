@@ -6,6 +6,7 @@ import { statsApi, NationalStats, ProvinceStats, ZoneStats, AireStats } from '..
 import { campaignsApi } from '../../lib/api/campaigns';
 import { formsApi } from '../../lib/api/forms';
 import { geographicApi } from '../../lib/api/geographic';
+import { prestatairesApi, Prestataire } from '../../lib/api/prestataires';
 import { Campaign, Form } from '../../types';
 import Link from 'next/link';
 import { getErrorMessage } from '../../utils/error-handler';
@@ -26,6 +27,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<NationalStats | ProvinceStats | ZoneStats | AireStats | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
+  const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     provinceId: '',
@@ -414,6 +416,21 @@ export default function DashboardPage() {
             statsData = await statsApi.getNational(statsFilters);
           }
 
+          // Charger les prestataires pour calculer correctement les validés par IT
+          let prestatairesData: Prestataire[] = [];
+          try {
+            const prestatairesFilters: any = {};
+            if (filters.campaignId) prestatairesFilters.campaignId = filters.campaignId;
+            if (filters.formId) prestatairesFilters.formId = filters.formId;
+            if (filters.provinceId) prestatairesFilters.provinceId = filters.provinceId;
+            if (filters.zoneId) prestatairesFilters.zoneId = filters.zoneId;
+            if (filters.aireId) prestatairesFilters.aireId = filters.aireId;
+            prestatairesData = await prestatairesApi.getAll(prestatairesFilters);
+            console.log('DEBUG DASHBOARD: Prestataires chargés:', prestatairesData.length);
+          } catch (error) {
+            console.warn('DEBUG DASHBOARD: Erreur lors du chargement des prestataires:', error);
+          }
+
           console.log('DEBUG DASHBOARD: Stats chargées:', statsData);
           console.log('DEBUG DASHBOARD: Total:', statsData?.total);
           console.log('DEBUG DASHBOARD: byStatus:', statsData?.byStatus);
@@ -422,21 +439,75 @@ export default function DashboardPage() {
           }
           
           if (isMounted) {
+            // Fonction helper pour déterminer si un prestataire a été validé par IT
+            const isValidatedByIT = (p: Prestataire): boolean => {
+              const rawData = p.raw_data || {};
+              
+              // Vérifier validation_status
+              let validationStatus = (p as any).validation_status ||
+                                    rawData.validation_status ||
+                                    (p as any).validationStatus ||
+                                    rawData.validationStatus;
+              
+              if (validationStatus) {
+                const statusUpper = String(validationStatus).toUpperCase().trim();
+                if (statusUpper === 'VALIDE_PAR_IT' || statusUpper === 'VALIDATED') {
+                  return true;
+                }
+              }
+              
+              // Vérifier si une date de validation existe (indique validation par IT)
+              const validationDate = (p as any).validation_date ||
+                                    (p as any).validationDate ||
+                                    (p as any).validated_at ||
+                                    rawData.validation_date ||
+                                    rawData.validationDate ||
+                                    rawData.validated_at;
+              
+              if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                return true;
+              }
+              
+              // Si le statut est APPROUVE_PAR_MCZ, cela signifie qu'il a d'abord été validé par IT
+              const status = p.status || rawData.status;
+              const statusStr = String(status || '').trim().toUpperCase();
+              if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                return true;
+              }
+              
+              // Vérifier aussi validationStatus depuis le champ status si c'est VALIDE_PAR_IT
+              const statusFromStatus = (p.validationStatus || '').toUpperCase();
+              if (statusFromStatus === 'VALIDE_PAR_IT' || statusFromStatus === 'VALIDATED') {
+                return true;
+              }
+              
+              return false;
+            };
+
+            // Calculer le nombre réel de prestataires validés par IT
+            const validatedByITCount = prestatairesData.filter(isValidatedByIT).length;
+            console.log('DEBUG DASHBOARD: Prestataires validés par IT calculés:', validatedByITCount, 'sur', prestatairesData.length);
+
             // S'assurer que statsData est toujours un objet valide
             if (!statsData) {
               console.warn('DEBUG DASHBOARD: statsData est null/undefined, utilisation d\'un objet vide');
               setStats({
                 total: 0,
-                byStatus: {},
+                byStatus: {
+                  VALIDE_PAR_IT: validatedByITCount,
+                },
                 byProvince: {},
                 byCategory: {},
                 paid: 0,
               } as NationalStats);
             } else {
-              // Normaliser les stats
+              // Normaliser les stats et corriger le nombre de validés par IT
               const normalizedStats: any = {
                 total: statsData.total || 0,
-                byStatus: statsData.byStatus || {},
+                byStatus: {
+                  ...(statsData.byStatus || {}),
+                  VALIDE_PAR_IT: validatedByITCount, // Utiliser le nombre calculé
+                },
                 byCategory: statsData.byCategory || {},
                 paid: statsData.paid || 0,
               };
@@ -449,8 +520,9 @@ export default function DashboardPage() {
               if ('byAire' in statsData) {
                 normalizedStats.byAire = statsData.byAire || {};
               }
-              console.log('DEBUG DASHBOARD: Stats normalisées:', normalizedStats);
+              console.log('DEBUG DASHBOARD: Stats normalisées avec VALIDE_PAR_IT corrigé:', normalizedStats);
               setStats(normalizedStats);
+              setPrestataires(prestatairesData);
             }
             setLoading(false);
           }
@@ -483,6 +555,20 @@ export default function DashboardPage() {
             statsData = await statsApi.getZone(user.zoneId, statsFilters) as ZoneStats;
           }
 
+          // Charger les prestataires pour calculer correctement les validés par IT
+          let prestatairesData: Prestataire[] = [];
+          try {
+            const prestatairesFilters: any = {
+              zoneId: user.zoneId,
+            };
+            if (filters.campaignId) prestatairesFilters.campaignId = filters.campaignId;
+            if (filters.formId) prestatairesFilters.formId = filters.formId;
+            prestatairesData = await prestatairesApi.getAll(prestatairesFilters);
+            console.log('DEBUG DASHBOARD MCZ: Prestataires chargés:', prestatairesData.length);
+          } catch (error) {
+            console.warn('DEBUG DASHBOARD MCZ: Erreur lors du chargement des prestataires:', error);
+          }
+
           console.log('DEBUG DASHBOARD: Stats chargées pour MCZ:', statsData);
           
           if (isMounted) {
@@ -497,18 +583,71 @@ export default function DashboardPage() {
                 paid: 0,
               });
             } else {
-              // Normaliser les stats
+              // Fonction helper pour déterminer si un prestataire a été validé par IT
+              const isValidatedByIT = (p: Prestataire): boolean => {
+                const rawData = p.raw_data || {};
+                
+                // Vérifier validation_status
+                let validationStatus = (p as any).validation_status ||
+                                      rawData.validation_status ||
+                                      (p as any).validationStatus ||
+                                      rawData.validationStatus;
+                
+                if (validationStatus) {
+                  const statusUpper = String(validationStatus).toUpperCase().trim();
+                  if (statusUpper === 'VALIDE_PAR_IT' || statusUpper === 'VALIDATED') {
+                    return true;
+                  }
+                }
+                
+                // Vérifier si une date de validation existe (indique validation par IT)
+                const validationDate = (p as any).validation_date ||
+                                      (p as any).validationDate ||
+                                      (p as any).validated_at ||
+                                      rawData.validation_date ||
+                                      rawData.validationDate ||
+                                      rawData.validated_at;
+                
+                if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                  return true;
+                }
+                
+                // Si le statut est APPROUVE_PAR_MCZ, cela signifie qu'il a d'abord été validé par IT
+                const status = p.status || rawData.status;
+                const statusStr = String(status || '').trim().toUpperCase();
+                if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                  return true;
+                }
+                
+                // Vérifier aussi validationStatus depuis le champ status si c'est VALIDE_PAR_IT
+                const statusFromStatus = (p.validationStatus || '').toUpperCase();
+                if (statusFromStatus === 'VALIDE_PAR_IT' || statusFromStatus === 'VALIDATED') {
+                  return true;
+                }
+                
+                return false;
+              };
+
+              // Calculer le nombre réel de prestataires validés par IT
+              const validatedByITCount = prestatairesData.filter(isValidatedByIT).length;
+              console.log('DEBUG DASHBOARD MCZ: Prestataires validés par IT calculés:', validatedByITCount, 'sur', prestatairesData.length);
+
+              // Normaliser les stats et corriger le nombre de validés par IT
               const normalizedStats: any = {
                 total: statsData.total || 0,
-                byStatus: statsData.byStatus || {},
+                byStatus: {
+                  ...(statsData.byStatus || {}),
+                  VALIDE_PAR_IT: validatedByITCount, // Utiliser le nombre calculé
+                },
                 byCategory: statsData.byCategory || {},
                 paid: statsData.paid || 0,
               };
               if ('byAire' in statsData) {
                 normalizedStats.byAire = statsData.byAire || {};
               }
-              console.log('DEBUG DASHBOARD MCZ: Stats normalisées:', normalizedStats);
+              console.log('DEBUG DASHBOARD MCZ: Stats normalisées avec VALIDE_PAR_IT corrigé:', normalizedStats);
               setStats(normalizedStats);
+              setPrestataires(prestatairesData);
             }
             setLoading(false);
           }
@@ -544,26 +683,96 @@ export default function DashboardPage() {
             statsData = await statsApi.getProvince(user.provinceId, statsFilters) as ProvinceStats;
           }
 
+          // Charger les prestataires pour calculer correctement les validés par IT
+          let prestatairesData: Prestataire[] = [];
+          try {
+            const prestatairesFilters: any = {
+              provinceId: user.provinceId,
+            };
+            if (filters.campaignId) prestatairesFilters.campaignId = filters.campaignId;
+            if (filters.formId) prestatairesFilters.formId = filters.formId;
+            if (filters.zoneId) prestatairesFilters.zoneId = filters.zoneId;
+            if (filters.aireId) prestatairesFilters.aireId = filters.aireId;
+            prestatairesData = await prestatairesApi.getAll(prestatairesFilters);
+            console.log('DEBUG DASHBOARD DPS: Prestataires chargés:', prestatairesData.length);
+          } catch (error) {
+            console.warn('DEBUG DASHBOARD DPS: Erreur lors du chargement des prestataires:', error);
+          }
+
           console.log('DEBUG DASHBOARD: Stats chargées pour DPS:', statsData);
           console.log('DEBUG DASHBOARD DPS: Total:', statsData?.total);
           console.log('DEBUG DASHBOARD DPS: byStatus:', statsData?.byStatus);
           
           if (isMounted) {
+            // Fonction helper pour déterminer si un prestataire a été validé par IT
+            const isValidatedByIT = (p: Prestataire): boolean => {
+              const rawData = p.raw_data || {};
+              
+              // Vérifier validation_status
+              let validationStatus = (p as any).validation_status ||
+                                    rawData.validation_status ||
+                                    (p as any).validationStatus ||
+                                    rawData.validationStatus;
+              
+              if (validationStatus) {
+                const statusUpper = String(validationStatus).toUpperCase().trim();
+                if (statusUpper === 'VALIDE_PAR_IT' || statusUpper === 'VALIDATED') {
+                  return true;
+                }
+              }
+              
+              // Vérifier si une date de validation existe (indique validation par IT)
+              const validationDate = (p as any).validation_date ||
+                                    (p as any).validationDate ||
+                                    (p as any).validated_at ||
+                                    rawData.validation_date ||
+                                    rawData.validationDate ||
+                                    rawData.validated_at;
+              
+              if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                return true;
+              }
+              
+              // Si le statut est APPROUVE_PAR_MCZ, cela signifie qu'il a d'abord été validé par IT
+              const status = p.status || rawData.status;
+              const statusStr = String(status || '').trim().toUpperCase();
+              if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                return true;
+              }
+              
+              // Vérifier aussi validationStatus depuis le champ status si c'est VALIDE_PAR_IT
+              const statusFromStatus = (p.validationStatus || '').toUpperCase();
+              if (statusFromStatus === 'VALIDE_PAR_IT' || statusFromStatus === 'VALIDATED') {
+                return true;
+              }
+              
+              return false;
+            };
+
+            // Calculer le nombre réel de prestataires validés par IT
+            const validatedByITCount = prestatairesData.filter(isValidatedByIT).length;
+            console.log('DEBUG DASHBOARD DPS: Prestataires validés par IT calculés:', validatedByITCount, 'sur', prestatairesData.length);
+
             // S'assurer que statsData est toujours un objet valide
             if (!statsData) {
               console.warn('DEBUG DASHBOARD DPS: statsData est null/undefined, utilisation d\'un objet vide');
               setStats({
                 total: 0,
-                byStatus: {},
+                byStatus: {
+                  VALIDE_PAR_IT: validatedByITCount,
+                },
                 byZone: {},
                 byCategory: {},
                 paid: 0,
               });
             } else {
-              // Normaliser les stats
+              // Normaliser les stats et corriger le nombre de validés par IT
               const normalizedStats: any = {
                 total: statsData.total || 0,
-                byStatus: statsData.byStatus || {},
+                byStatus: {
+                  ...(statsData.byStatus || {}),
+                  VALIDE_PAR_IT: validatedByITCount, // Utiliser le nombre calculé
+                },
                 byCategory: statsData.byCategory || {},
                 paid: statsData.paid || 0,
               };
@@ -573,8 +782,9 @@ export default function DashboardPage() {
               if ('byAire' in statsData) {
                 normalizedStats.byAire = statsData.byAire || {};
               }
-              console.log('DEBUG DASHBOARD DPS: Stats normalisées:', normalizedStats);
+              console.log('DEBUG DASHBOARD DPS: Stats normalisées avec VALIDE_PAR_IT corrigé:', normalizedStats);
               setStats(normalizedStats);
+              setPrestataires(prestatairesData);
             }
             setLoading(false);
           }

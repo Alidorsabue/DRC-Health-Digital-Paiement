@@ -259,10 +259,10 @@ export default function StatsPage() {
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              {subtitle}
-            </p>
+        <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          {subtitle}
+        </p>
           </div>
           {campaigns.length > 0 && (
             <div className="sm:w-64">
@@ -318,22 +318,22 @@ export default function StatsPage() {
               }
               
               return Object.entries(allStatuses).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between">
+              <div key={status} className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-800">{status}</span>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-48 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{
-                          width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%`,
-                        }}
-                      ></div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900 w-12 text-right">
-                      {count}
-                    </span>
+                <div className="flex items-center space-x-4">
+                  <div className="w-48 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{
+                        width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%`,
+                      }}
+                    ></div>
                   </div>
+                    <span className="text-sm font-semibold text-gray-900 w-12 text-right">
+                    {count}
+                  </span>
                 </div>
+              </div>
               ));
             })()}
           </div>

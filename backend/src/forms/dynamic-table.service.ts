@@ -910,7 +910,7 @@ export class DynamicTableService {
 
     if (filters) {
       if (filters.status !== undefined) {
-        whereClause += ` AND status = $${paramIndex}`;
+        whereClause += ` AND validation_status = $${paramIndex}`;
         queryParams.push(filters.status);
         paramIndex++;
       }
@@ -1362,13 +1362,6 @@ export class DynamicTableService {
       paramIndex++;
     }
 
-    // Mettre à jour status (statut global pour compatibilité)
-    if (existingColumnNames.has('status')) {
-      updates.push(`status = $${paramIndex}`);
-      values.push('VALIDE_PAR_IT');
-      paramIndex++;
-    }
-
     // Mettre à jour validation_date
     if (validationDate && existingColumnNames.has('validation_date')) {
       updates.push(`validation_date = $${paramIndex}`);
@@ -1437,7 +1430,7 @@ export class DynamicTableService {
       console.warn(`[updateValidationInTable] ⚠️ Aucune ligne mise à jour. Vérification de l'existence de l'enregistrement...`);
       // Vérifier si l'enregistrement existe
       const checkQuery = await this.dataSource.query(
-        `SELECT id, campaign_id, validation_sequence, status, presence_days FROM "${tableName}" 
+        `SELECT id, campaign_id, validation_sequence, validation_status, presence_days FROM "${tableName}" 
          WHERE id = $1`,
         [prestataireId],
       );
