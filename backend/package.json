@@ -31,6 +31,7 @@
     "migration:fix-campaign-ids": "node scripts/run-migration-fix-campaign-ids.js --yes",
     "migration:select-labels": "node scripts/run-migration-select-labels.js --yes",
     "migration:form-columns": "node scripts/migrate-form-columns.js --yes",
+    "migration:validation-status": "node scripts/run-migration-validation-status.js",
     "generate:xlsform-template": "node scripts/generate-xlsform-template.js"
   },
   "dependencies": {

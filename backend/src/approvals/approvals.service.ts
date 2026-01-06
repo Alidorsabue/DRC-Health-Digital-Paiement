@@ -185,14 +185,10 @@ export class ApprovalsService {
         console.log(`[ApprovalsService.findByZoneOrAire] Aucun filtre de campagne - retourner toutes les validations pour toutes les campagnes`);
       }
       
-      // Pour MCZ: filtrer automatiquement pour ne voir que les prestataires validés par IT
-      // (ceux qui sont prêts à être approuvés/rejetés par MCZ)
-      // MCZ ne doit pas voir les prestataires non validés par IT
-      if (userRole === 'MCZ' && !status) {
-        // Ne pas filtrer par status dans la requête, on filtrera après déduplication
-        // car on veut inclure les prestataires validés par IT (status = VALIDE_PAR_IT ou EN_ATTENTE_PAR_MCZ)
-        // mais aussi ceux déjà approuvés/rejetés pour les statistiques
-      } else if (status) {
+      // Pour MCZ: ne pas filtrer par status dans la requête SQL
+      // On récupérera TOUS les enregistrements (originaux ET validations) et on filtrera après
+      // pour inclure les prestataires validés par IT (même si le statut n'est pas explicitement défini)
+      if (status) {
         // Si un status est explicitement demandé, l'utiliser
         filters.validation_status = status;
       }
@@ -321,15 +317,27 @@ export class ApprovalsService {
       // (ceux avec status = VALIDE_PAR_IT ou EN_ATTENTE_PAR_MCZ, ou déjà approuvés/rejetés)
       if (userRole === 'MCZ' && !status) {
         data = data.filter((record: any) => {
-          const recordStatus = (record.status || '').toUpperCase();
+          // Vérifier à la fois status et validation_status (le statut peut être dans l'un ou l'autre)
+          const recordStatus = (record.status || record.validation_status || '').toUpperCase();
+          const validationStatus = (record.validation_status || record.status || '').toUpperCase();
           const approvalStatus = (record.approval_status || '').toUpperCase();
+          
+          // Vérifier si le prestataire a été validé par IT (validation_sequence > 0 indique une validation)
+          const hasValidationSequence = record.validation_sequence != null && record.validation_sequence > 0;
+          const hasValidationDate = record.validation_date != null && record.validation_date !== '';
           
           // Inclure:
           // 1. Les prestataires validés par IT (en attente d'approbation MCZ)
+          //    - validation_status = VALIDE_PAR_IT
+          //    - status = VALIDE_PAR_IT ou EN_ATTENTE_PAR_MCZ
+          //    - validation_sequence > 0 (indique qu'une validation a été effectuée)
+          //    - validation_date existe (indique qu'une validation a été effectuée)
           // 2. Les prestataires déjà approuvés par MCZ (pour les statistiques)
           // 3. Les prestataires déjà rejetés par MCZ (pour les statistiques)
-          return recordStatus === 'VALIDE_PAR_IT' || 
+          return validationStatus === 'VALIDE_PAR_IT' ||
+                 recordStatus === 'VALIDE_PAR_IT' || 
                  recordStatus === 'EN_ATTENTE_PAR_MCZ' ||
+                 (hasValidationSequence && hasValidationDate) || // Prestataire avec validation_sequence > 0 et validation_date
                  recordStatus === 'APPROUVE_PAR_MCZ' ||
                  recordStatus === 'REJETE_PAR_MCZ' ||
                  approvalStatus === 'APPROVED' ||
@@ -473,7 +481,9 @@ export class ApprovalsService {
             approvalDate: record.approval_date || null,
             validationDate: record.validation_date || null, // Date de validation par IT
             validation_date: record.validation_date || null, // Date de validation par IT (snake_case)
-            status: record.status,
+            status: record.status || record.validation_status, // Utiliser validation_status si status n'existe pas
+            validation_status: record.validation_status || record.status, // Statut de validation IT
+            validation_sequence: record.validation_sequence || null, // Séquence de validation
             kycStatus: record.kyc_status || null, // Statut KYC
             kyc_status: record.kyc_status || null, // Statut KYC (snake_case pour compatibilité)
             paymentStatus: record.payment_status || null, // Statut de paiement
