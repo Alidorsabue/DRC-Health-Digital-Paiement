@@ -1906,7 +1906,7 @@ export default function PartnerPage() {
                   type="text"
                   readOnly
                   value={sharedLink.publicUrl}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm font-mono"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-900 text-sm font-mono"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button

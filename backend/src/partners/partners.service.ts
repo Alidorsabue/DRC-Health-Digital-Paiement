@@ -997,5 +997,87 @@ export class PartnersService {
     
     return prestataires;
   }
+
+  /**
+   * Convertit les prestataires en CSV
+   */
+  convertToCSV(prestataires: any[]): string {
+    if (prestataires.length === 0) {
+      return '';
+    }
+
+    // Obtenir toutes les clés uniques de tous les prestataires
+    const allKeys = new Set<string>();
+    prestataires.forEach(p => {
+      Object.keys(p).forEach(key => {
+        if (key !== 'enregistrementData' && typeof p[key] !== 'object') {
+          allKeys.add(key);
+        }
+      });
+    });
+
+    const headers = Array.from(allKeys).sort();
+    
+    // Créer les lignes CSV
+    const rows = [
+      headers.join(','), // En-têtes
+      ...prestataires.map(p => {
+        return headers.map(header => {
+          const value = p[header];
+          if (value === null || value === undefined) {
+            return '';
+          }
+          // Échapper les guillemets et les virgules
+          const stringValue = String(value).replace(/"/g, '""');
+          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+            return `"${stringValue}"`;
+          }
+          return stringValue;
+        }).join(',');
+      }),
+    ];
+
+    // Ajouter BOM UTF-8 pour Excel
+    return '\ufeff' + rows.join('\n');
+  }
+
+  /**
+   * Convertit les prestataires en Excel
+   */
+  async convertToExcel(prestataires: any[]): Promise<Buffer> {
+    const XLSX = require('xlsx');
+    
+    if (prestataires.length === 0) {
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([[]]);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Prestataires');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    }
+
+    // Préparer les données pour Excel (exclure les objets complexes)
+    const excelData = prestataires.map(p => {
+      const row: any = {};
+      Object.keys(p).forEach(key => {
+        if (key !== 'enregistrementData' && typeof p[key] !== 'object') {
+          row[key] = p[key];
+        } else if (key === 'enregistrementData' && p[key]) {
+          // Inclure quelques champs importants de enregistrementData
+          const ed = p[key];
+          Object.keys(ed).forEach(subKey => {
+            if (typeof ed[subKey] !== 'object') {
+              row[`ed_${subKey}`] = ed[subKey];
+            }
+          });
+        }
+      });
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Prestataires');
+    
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  }
 }
 

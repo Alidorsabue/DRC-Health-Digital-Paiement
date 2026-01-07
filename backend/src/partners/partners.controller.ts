@@ -7,7 +7,9 @@ import {
   Headers,
   Param,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { PartnersService } from './partners.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
@@ -215,10 +217,31 @@ export class PartnersPublicController {
   @Get('prestataires/:token')
   @Public()
   @ApiOperation({ summary: 'Récupérer les prestataires filtrés via un lien public partagé' })
-  async getSharedPrestataires(@Param('token') token: string) {
+  async getSharedPrestataires(
+    @Param('token') token: string,
+    @Query('format') format: string | undefined,
+    @Res() res: Response,
+  ) {
     const prestataires = await this.partnersService.getSharedPrestataires(token);
     
-    return {
+    const requestedFormat = (format || '').toLowerCase();
+    
+    if (requestedFormat === 'csv') {
+      const csv = this.partnersService.convertToCSV(prestataires);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="prestataires-${token.substring(0, 8)}.csv"`);
+      return res.send(csv);
+    }
+    
+    if (requestedFormat === 'excel' || requestedFormat === 'xlsx') {
+      const excelBuffer = await this.partnersService.convertToExcel(prestataires);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="prestataires-${token.substring(0, 8)}.xlsx"`);
+      return res.send(excelBuffer);
+    }
+    
+    // Format JSON par défaut
+    return res.json({
       success: true,
       count: prestataires.length,
       data: prestataires,
@@ -229,7 +252,7 @@ export class PartnersPublicController {
         csv: 'Ajoutez ?format=csv à l\'URL pour obtenir un CSV',
         excel: 'Ajoutez ?format=excel à l\'URL pour obtenir un Excel',
       },
-    };
+    });
   }
 }
 
