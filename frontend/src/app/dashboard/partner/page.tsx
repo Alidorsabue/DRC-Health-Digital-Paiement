@@ -1896,9 +1896,6 @@ export default function PartnerPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
             <h2 className="text-xl font-bold mb-4" style={{ color: '#111827' }}>Lien API partagé</h2>
-            <p className="text-sm mb-4" style={{ color: '#374151' }}>
-              Ce lien permet d'accéder aux données filtrées via une API publique. Il expire le {new Date(sharedLink.expiresAt).toLocaleString('fr-FR')}.
-            </p>
             
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" style={{ color: '#111827' }}>
@@ -1921,29 +1918,6 @@ export default function PartnerPage() {
                 >
                   📋 Copier
                 </button>
-              </div>
-            </div>
-
-            <div className="mb-4 p-4 bg-blue-50 rounded-md">
-              <h3 className="text-sm font-semibold text-blue-900 mb-2">💡 Utilisation de l'API :</h3>
-              <div className="text-xs text-blue-800 space-y-2">
-                <p><strong>Format JSON :</strong> Accédez directement à l'URL pour obtenir les données au format JSON.</p>
-                <p><strong>Exemple avec curl :</strong></p>
-                <code className="block bg-blue-100 p-2 rounded text-xs font-mono break-all">
-                  curl {sharedLink.publicUrl}
-                </code>
-                <p><strong>Exemple avec Python :</strong></p>
-                <code className="block bg-blue-100 p-2 rounded text-xs font-mono">
-                  import requests<br/>
-                  response = requests.get('{sharedLink.publicUrl}')<br/>
-                  data = response.json()
-                </code>
-                <p><strong>Exemple avec JavaScript :</strong></p>
-                <code className="block bg-blue-100 p-2 rounded text-xs font-mono">
-                  fetch('{sharedLink.publicUrl}')<br/>
-                  &nbsp;&nbsp;.then(res =&gt; res.json())<br/>
-                  &nbsp;&nbsp;.then(data =&gt; console.log(data))
-                </code>
               </div>
             </div>
 

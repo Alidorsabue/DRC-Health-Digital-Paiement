@@ -258,7 +258,7 @@ export default function StatsPage() {
       }
     }, 10000); // 10 secondes max
 
-    if (user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') {
+    if (user?.role === 'SUPERADMIN' || user?.role === 'ADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') {
       loadStats().then(async () => {
         if (user?.role === 'PARTNER') {
           await loadPrestatairesForPartner();

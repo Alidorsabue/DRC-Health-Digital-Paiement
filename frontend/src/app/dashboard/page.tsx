@@ -392,7 +392,7 @@ export default function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        if (user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') {
+        if (user?.role === 'SUPERADMIN' || user?.role === 'ADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') {
           setLoading(true);
           console.log('DEBUG DASHBOARD: Chargement des stats...', { filters, role: user?.role });
           let statsData: NationalStats | ProvinceStats | ZoneStats | AireStats;

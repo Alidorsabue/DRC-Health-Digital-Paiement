@@ -936,9 +936,12 @@ export class PartnersService {
     });
     
     // Construire l'URL publique
-    const apiUrl = this.configService.get<string>('API_URL') || 
-                   this.configService.get<string>('BACKEND_URL') || 
-                   'http://localhost:3001';
+    // Sur Railway, utiliser RAILWAY_PUBLIC_DOMAIN ou l'URL du backend
+    const apiUrl = this.configService.get<string>('BACKEND_URL') ||
+                   this.configService.get<string>('API_URL') ||
+                   (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) ||
+                   (process.env.RAILWAY_STATIC_URL ? process.env.RAILWAY_STATIC_URL : null) ||
+                   (process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:3001');
     const publicUrl = `${apiUrl}/partner/public/prestataires/${token}`;
     
     return {

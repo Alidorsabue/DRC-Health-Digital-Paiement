@@ -143,7 +143,7 @@ function FormsPageContent() {
 
   useEffect(() => {
     const currentUserRole = user?.role;
-    const shouldLoad = currentUserRole === 'SUPERADMIN' && mounted;
+    const shouldLoad = (currentUserRole === 'SUPERADMIN' || currentUserRole === 'ADMIN') && mounted;
     const userRoleChanged = lastUserRoleRef.current !== currentUserRole;
     const mountedChanged = lastMountedRef.current !== mounted;
     
@@ -323,7 +323,7 @@ function FormsPageContent() {
     );
   };
 
-  if (user?.role !== 'SUPERADMIN') {
+  if (user?.role !== 'SUPERADMIN' && user?.role !== 'ADMIN') {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">{t('errors.unauthorizedAccess')}</p>
@@ -367,19 +367,14 @@ function FormsPageContent() {
             Gestion des formulaires dynamiques
           </p>
         </div>
-        <button
-          onClick={() => setShowMethodSelection(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-        >
-          {(user?.role === Role.SUPERADMIN) && (
-            <button
-              onClick={() => setShowMethodSelection(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-            >
-              + Créer un formulaire
-            </button>
-          )}
-        </button>
+        {user?.role === Role.SUPERADMIN && (
+          <button
+            onClick={() => setShowMethodSelection(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            + Créer un formulaire
+          </button>
+        )}
       </div>
 
       {/* Onglets */}
@@ -532,13 +527,15 @@ function FormsPageContent() {
                   {/* Actions */}
                   <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                     <div className="flex items-center gap-4">
-                      <Link
-                        href={`/dashboard/forms/${form.id}/builder`}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
-                      >
-                        <span>✏️</span>
-                        <span>Éditer</span>
-                      </Link>
+                      {user?.role === Role.SUPERADMIN && (
+                        <Link
+                          href={`/dashboard/forms/${form.id}/builder`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                        >
+                          <span>✏️</span>
+                          <span>Éditer</span>
+                        </Link>
+                      )}
                       {publishedVersion && (
                         <>
                           <Link
@@ -560,29 +557,33 @@ function FormsPageContent() {
                             <span>👁️</span>
                             <span>{t('forms.view')}</span>
                           </Link>
-                          <button
-                            onClick={() => {
-                              const publicUrl = `${window.location.origin}/forms/public/${form.id}`;
-                              navigator.clipboard.writeText(publicUrl);
-                              showAlert(t('common.success'), `${t('success.linkCopied')}:\n${publicUrl}`, 'success');
-                            }}
-                            className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center gap-1"
-                            title={t('forms.copyLinkTitle')}
-                          >
-                            <span>🔗</span>
-                            <span>{t('forms.copyLink')}</span>
-                          </button>
+                          {user?.role === Role.SUPERADMIN && (
+                            <button
+                              onClick={() => {
+                                const publicUrl = `${window.location.origin}/forms/public/${form.id}`;
+                                navigator.clipboard.writeText(publicUrl);
+                                showAlert(t('common.success'), `${t('success.linkCopied')}:\n${publicUrl}`, 'success');
+                              }}
+                              className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center gap-1"
+                              title={t('forms.copyLinkTitle')}
+                            >
+                              <span>🔗</span>
+                              <span>{t('forms.copyLink')}</span>
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDeleteForm(form)}
-                      className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
-                      title={t('forms.deleteFormTitle')}
-                    >
-                      <span>🗑️</span>
-                      <span>{t('forms.deleteForm')}</span>
-                    </button>
+                    {user?.role === Role.SUPERADMIN && (
+                      <button
+                        onClick={() => handleDeleteForm(form)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+                        title={t('forms.deleteFormTitle')}
+                      >
+                        <span>🗑️</span>
+                        <span>{t('forms.deleteForm')}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
