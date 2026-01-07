@@ -8,6 +8,7 @@ import { FormsService } from '../forms/forms.service';
 import { PrestataireStatus } from '../common/enums/status.enum';
 import { PaymentStatus } from '../common/enums/status.enum';
 import * as crypto from 'crypto';
+import { filterApprovedPrestataireColumns } from './approved-prestataires-columns';
 
 // Stockage temporaire pour les liens partagés (en production, utiliser Redis ou une base de données)
 const sharedLinksStore = new Map<string, { 
@@ -386,7 +387,7 @@ export class PartnersService {
             return null;
           };
 
-          return {
+          const prestataireData = {
             id: record.id,
             prestataireId: record.prestataire_id || record.id,
             approvalStatus: record.approval_status,
@@ -415,9 +416,24 @@ export class PartnersService {
               }
               return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
             })(),
+            payment_amount: (() => {
+              const rawAmount = record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount;
+              if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
+                return null;
+              }
+              if (typeof rawAmount === 'string') {
+                const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              }
+              return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
+            })(),
             presenceDays: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays || null,
+            presence_days: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays || null,
             amountToPay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay || null,
+            amount_to_pay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay || null,
             amountCurrency: record.amount_currency || record.amountCurrency || formData.amount_currency || formData.amountCurrency || 'USD',
+            amount_currency: record.amount_currency || record.amountCurrency || formData.amount_currency || formData.amountCurrency || 'USD',
             categorie: record.categorie || formData.categorie || formData.campaign_role_i_f || formData.campaign_role || formData.role || null,
             provinceId: record.province_id || record.provinceId || formData.provinceId || formData.province_id || formData.province || null,
             zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.zone || null,
@@ -435,6 +451,9 @@ export class PartnersService {
             // Genre/Sexe
             gender: getFormDataValue(['gender_i_c', 'gender', 'sexe']) || null,
           };
+          
+          // Filtrer pour ne retourner que les colonnes définies dans la configuration
+          return filterApprovedPrestataireColumns(prestataireData);
         });
       } catch (error) {
         console.error('Erreur lors de la récupération depuis la table du formulaire:', error);
@@ -508,6 +527,44 @@ export class PartnersService {
         telephone: p.telephone || null,
         gender: p.gender || p.gender_i_c || p.sexe || null,
       };
+      
+      // Filtrer pour ne retourner que les colonnes définies dans la configuration
+      return filterApprovedPrestataireColumns({
+        id: p.id,
+        prestataireId: p.prestataireId || p.id,
+        approvalStatus: p.approval_status || p.status,
+        approval_status: p.approval_status || p.status,
+        approvalDate: p.approval_date,
+        approval_date: p.approval_date,
+        validationStatus: p.validation_status || 'ENREGISTRE',
+        validation_status: p.validation_status || 'ENREGISTRE',
+        validationDate: p.validation_date,
+        validation_date: p.validation_date,
+        kycStatus: p.kyc_status,
+        kyc_status: p.kyc_status,
+        paymentStatus: p.payment_status,
+        payment_status: p.payment_status,
+        paymentDate: p.payment_date || p.paid_at,
+        payment_date: p.payment_date || p.paid_at,
+        paymentAmount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount || null,
+        payment_amount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount || null,
+        presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days || null,
+        presence_days: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days || null,
+        amountToPay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay || null,
+        amount_to_pay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay || null,
+        amountCurrency: p.amountCurrency || p.amount_currency || p.enregistrementData?.amount_currency || p.enregistrementData?.amountCurrency || 'USD',
+        amount_currency: p.amountCurrency || p.amount_currency || p.enregistrementData?.amount_currency || p.enregistrementData?.amountCurrency || 'USD',
+        categorie: categorie || null,
+        provinceId: p.provinceId || null,
+        zoneId: p.zoneId || null,
+        aireId: p.aireId || null,
+        nom: p.nom || null,
+        prenom: p.prenom || null,
+        postnom: p.postnom || null,
+        nom_complet: p.nom_complet || p.fullName || p.full_name || null,
+        telephone: p.telephone || null,
+        gender: p.gender || p.gender_i_c || p.sexe || null,
+      });
     });
     
     console.log(`[getApprovedPrestataires] ${mappedPrestataires.length} prestataires mappés`);

@@ -95,6 +95,25 @@ export const formsApi = {
     return response.json();
   },
 
+  createSharedLink: async (
+    formId: string,
+    filters: {
+      campaignId?: string;
+      status?: string;
+      provinceId?: string;
+      zoneId?: string;
+      aireId?: string;
+      includeValidations?: boolean;
+      expiresInHours?: number;
+    },
+  ): Promise<{ token: string; publicUrl: string; expiresAt: string }> => {
+    const response = await api.post<{ token: string; publicUrl: string; expiresAt: string }>(
+      `/forms/${formId}/shared-link`,
+      filters,
+    );
+    return response.data;
+  },
+
   submitPublic: async (id: string, data: { campaignId?: string; data: Record<string, any> }): Promise<any> => {
     const apiUrl = getApiUrl();
     const response = await fetch(`${apiUrl}/forms/public/${id}/submit`, {

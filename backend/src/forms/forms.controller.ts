@@ -26,6 +26,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Forms')
 @ApiBearerAuth()
@@ -255,6 +256,40 @@ export class FormsController {
   @ApiOperation({ summary: 'Obtenir les statistiques descriptives d\'un formulaire' })
   async getStatistics(@Param('id') id: string) {
     return this.formsService.getFormStatistics(id);
+  }
+
+  @Post(':id/shared-link')
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  @ApiOperation({ summary: 'Créer un lien public partageable pour les données d\'un formulaire' })
+  async createSharedLink(
+    @Param('id') formId: string,
+    @Body() dto: {
+      campaignId?: string;
+      status?: string;
+      provinceId?: string;
+      zoneId?: string;
+      aireId?: string;
+      includeValidations?: boolean;
+      expiresInHours?: number;
+    },
+    @CurrentUser() user?: any,
+  ) {
+    const expiresInHours = dto.expiresInHours || 168; // 7 jours par défaut
+    
+    return this.formsService.createSharedLink(
+      formId,
+      {
+        campaignId: dto.campaignId,
+        status: dto.status,
+        provinceId: dto.provinceId,
+        zoneId: dto.zoneId,
+        aireId: dto.aireId,
+        includeValidations: dto.includeValidations !== false,
+      },
+      expiresInHours,
+      user?.userId,
+    );
   }
 
   @Post('import-xlsform')

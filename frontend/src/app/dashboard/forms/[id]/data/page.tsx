@@ -2510,7 +2510,7 @@ export default function FormDataPage() {
             <>
               <div className="overflow-x-auto -mx-2 sm:mx-0">
                 <div className="inline-block min-w-full align-middle">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200" style={{ tableLayout: 'auto', width: '100%' }}>
                     <thead className="bg-gray-50">
                       <tr>
                         {user?.role === 'SUPERADMIN' && activeTab === 'data' && (
@@ -2536,7 +2536,7 @@ export default function FormDataPage() {
                           const selectedValues = Array.isArray(currentFilter) ? currentFilter : (currentFilter ? [currentFilter] : []);
                           
                           return (
-                            <th key={fieldName} className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                            <th key={fieldName} className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ whiteSpace: 'nowrap' }}>
                               <div className="flex flex-col gap-1 sm:gap-2">
                                 <span className="whitespace-normal break-words leading-tight text-[10px] sm:text-xs">{fieldSchema?.title || fieldName}</span>
                               {isSelect && uniqueValues.length > 0 ? (
@@ -2666,7 +2666,12 @@ export default function FormDataPage() {
                           return (
                             <td 
                               key={fieldName} 
-                              className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 max-w-[150px] sm:max-w-xs"
+                              className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900"
+                              style={{ 
+                                maxWidth: '300px',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word'
+                              }}
                               title={formatted.fullValue || undefined}
                             >
                               <div className="flex items-center gap-1 sm:gap-2 min-w-0">

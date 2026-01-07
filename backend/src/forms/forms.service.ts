@@ -9,6 +9,8 @@ import { UpdateFormDto } from './dto/update-form.dto';
 import { PrestatairesService } from '../prestataires/prestataires.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { DynamicTableService } from './dynamic-table.service';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class FormsService {
@@ -22,6 +24,7 @@ export class FormsService {
     @Inject(forwardRef(() => CampaignsService))
     private campaignsService: CampaignsService,
     private dynamicTableService: DynamicTableService,
+    private configService: ConfigService,
   ) {}
 
   async create(createFormDto: CreateFormDto, userId: string): Promise<Form> {
@@ -518,7 +521,16 @@ export class FormsService {
         if (!telephone && record.raw_data && typeof record.raw_data === 'object') {
           const rawData = record.raw_data;
           telephone = rawData.num_phone || rawData.confirm_phone || rawData.telephone || 
-                      rawData.phone || rawData.Phone || rawData.Telephone || null;
+                      rawData.phone || rawData.Phone || rawData.Telephone || 
+                      rawData.numero_telephone || rawData.telephone_number || 
+                      rawData.contact || rawData.numero || null;
+        }
+        
+        // Extraire le sexe/gender depuis les colonnes directes ou raw_data
+        let gender = record.gender || record.gender_i_c || record.sexe || null;
+        if (!gender && record.raw_data && typeof record.raw_data === 'object') {
+          const rawData = record.raw_data;
+          gender = rawData.gender_i_c || rawData.gender || rawData.sexe || null;
         }
         
         // Utiliser record.id (ID du prestataire dans la table form_*) comme ID principal
@@ -543,6 +555,9 @@ export class FormsService {
           paymentDate: record.payment_date,
           payment_date: record.payment_date,
           telephone: telephone, // Ajouter le téléphone au niveau racine pour faciliter l'accès
+          gender: gender, // Ajouter le sexe/gender au niveau racine pour faciliter l'accès
+          sexe: gender, // Alias pour compatibilité
+          gender_i_c: gender, // Alias pour compatibilité
           ...formData, // Toutes les données du formulaire
           createdAt: record.created_at,
           updatedAt: record.updated_at,
@@ -644,6 +659,162 @@ export class FormsService {
     });
 
     return statistics;
+  }
+
+  /**
+   * Stockage temporaire pour les liens partagés (en production, utiliser Redis ou une base de données)
+   */
+  private static sharedLinksStore = new Map<string, { 
+    formId: string;
+    filters: any; 
+    expiresAt: number;
+    userId?: string;
+  }>();
+
+  /**
+   * Génère un lien public partageable pour les données d'un formulaire
+   */
+  async createSharedLink(
+    formId: string,
+    filters: {
+      campaignId?: string;
+      status?: string;
+      provinceId?: string;
+      zoneId?: string;
+      aireId?: string;
+      includeValidations?: boolean;
+    },
+    expiresInHours: number = 168, // 7 jours par défaut
+    userId?: string,
+  ): Promise<{ token: string; publicUrl: string; expiresAt: string }> {
+    // Générer un token unique
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    const expiresAt = Date.now() + (expiresInHours * 60 * 60 * 1000);
+    
+    // Stocker les filtres avec le token
+    FormsService.sharedLinksStore.set(token, {
+      formId,
+      filters,
+      expiresAt,
+      userId,
+    });
+    
+    // Construire l'URL publique
+    const apiUrl = this.configService.get<string>('BACKEND_URL') ||
+                   this.configService.get<string>('API_URL') ||
+                   (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) ||
+                   (process.env.RAILWAY_STATIC_URL ? process.env.RAILWAY_STATIC_URL : null) ||
+                   (process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:3001');
+    const publicUrl = `${apiUrl}/forms/public/data/${token}`;
+    
+    return {
+      token,
+      publicUrl,
+      expiresAt: new Date(expiresAt).toISOString(),
+    };
+  }
+
+  /**
+   * Récupère les données filtrées depuis un token partagé
+   */
+  async getSharedFormData(token: string): Promise<any[]> {
+    const stored = FormsService.sharedLinksStore.get(token);
+    
+    if (!stored) {
+      throw new NotFoundException('Lien non trouvé ou expiré');
+    }
+    
+    if (stored.expiresAt < Date.now()) {
+      FormsService.sharedLinksStore.delete(token);
+      throw new NotFoundException('Lien expiré');
+    }
+    
+    const { formId, filters } = stored;
+    
+    // Récupérer les données avec les filtres
+    const result = await this.getPrestatairesDataByForm(
+      formId,
+      1,
+      10000, // Récupérer toutes les données
+      filters,
+    );
+    
+    return result.data;
+  }
+
+  /**
+   * Convertit les données en CSV
+   */
+  convertToCSV(data: any[]): string {
+    if (data.length === 0) {
+      return '';
+    }
+
+    // Obtenir toutes les clés uniques de toutes les données
+    const allKeys = new Set<string>();
+    data.forEach(item => {
+      Object.keys(item).forEach(key => {
+        if (key !== 'raw_data' && typeof item[key] !== 'object') {
+          allKeys.add(key);
+        }
+      });
+    });
+
+    const headers = Array.from(allKeys).sort();
+    
+    // Créer les lignes CSV
+    const rows = [
+      headers.join(','), // En-têtes
+      ...data.map(item => {
+        return headers.map(header => {
+          const value = item[header];
+          if (value === null || value === undefined) {
+            return '';
+          }
+          // Échapper les guillemets et les virgules
+          const stringValue = String(value).replace(/"/g, '""');
+          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+            return `"${stringValue}"`;
+          }
+          return stringValue;
+        }).join(',');
+      }),
+    ];
+
+    // Ajouter BOM UTF-8 pour Excel
+    return '\ufeff' + rows.join('\n');
+  }
+
+  /**
+   * Convertit les données en Excel
+   */
+  async convertToExcel(data: any[]): Promise<Buffer> {
+    const XLSX = require('xlsx');
+    
+    if (data.length === 0) {
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([[]]);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    }
+
+    // Préparer les données pour Excel (exclure les objets complexes)
+    const excelData = data.map(item => {
+      const row: any = {};
+      Object.keys(item).forEach(key => {
+        if (key !== 'raw_data' && typeof item[key] !== 'object') {
+          row[key] = item[key];
+        }
+      });
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
+    
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 }
 
