@@ -80,7 +80,7 @@ export default function FormDataPage() {
 
   useEffect(() => {
     console.log('🔵 [FormDataPage] useEffect[loadForm] - Déclenché', { role: user?.role, formId: params.id });
-    if (user?.role === 'SUPERADMIN' && params.id) {
+    if ((user?.role === 'SUPERADMIN' || user?.role === 'ADMIN') && params.id) {
       console.log('🔵 [FormDataPage] useEffect[loadForm] - Chargement du formulaire');
       loadForm();
     }

@@ -369,36 +369,45 @@ export class PartnersService {
         }
 
         // Transformer les données pour un format cohérent
+        // Ne retourner que les colonnes nécessaires pour le tableau "Prestataires Approuvés"
         return filtered.map((record: any) => {
           const formData = record.raw_data || {};
-          // Fusionner les données du record avec raw_data
-          Object.keys(record).forEach(key => {
-            const lowerKey = key.toLowerCase();
-            if (!['id', 'submission_id', 'form_id', 'form_version', 'campaign_id', 
-                  'prestataire_id', 'status', 'presence_days', 'validation_date',
-                  'kyc_status', 'approval_status', 'approval_date', 'payment_status',
-                  'payment_amount', 'payment_date', 'paid_at', 'parent_submission_id',
-                  'validation_sequence', 'created_at', 'updated_at', 'raw_data'].includes(lowerKey)) {
-              formData[key] = record[key];
+          
+          // Extraire les valeurs nécessaires depuis formData et record
+          const getFormDataValue = (keys: string[]) => {
+            for (const key of keys) {
+              if (record[key] !== undefined && record[key] !== null && record[key] !== '') {
+                return record[key];
+              }
+              if (formData[key] !== undefined && formData[key] !== null && formData[key] !== '') {
+                return formData[key];
+              }
             }
-          });
+            return null;
+          };
 
           return {
             id: record.id,
             prestataireId: record.prestataire_id || record.id,
-            status: record.status,
             approvalStatus: record.approval_status,
+            approval_status: record.approval_status, // Variante snake_case pour compatibilité
             approvalDate: record.approval_date,
+            approval_date: record.approval_date, // Variante snake_case pour compatibilité
+            validationStatus: record.validation_status || 'ENREGISTRE',
+            validation_status: record.validation_status || 'ENREGISTRE', // Variante snake_case pour compatibilité
             validationDate: record.validation_date,
+            validation_date: record.validation_date, // Variante snake_case pour compatibilité
             kycStatus: record.kyc_status,
+            kyc_status: record.kyc_status, // Variante snake_case pour compatibilité
             paymentStatus: record.payment_status,
+            payment_status: record.payment_status, // Variante snake_case pour compatibilité
             paymentDate: record.payment_date || record.paid_at,
+            payment_date: record.payment_date || record.paid_at, // Variante snake_case pour compatibilité
             paymentAmount: (() => {
               const rawAmount = record.payment_amount || record.paymentAmount || formData.payment_amount || formData.paymentAmount;
               if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
                 return null;
               }
-              // Convertir en nombre si c'est une chaîne
               if (typeof rawAmount === 'string') {
                 const cleaned = rawAmount.replace(/[$€FC\s,]/g, '').trim();
                 const parsed = parseFloat(cleaned);
@@ -406,32 +415,25 @@ export class PartnersService {
               }
               return typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount)) || null;
             })(),
-            presenceDays: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays,
-            amountToPay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay,
+            presenceDays: record.presence_days || record.presenceDays || formData.presence_days || formData.presenceDays || null,
+            amountToPay: record.amount_to_pay || record.amountToPay || formData.amount_to_pay || formData.amountToPay || null,
             amountCurrency: record.amount_currency || record.amountCurrency || formData.amount_currency || formData.amountCurrency || 'USD',
-            categorie: record.categorie || formData.categorie || formData.campaign_role_i_f || formData.campaign_role || formData.role,
-            provinceId: record.province_id || record.provinceId || formData.provinceId || formData.province_id || formData.province,
-            zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.zone,
-            aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.aire,
-            // Extraire nom, prénom, postnom, téléphone depuis formData et record
-            // Chercher dans plusieurs formats possibles (comme dans MCZ page)
-            nom: record.nom || record.family_name_i_c || record.Nom || record.family_name || 
-                 formData.nom || formData.family_name_i_c || formData.Nom || formData.family_name || formData.name,
-            prenom: record.prenom || record.given_name_i_c || record.Prenom || record.Prénom || record.firstName ||
-                    formData.prenom || formData.given_name_i_c || formData.Prenom || formData.Prénom || formData.prenom_complet || formData.firstName,
-            postnom: record.postnom || record.middle_name_i_c || record.Postnom || record.post_nom || record.lastName ||
-                     formData.postnom || formData.middle_name_i_c || formData.Postnom || formData.post_nom || formData.postnom_complet || formData.lastName,
-            nom_complet: record.nom_complet || record.fullName || record.full_name ||
-                         formData.nom_complet || formData.fullName || formData.full_name,
-            telephone: record.num_phone || record.confirm_phone || record.telephone || record.Telephone ||
-                       record.phone || record.Phone || record.numero_telephone || record.telephone_number || 
-                       record.contact || record.numero ||
-                       formData.num_phone || formData.confirm_phone || formData.telephone || formData.Telephone ||
-                       formData.phone || formData.Phone || formData.numero_telephone || formData.telephone_number || 
-                       formData.contact || formData.numero,
-            ...formData,
-            createdAt: record.created_at,
-            updatedAt: record.updated_at,
+            categorie: record.categorie || formData.categorie || formData.campaign_role_i_f || formData.campaign_role || formData.role || null,
+            provinceId: record.province_id || record.provinceId || formData.provinceId || formData.province_id || formData.province || null,
+            zoneId: record.zone_id || record.zoneId || formData.zoneId || formData.zone_id || formData.zone || null,
+            aireId: record.aire_id || record.aireId || formData.aireId || formData.aire_id || formData.aire || null,
+            // Nom complet et parties
+            nom: getFormDataValue(['nom', 'family_name_i_c', 'Nom', 'family_name', 'name']) || null,
+            prenom: getFormDataValue(['prenom', 'given_name_i_c', 'Prenom', 'Prénom', 'firstName', 'prenom_complet']) || null,
+            postnom: getFormDataValue(['postnom', 'middle_name_i_c', 'Postnom', 'post_nom', 'lastName', 'postnom_complet']) || null,
+            nom_complet: getFormDataValue(['nom_complet', 'fullName', 'full_name']) || null,
+            // Téléphone
+            telephone: getFormDataValue([
+              'num_phone', 'confirm_phone', 'telephone', 'Telephone', 'phone', 'Phone',
+              'numero_telephone', 'telephone_number', 'contact', 'numero'
+            ]) || null,
+            // Genre/Sexe
+            gender: getFormDataValue(['gender_i_c', 'gender', 'sexe']) || null,
           };
         });
       } catch (error) {
@@ -473,28 +475,38 @@ export class PartnersService {
         });
       }
       
+      // Ne retourner que les colonnes nécessaires pour le tableau "Prestataires Approuvés"
       return {
         id: p.id,
         prestataireId: p.prestataireId || p.id,
-        status: p.status,
-        presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days,
-        paymentAmount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount,
-        amountToPay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay,
+        approvalStatus: p.approval_status || p.status,
+        approval_status: p.approval_status || p.status, // Variante snake_case pour compatibilité
+        approvalDate: p.approval_date,
+        approval_date: p.approval_date, // Variante snake_case pour compatibilité
+        validationStatus: p.validation_status || 'ENREGISTRE',
+        validation_status: p.validation_status || 'ENREGISTRE', // Variante snake_case pour compatibilité
+        validationDate: p.validation_date,
+        validation_date: p.validation_date, // Variante snake_case pour compatibilité
+        kycStatus: p.kyc_status,
+        kyc_status: p.kyc_status, // Variante snake_case pour compatibilité
+        paymentStatus: p.payment_status,
+        payment_status: p.payment_status, // Variante snake_case pour compatibilité
+        paymentDate: p.payment_date || p.paid_at,
+        payment_date: p.payment_date || p.paid_at, // Variante snake_case pour compatibilité
+        paymentAmount: p.paymentAmount || p.payment_amount || p.enregistrementData?.paymentAmount || p.enregistrementData?.payment_amount || null,
+        presenceDays: p.presenceDays || p.presence_days || p.enregistrementData?.presenceDays || p.enregistrementData?.presence_days || null,
+        amountToPay: p.amountToPay || p.amount_to_pay || p.enregistrementData?.amountToPay || p.enregistrementData?.amount_to_pay || null,
         amountCurrency: p.amountCurrency || p.amount_currency || p.enregistrementData?.amount_currency || p.enregistrementData?.amountCurrency || 'USD',
-        categorie: categorie,
-        role: p.role || p.enregistrementData?.role,
-        campaign_role_i_f: p.campaign_role_i_f || p.enregistrementData?.campaign_role_i_f,
-        campaign_role: p.campaign_role || p.enregistrementData?.campaign_role,
-        role_prestataire: p.role_prestataire || p.enregistrementData?.role_prestataire,
-        provinceId: p.provinceId,
-        zoneId: p.zoneId,
-        aireId: p.aireId,
-        nom: p.nom,
-        prenom: p.prenom,
-        postnom: p.postnom,
-        telephone: p.telephone,
-        enregistrementData: p.enregistrementData,
-        ...p,
+        categorie: categorie || null,
+        provinceId: p.provinceId || null,
+        zoneId: p.zoneId || null,
+        aireId: p.aireId || null,
+        nom: p.nom || null,
+        prenom: p.prenom || null,
+        postnom: p.postnom || null,
+        nom_complet: p.nom_complet || p.fullName || p.full_name || null,
+        telephone: p.telephone || null,
+        gender: p.gender || p.gender_i_c || p.sexe || null,
       };
     });
     
