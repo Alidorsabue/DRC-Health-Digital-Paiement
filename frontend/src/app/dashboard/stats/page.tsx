@@ -28,6 +28,8 @@ export default function StatsPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
   const [aires, setAires] = useState<GeographicOption[]>([]);
+  const [zones, setZones] = useState<GeographicOption[]>([]);
+  const [provinces, setProvinces] = useState<GeographicOption[]>([]);
   const [alert, setAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
@@ -135,6 +137,33 @@ export default function StatsPage() {
     }
   };
 
+  const loadPrestatairesForDPS = async () => {
+    if (!user?.provinceId) return;
+    
+    try {
+      const filters: any = {
+        provinceId: user.provinceId,
+      };
+      if (selectedCampaignId) filters.campaignId = selectedCampaignId;
+      
+      const data = await prestatairesApi.getAll(filters);
+      setPrestataires(data);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des prestataires DPS:', error);
+      setPrestataires([]);
+    }
+  };
+
+  const loadZonesForDPS = async (provinceId: string) => {
+    try {
+      const zonesFromGeo = await geographicApi.getZones(provinceId);
+      setZones(zonesFromGeo);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des zones DPS:', error);
+      setZones([]);
+    }
+  };
+
   // SUPPRIMÉ useCallback pour éviter les problèmes de hooks React #310
   const loadStatsForDPS = async () => {
     if (!user?.provinceId) {
@@ -150,6 +179,10 @@ export default function StatsPage() {
       const data = await statsApi.getProvince(user.provinceId, filters);
       console.log('Statistiques DPS chargées:', data);
       setStats(data);
+      
+      // Charger les prestataires et zones pour le tableau de répartition
+      await loadPrestatairesForDPS();
+      await loadZonesForDPS(user.provinceId);
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques DPS:', error);
       const errorMsg = getErrorMessage(error, 'Erreur inconnue');
@@ -157,6 +190,29 @@ export default function StatsPage() {
       setStats(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPrestatairesForPartner = async () => {
+    try {
+      const filters: any = {};
+      if (selectedCampaignId) filters.campaignId = selectedCampaignId;
+      
+      const data = await prestatairesApi.getAll(filters);
+      setPrestataires(data);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des prestataires PARTNER:', error);
+      setPrestataires([]);
+    }
+  };
+
+  const loadProvincesForPartner = async () => {
+    try {
+      const provincesFromGeo = await geographicApi.getProvinces();
+      setProvinces(provincesFromGeo);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des provinces PARTNER:', error);
+      setProvinces([]);
     }
   };
 
@@ -203,7 +259,11 @@ export default function StatsPage() {
     }, 10000); // 10 secondes max
 
     if (user?.role === 'SUPERADMIN' || user?.role === 'NATIONAL' || user?.role === 'PARTNER') {
-      loadStats().then(() => {
+      loadStats().then(async () => {
+        if (user?.role === 'PARTNER') {
+          await loadPrestatairesForPartner();
+          await loadProvincesForPartner();
+        }
         if (timeoutId) clearTimeout(timeoutId);
       });
     } else if (user?.role === 'MCZ' && user?.zoneId) {
@@ -549,6 +609,286 @@ export default function StatsPage() {
             ]}
             title="Répartition par Aire de Santé"
             exportFilename="statistiques-par-aire-mcz"
+          />
+        </div>
+      )}
+
+      {/* Tableau de répartition par zone de santé pour DPS */}
+      {user?.role === 'DPS' && prestataires.length > 0 && (
+        <div className="mt-8">
+          <DataTable
+            data={(() => {
+              // Fonction helper pour déterminer si un prestataire a été validé par IT
+              const getValidationStatus = (p: Prestataire): string => {
+                const rawData = p.raw_data || {};
+                let validationStatus = (p as any).validation_status ||
+                                      rawData.validation_status ||
+                                      (p as any).validationStatus ||
+                                      rawData.validationStatus;
+                
+                if (!validationStatus || validationStatus === 'ENREGISTRE' || validationStatus === '') {
+                  const validationDate = (p as any).validation_date ||
+                                        (p as any).validationDate ||
+                                        (p as any).validated_at ||
+                                        rawData.validation_date ||
+                                        rawData.validationDate ||
+                                        rawData.validated_at;
+                  
+                  if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                    validationStatus = 'VALIDE_PAR_IT';
+                  } else {
+                    const status = p.status || rawData.status;
+                    const statusStr = String(status || '').trim().toUpperCase();
+                    if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                      validationStatus = 'VALIDE_PAR_IT';
+                    } else if (!validationStatus) {
+                      validationStatus = 'ENREGISTRE';
+                    }
+                  }
+                }
+                
+                return validationStatus;
+              };
+
+              // Fonction helper pour récupérer le statut d'approbation
+              const getApprovalStatus = (p: Prestataire): string => {
+                const rawData = p.raw_data || {};
+                const approvalStatus = (p as any).approval_status ||
+                                      (p as any).approvalStatus ||
+                                      rawData.approval_status ||
+                                      rawData.approvalStatus ||
+                                      p.status;
+                
+                if (approvalStatus && approvalStatus !== null && approvalStatus !== '') {
+                  return approvalStatus;
+                }
+                
+                const validationStatus = getValidationStatus(p);
+                if (validationStatus === 'VALIDE_PAR_IT') {
+                  return 'EN_ATTENTE_PAR_MCZ';
+                }
+                
+                return approvalStatus || 'ENREGISTRE';
+              };
+
+              // Calculer les statistiques par zone depuis les prestataires
+              const zoneStats: Record<string, {
+                total: number;
+                validesIt: number;
+                approuvesMcz: number;
+                payes: number;
+              }> = {};
+
+              prestataires.forEach((p) => {
+                const zoneId = p.zoneId || (p as any).zone_id || 'N/A';
+                if (!zoneStats[zoneId]) {
+                  zoneStats[zoneId] = {
+                    total: 0,
+                    validesIt: 0,
+                    approuvesMcz: 0,
+                    payes: 0,
+                  };
+                }
+
+                zoneStats[zoneId].total++;
+
+                // Compter validés par IT
+                const validationStatus = getValidationStatus(p);
+                if (validationStatus === 'VALIDE_PAR_IT') {
+                  zoneStats[zoneId].validesIt++;
+                }
+
+                // Compter approuvés par MCZ
+                const approvalStatus = getApprovalStatus(p);
+                if (approvalStatus === 'APPROUVE_PAR_MCZ' || approvalStatus === 'APPROVED') {
+                  zoneStats[zoneId].approuvesMcz++;
+                }
+
+                // Compter payés
+                const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                if (paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ') {
+                  zoneStats[zoneId].payes++;
+                }
+              });
+
+              return Object.entries(zoneStats).map(([zoneId, stats]) => {
+                // Trouver le nom de la zone depuis la liste des zones
+                const zone = zones.find(z => z.id === zoneId);
+                return {
+                  id: zoneId,
+                  zone: zone ? zone.name : zoneId,
+                  total: stats.total,
+                  payes: stats.payes,
+                  validesIt: stats.validesIt,
+                  approuvesMcz: stats.approuvesMcz,
+                };
+              });
+            })()}
+            columns={[
+              {
+                key: 'zone',
+                label: t('province.zone'),
+                filterType: 'select',
+              },
+              {
+                key: 'total',
+                label: t('dashboard.totalProviders'),
+              },
+              {
+                key: 'payes',
+                label: t('dashboard.paid'),
+              },
+              {
+                key: 'validesIt',
+                label: t('dashboard.validatedByIT'),
+              },
+              {
+                key: 'approuvesMcz',
+                label: t('dashboard.approvedByMCZ'),
+              },
+            ]}
+            title="Répartition par Zone de Santé"
+            exportFilename="statistiques-par-zone-dps"
+          />
+        </div>
+      )}
+
+      {/* Tableau de répartition par province pour PARTNER */}
+      {user?.role === 'PARTNER' && prestataires.length > 0 && (
+        <div className="mt-8">
+          <DataTable
+            data={(() => {
+              // Fonction helper pour déterminer si un prestataire a été validé par IT
+              const getValidationStatus = (p: Prestataire): string => {
+                const rawData = p.raw_data || {};
+                let validationStatus = (p as any).validation_status ||
+                                      rawData.validation_status ||
+                                      (p as any).validationStatus ||
+                                      rawData.validationStatus;
+                
+                if (!validationStatus || validationStatus === 'ENREGISTRE' || validationStatus === '') {
+                  const validationDate = (p as any).validation_date ||
+                                        (p as any).validationDate ||
+                                        (p as any).validated_at ||
+                                        rawData.validation_date ||
+                                        rawData.validationDate ||
+                                        rawData.validated_at;
+                  
+                  if (validationDate && validationDate !== '-' && validationDate !== null && validationDate !== '') {
+                    validationStatus = 'VALIDE_PAR_IT';
+                  } else {
+                    const status = p.status || rawData.status;
+                    const statusStr = String(status || '').trim().toUpperCase();
+                    if (statusStr === 'APPROUVE_PAR_MCZ' || statusStr === 'APPROUVÉ_PAR_MCZ') {
+                      validationStatus = 'VALIDE_PAR_IT';
+                    } else if (!validationStatus) {
+                      validationStatus = 'ENREGISTRE';
+                    }
+                  }
+                }
+                
+                return validationStatus;
+              };
+
+              // Fonction helper pour récupérer le statut d'approbation
+              const getApprovalStatus = (p: Prestataire): string => {
+                const rawData = p.raw_data || {};
+                const approvalStatus = (p as any).approval_status ||
+                                      (p as any).approvalStatus ||
+                                      rawData.approval_status ||
+                                      rawData.approvalStatus ||
+                                      p.status;
+                
+                if (approvalStatus && approvalStatus !== null && approvalStatus !== '') {
+                  return approvalStatus;
+                }
+                
+                const validationStatus = getValidationStatus(p);
+                if (validationStatus === 'VALIDE_PAR_IT') {
+                  return 'EN_ATTENTE_PAR_MCZ';
+                }
+                
+                return approvalStatus || 'ENREGISTRE';
+              };
+
+              // Calculer les statistiques par province depuis les prestataires
+              const provinceStats: Record<string, {
+                total: number;
+                validesIt: number;
+                approuvesMcz: number;
+                payes: number;
+              }> = {};
+
+              prestataires.forEach((p) => {
+                const provinceId = p.provinceId || (p as any).province_id || 'N/A';
+                if (!provinceStats[provinceId]) {
+                  provinceStats[provinceId] = {
+                    total: 0,
+                    validesIt: 0,
+                    approuvesMcz: 0,
+                    payes: 0,
+                  };
+                }
+
+                provinceStats[provinceId].total++;
+
+                // Compter validés par IT
+                const validationStatus = getValidationStatus(p);
+                if (validationStatus === 'VALIDE_PAR_IT') {
+                  provinceStats[provinceId].validesIt++;
+                }
+
+                // Compter approuvés par MCZ
+                const approvalStatus = getApprovalStatus(p);
+                if (approvalStatus === 'APPROUVE_PAR_MCZ' || approvalStatus === 'APPROVED') {
+                  provinceStats[provinceId].approuvesMcz++;
+                }
+
+                // Compter payés
+                const paymentStatus = (p.paymentStatus || '').toUpperCase();
+                if (paymentStatus === 'PAID' || paymentStatus === 'PAYE' || paymentStatus === 'PAYÉ') {
+                  provinceStats[provinceId].payes++;
+                }
+              });
+
+              return Object.entries(provinceStats).map(([provinceId, stats]) => {
+                // Trouver le nom de la province depuis la liste des provinces
+                const province = provinces.find(pr => pr.id === provinceId);
+                return {
+                  id: provinceId,
+                  province: province ? province.name : provinceId,
+                  total: stats.total,
+                  payes: stats.payes,
+                  validesIt: stats.validesIt,
+                  approuvesMcz: stats.approuvesMcz,
+                };
+              });
+            })()}
+            columns={[
+              {
+                key: 'province',
+                label: t('common.province'),
+                filterType: 'select',
+              },
+              {
+                key: 'total',
+                label: t('dashboard.totalProviders'),
+              },
+              {
+                key: 'payes',
+                label: t('dashboard.paid'),
+              },
+              {
+                key: 'validesIt',
+                label: t('dashboard.validatedByIT'),
+              },
+              {
+                key: 'approuvesMcz',
+                label: t('dashboard.approvedByMCZ'),
+              },
+            ]}
+            title="Répartition par Province"
+            exportFilename="statistiques-par-province-partner"
           />
         </div>
       )}
