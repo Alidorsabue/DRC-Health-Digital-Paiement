@@ -870,6 +870,7 @@ export class DynamicTableService {
     limit: number = 100,
     filters?: {
       status?: string;
+      approvalStatus?: string;
       prestataireId?: string;
       campaignId?: string;
       validationSequence?: number | null;
@@ -913,6 +914,20 @@ export class DynamicTableService {
         whereClause += ` AND validation_status = $${paramIndex}`;
         queryParams.push(filters.status);
         paramIndex++;
+      }
+      if (filters.approvalStatus !== undefined) {
+        // Vérifier si la colonne approval_status existe
+        if (columnNames.has('approval_status')) {
+          whereClause += ` AND approval_status = $${paramIndex}`;
+          queryParams.push(filters.approvalStatus);
+          paramIndex++;
+        } else {
+          // Fallback: si approval_status n'existe pas, utiliser validation_status (ancienne structure)
+          console.warn(`[getSubmissions] Colonne approval_status n'existe pas, utilisation de validation_status comme fallback`);
+          whereClause += ` AND validation_status = $${paramIndex}`;
+          queryParams.push(filters.approvalStatus);
+          paramIndex++;
+        }
       }
       if (filters.prestataireId) {
         // Chercher soit par id, soit par prestataire_id (selon la structure de la table)

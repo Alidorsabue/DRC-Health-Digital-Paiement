@@ -312,7 +312,7 @@ export class PartnersService {
     if (targetFormId) {
       try {
         const filters: any = {
-          status: PrestataireStatus.APPROUVE_PAR_MCZ,
+          approvalStatus: 'APPROUVE_PAR_MCZ', // Utiliser approval_status au lieu de status
           // IMPORTANT: Récupérer les enregistrements originaux (validation_sequence IS NULL)
           // Même si l'enregistrement original a été mis à jour avec des informations de validation,
           // il reste l'enregistrement original (première validation met à jour l'original, ne crée pas de nouvelle ligne)
@@ -332,12 +332,23 @@ export class PartnersService {
           filters.aireId = aireId;
         }
 
+        console.log(`[getApprovedPrestataires] Recherche dans form_${targetFormId} avec filtres:`, filters);
         const { data } = await this.dynamicTableService.getSubmissions(
           targetFormId,
           1,
           10000, // Récupérer tous les prestataires approuvés
           filters,
         );
+        console.log(`[getApprovedPrestataires] ${data.length} prestataires trouvés dans form_${targetFormId}`);
+        
+        if (data.length > 0) {
+          console.log(`[getApprovedPrestataires] Exemple de prestataire trouvé:`, {
+            id: data[0].id,
+            approval_status: data[0].approval_status,
+            validation_status: data[0].validation_status,
+            status: data[0].status,
+          });
+        }
 
         // Filtrer par catégorie/rôle si fourni
         let filtered = data;

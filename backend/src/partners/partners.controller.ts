@@ -29,7 +29,7 @@ import { ConfigService } from '@nestjs/config';
 @ApiTags('Partners')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.PARTNER)
+@Roles(Role.PARTNER, Role.ADMIN, Role.SUPERADMIN)
 @Controller('partner')
 export class PartnersController {
   constructor(

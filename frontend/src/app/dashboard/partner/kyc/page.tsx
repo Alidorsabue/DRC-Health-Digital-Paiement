@@ -657,7 +657,7 @@ export default function KycVerificationPage() {
     },
   ];
 
-  if (user?.role !== 'PARTNER') {
+  if (user?.role !== 'PARTNER' && user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Accès non autorisé</p>

@@ -183,6 +183,15 @@ export default function PartnerPage() {
   const loadPrestataires = async () => {
     setLoading(true);
     try {
+      console.log('[loadPrestataires] Début du chargement avec filtres:', {
+        selectedCampaignId,
+        selectedFormId,
+        selectedCategory,
+        selectedProvinceId,
+        selectedZoneId,
+        selectedAireId,
+      });
+
       // Charger les prestataires même sans filtres (le backend gère les cas sans formId/campaignId)
       // L'API n'accepte qu'une seule catégorie, donc on charge toutes les données et on filtre côté frontend
       let data = await partnersApi.getApprovedPrestataires(
@@ -194,7 +203,7 @@ export default function PartnerPage() {
         selectedAireId || undefined,
       );
 
-      console.log(`[loadPrestataires] ${data.length} prestataires chargés`, {
+      console.log(`[loadPrestataires] ${data.length} prestataires chargés depuis l'API`, {
         selectedCampaignId,
         selectedFormId,
         selectedCategory,
@@ -1598,7 +1607,7 @@ export default function PartnerPage() {
     },
   ];
 
-  if (user?.role !== 'PARTNER') {
+  if (user?.role !== 'PARTNER' && user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Accès non autorisé</p>
